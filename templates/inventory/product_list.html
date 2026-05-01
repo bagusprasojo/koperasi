@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Produk | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Daftar Produk</h1>
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm">
+            <thead class="border-b bg-slate-50">
+                <tr>
+                    <th class="px-3 py-2 font-medium">Nama</th>
+                    <th class="px-3 py-2 font-medium">Kategori</th>
+                    <th class="px-3 py-2 font-medium">SKU</th>
+                    <th class="px-3 py-2 font-medium">Stok</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ product.name }}</td>
+                        <td class="px-3 py-2">{{ product.category.name }}</td>
+                        <td class="px-3 py-2">{{ product.sku }}</td>
+                        <td class="px-3 py-2">{{ product.stock }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="4" class="px-3 py-4 text-slate-500">Belum ada data produk.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

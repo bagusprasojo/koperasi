@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}POS Koperasi{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+    <div class="min-h-screen" x-data="{ open: false }">
+        {% if request.user.is_authenticated %}
+            <header class="border-b border-slate-200 bg-white">
+                <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+                    <a href="{% url 'dashboard' %}" class="text-lg font-semibold">POS Koperasi</a>
+                    <button class="rounded-md border px-3 py-1 text-sm md:hidden" @click="open = !open">Menu</button>
+                    <nav class="hidden items-center gap-3 md:flex">
+                        <a href="{% url 'dashboard' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Dashboard</a>
+                        <a href="{% url 'product_list' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Produk</a>
+                        <a href="{% url 'purchase_page' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Pembelian</a>
+                        <a href="{% url 'pos_page' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Kasir</a>
+                        <form method="post" action="{% url 'logout' %}">
+                            {% csrf_token %}
+                            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Logout</button>
+                        </form>
+                    </nav>
+                </div>
+                <nav class="mx-auto max-w-7xl px-4 pb-4 md:hidden" x-show="open" x-transition>
+                    <div class="grid gap-2">
+                        <a href="{% url 'dashboard' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Dashboard</a>
+                        <a href="{% url 'product_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Produk</a>
+                        <a href="{% url 'purchase_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Pembelian</a>
+                        <a href="{% url 'pos_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kasir</a>
+                        <form method="post" action="{% url 'logout' %}">
+                            {% csrf_token %}
+                            <button class="w-full rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Logout</button>
+                        </form>
+                    </div>
+                </nav>
+            </header>
+        {% endif %}
+        <main class="mx-auto max-w-7xl px-4 py-6">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

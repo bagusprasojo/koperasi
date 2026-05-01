@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Kasir | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="grid gap-4 lg:grid-cols-3" x-data="{ q: '' }">
+    <div class="rounded-xl bg-white p-6 shadow-sm lg:col-span-2">
+        <h1 class="mb-4 text-xl font-semibold">Transaksi Kasir</h1>
+        <input
+            x-model="q"
+            placeholder="Cari produk..."
+            class="mb-4 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800"
+        >
+        <div class="grid gap-3 md:grid-cols-2">
+            {% for product in products %}
+                <div class="rounded-lg border p-4" x-show="'{{ product.name|lower }}'.includes(q.toLowerCase())">
+                    <h2 class="font-medium">{{ product.name }}</h2>
+                    <p class="text-sm text-slate-500">SKU: {{ product.sku }}</p>
+                    <p class="mt-2 text-sm">Stok: {{ product.stock }}</p>
+                </div>
+            {% empty %}
+                <p class="text-slate-500">Belum ada produk untuk ditransaksikan.</p>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <h2 class="text-lg font-semibold">Keranjang</h2>
+        <p class="mt-2 text-sm text-slate-600">Placeholder keranjang transaksi. Berikutnya bisa kita lanjut ke add-item, subtotal, diskon, dan pembayaran.</p>
+    </div>
+</div>
+{% endblock %}
