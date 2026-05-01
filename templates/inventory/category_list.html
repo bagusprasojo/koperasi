@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Kategori | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <div class="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <h1 class="text-xl font-semibold">Sampul Kategori Produk</h1>
+        <form method="get" class="flex gap-2">
+            <input
+                type="text"
+                name="q"
+                value="{{ query }}"
+                placeholder="Cari nama kategori..."
+                class="w-64 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-800"
+            >
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Cari</button>
+        </form>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm">
+            <thead class="border-b bg-slate-50">
+                <tr>
+                    <th class="px-3 py-2 font-medium">Nama Kategori</th>
+                    <th class="px-3 py-2 font-medium">Dibuat</th>
+                    <th class="px-3 py-2 font-medium text-right">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for category in page_obj %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ category.name }}</td>
+                        <td class="px-3 py-2">{{ category.created_at }}</td>
+                        <td class="px-3 py-2">
+                            <div class="flex justify-end gap-2">
+                                <a href="{% url 'category_detail' category.uuid %}" class="rounded-md border px-3 py-1">Detail</a>
+                                <a href="{% url 'category_edit' category.uuid %}" class="rounded-md border px-3 py-1">Edit</a>
+                                <form method="post" action="{% url 'category_delete' category.uuid %}" onsubmit="return confirm('Yakin ingin menghapus kategori ini?');">
+                                    {% csrf_token %}
+                                    <button class="rounded-md bg-red-600 px-3 py-1 text-white">Hapus</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="3" class="px-3 py-4 text-slate-500">Data kategori belum tersedia.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-4 flex items-center justify-between text-sm">
+        <p>Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}</p>
+        <div class="flex gap-2">
+            {% if page_obj.has_previous %}
+                <a href="?q={{ query }}&page={{ page_obj.previous_page_number }}" class="rounded-md border px-3 py-1">Sebelumnya</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+                <a href="?q={{ query }}&page={{ page_obj.next_page_number }}" class="rounded-md border px-3 py-1">Berikutnya</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
