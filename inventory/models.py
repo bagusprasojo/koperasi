@@ -1,5 +1,6 @@
 from django.db import models
 from core.models import BaseModel
+from django.core.exceptions import ValidationError
 
 
 class Category(BaseModel):
@@ -40,5 +41,48 @@ class ProductPriceTier(BaseModel):
         ordering = ['level']
         unique_together = ('product', 'level')
 
+    def clean(self):
+        # Skip semua validasi DB kalau product belum disimpan
+        if not self.product or not self.product.pk:
+            return
+        
+        if self.min_qty > self.max_qty:
+            raise ValidationError("min_qty tidak boleh lebih besar dari max_qty")
+
+        qs = ProductPriceTier.objects.filter(product=self.product)
+
+        if self.pk:
+            qs = qs.exclude(pk=self.pk)
+
+        # Cek overlap
+        for tier in qs:
+            if not (self.max_qty < tier.min_qty or self.min_qty > tier.max_qty):
+                raise ValidationError(
+                    f"Range {self.min_qty}-{self.max_qty} overlap dengan "
+                    f"{tier.min_qty}-{tier.max_qty}"
+                )
+
+        # Optional: enforce level ordering
+        lower_tiers = qs.filter(level__lt=self.level)
+        higher_tiers = qs.filter(level__gt=self.level)
+
+        if lower_tiers.exists():
+            max_lower = max(t.max_qty for t in lower_tiers)
+            if self.min_qty <= max_lower:
+                raise ValidationError(
+                    "Range harus lebih besar dari tier sebelumnya"
+                )
+
+        if higher_tiers.exists():
+            min_higher = min(t.min_qty for t in higher_tiers)
+            if self.max_qty >= min_higher:
+                raise ValidationError(
+                    "Range harus lebih kecil dari tier berikutnya"
+                )
+
     def __str__(self):
         return f"{self.product.name} - Level {self.level}"
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
