@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load humanize %}
 
 {% block title %}Produk | POS Koperasi{% endblock %}
 
@@ -28,6 +29,7 @@
                     <th class="px-3 py-2 font-medium">Nama</th>
                     <th class="px-3 py-2 font-medium">Kategori</th>
                     <th class="px-3 py-2 font-medium">SKU</th>
+                    <th class="px-3 py-2 font-medium">Harga Dasar</th>
                     <th class="px-3 py-2 font-medium">Stok</th>
                     <th class="px-3 py-2 font-medium text-right">Aksi</th>
                 </tr>
@@ -38,7 +40,16 @@
                         <td class="px-3 py-2">{{ product.name }}</td>
                         <td class="px-3 py-2">{{ product.category.name }}</td>
                         <td class="px-3 py-2">{{ product.sku }}</td>
-                        <td class="px-3 py-2">{{ product.stock }}</td>
+                        <td class="px-3 py-2">
+                            {% for tier in product.price_tiers.all %}
+                                {% if tier.level == 1 %}
+                                    {{ tier.price|floatformat:2|intcomma }}
+                                {% endif %}
+                            {% empty %}
+                                -
+                            {% endfor %}
+                        </td>
+                        <td class="px-3 py-2">{{ product.stock|intcomma }}</td>
                         <td class="px-3 py-2">
                             <div class="flex justify-end gap-2">
                                 <a href="{% url 'product_detail' product.uuid %}" class="rounded-md border px-3 py-1">Detail</a>
@@ -55,7 +66,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="5" class="px-3 py-4 text-slate-500">Belum ada data produk.</td>
+                        <td colspan="6" class="px-3 py-4 text-slate-500">Belum ada data produk.</td>
                     </tr>
                 {% endfor %}
             </tbody>

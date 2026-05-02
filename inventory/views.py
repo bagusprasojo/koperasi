@@ -11,6 +11,12 @@ import json
 from core.decorators import role_required
 from .models import Category, Product, ProductPriceTier
 
+TWOPLACES = Decimal('0.01')
+
+
+def _to_json_payload(value):
+    return json.dumps(value, default=str)
+
 
 def _get_safe_next_url(request):
     next_url = request.GET.get('next') or request.POST.get('next') or ''
@@ -95,7 +101,7 @@ def _compute_level_prices(rows):
 
     _validate_contiguous_ranges(rows)
 
-    base_price = Decimal(rows[0]['input_value'])
+    base_price = Decimal(rows[0]['input_value']).quantize(TWOPLACES)
     if base_price <= 0:
         raise ValidationError('Level 1 wajib memiliki harga lebih besar dari 0.')
     rows[0]['price'] = base_price
@@ -105,7 +111,7 @@ def _compute_level_prices(rows):
 
     for i in [1, 2]:
         mode = rows[i]['mode']
-        value = Decimal(rows[i]['input_value'])
+        value = Decimal(rows[i]['input_value']).quantize(TWOPLACES)
         if mode == 'final':
             price = value
             rows[i]['source_mode'] = 'final'
@@ -115,20 +121,20 @@ def _compute_level_prices(rows):
             if rows[i]['discount_type'] == 'percent':
                 if value < 0 or value > 100:
                     raise ValidationError(f'Level {i + 1}: diskon persen harus 0 sampai 100.')
-                price = base_price - ((value / Decimal('100')) * base_price)
+                price = (base_price - ((value / Decimal('100')) * base_price)).quantize(TWOPLACES)
                 rows[i]['source_mode'] = 'discount'
                 rows[i]['discount_type'] = 'percent'
                 rows[i]['discount_value'] = value
             else:
                 if value < 0:
                     raise ValidationError(f'Level {i + 1}: diskon nominal tidak boleh negatif.')
-                price = base_price - value
+                price = (base_price - value).quantize(TWOPLACES)
                 rows[i]['source_mode'] = 'discount'
                 rows[i]['discount_type'] = 'nominal'
                 rows[i]['discount_value'] = value
         if price <= 0:
             raise ValidationError(f'Level {i + 1}: harga akhir harus lebih besar dari 0.')
-        rows[i]['price'] = price
+        rows[i]['price'] = price.quantize(TWOPLACES)
 
     if not (rows[0]['price'] >= rows[1]['price'] >= rows[2]['price']):
         raise ValidationError('Harga level harus menurun atau sama: Level 1 >= Level 2 >= Level 3.')
@@ -188,7 +194,7 @@ def _default_tier_rows():
 @role_required('admin_toko', 'kasir', 'pembelian')
 def product_list(request):
     query = request.GET.get('q', '').strip()
-    products = Product.objects.select_related('category').order_by('name')
+    products = Product.objects.select_related('category').prefetch_related('price_tiers').order_by('name')
     if query:
         products = products.filter(
             Q(name__icontains=query) |
@@ -247,7 +253,7 @@ def product_create(request):
             'error_message': error_message,
             'categories': categories,
             'tier_rows': tier_rows,
-            'tier_rows_json': json.dumps(tier_rows),
+            'tier_rows_json': _to_json_payload(tier_rows),
         },
     )
 
@@ -295,7 +301,7 @@ def product_edit(request, uuid):
                             'back_url': back_url,
                             'next_url': next_url,
                             'tier_rows': tier_rows,
-                            'tier_rows_json': json.dumps(tier_rows),
+                            'tier_rows_json': _to_json_payload(tier_rows),
                         },
                     )
                 with transaction.atomic():
@@ -330,7 +336,7 @@ def product_edit(request, uuid):
             'back_url': back_url,
             'next_url': next_url,
             'tier_rows': tier_rows,
-            'tier_rows_json': json.dumps(tier_rows),
+            'tier_rows_json': _to_json_payload(tier_rows),
         },
     )
 

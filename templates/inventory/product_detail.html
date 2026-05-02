@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load humanize %}
 
 {% block title %}Detail Produk | POS Koperasi{% endblock %}
 
@@ -9,7 +10,7 @@
         <div><p class="text-slate-500">Nama Produk</p><p class="font-medium">{{ product.name }}</p></div>
         <div><p class="text-slate-500">Kategori</p><p class="font-medium">{{ product.category.name }}</p></div>
         <div><p class="text-slate-500">SKU</p><p class="font-medium">{{ product.sku }}</p></div>
-        <div><p class="text-slate-500">Stok</p><p class="font-medium">{{ product.stock }}</p></div>
+        <div><p class="text-slate-500">Stok</p><p class="font-medium">{{ product.stock|intcomma }}</p></div>
         <div><p class="text-slate-500">Dibuat</p><p class="font-medium">{{ product.created_at }}</p></div>
         <div><p class="text-slate-500">Diubah</p><p class="font-medium">{{ product.updated_at }}</p></div>
     </div>
@@ -30,20 +31,20 @@
                     {% for tier in product.price_tiers.all %}
                         <tr class="border-b">
                             <td class="px-3 py-2">{{ tier.level }}</td>
-                            <td class="px-3 py-2">{{ tier.min_qty }}</td>
-                            <td class="px-3 py-2">{{ tier.max_qty }}</td>
+                            <td class="px-3 py-2">{{ tier.min_qty|intcomma }}</td>
+                            <td class="px-3 py-2">{{ tier.max_qty|intcomma }}</td>
                             <td class="px-3 py-2">
                                 {% if tier.source_mode == 'discount' %}
                                     {% if tier.discount_type == 'percent' %}
-                                        Diskon {{ tier.discount_value }}%
+                                        Diskon {{ tier.discount_value|floatformat:2|intcomma }}%
                                     {% else %}
-                                        Diskon nominal {{ tier.discount_value }}
+                                        Diskon nominal {{ tier.discount_value|floatformat:2|intcomma }}
                                     {% endif %}
                                 {% else %}
                                     Harga jadi
                                 {% endif %}
                             </td>
-                            <td class="px-3 py-2">{{ tier.price }}</td>
+                            <td class="px-3 py-2">{{ tier.price|floatformat:2|intcomma }}</td>
                         </tr>
                     {% empty %}
                         <tr><td colspan="5" class="px-3 py-3 text-slate-500">Belum ada level harga.</td></tr>
