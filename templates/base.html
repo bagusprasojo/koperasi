@@ -6,9 +6,30 @@
     <title>{% block title %}POS Koperasi{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body class="min-h-screen bg-slate-100 text-slate-900">
-    <div class="min-h-screen" x-data="{ open: false }">
+    <div
+        class="min-h-screen"
+        x-data="{
+            open: false,
+            confirmOpen: false,
+            confirmTitle: 'Konfirmasi',
+            confirmMessage: 'Apakah Anda yakin?',
+            confirmForm: null,
+            openConfirm(payload) {
+                this.confirmTitle = payload?.title || 'Konfirmasi';
+                this.confirmMessage = payload?.message || 'Apakah Anda yakin?';
+                this.confirmForm = payload?.form || null;
+                this.confirmOpen = true;
+            },
+            submitConfirm() {
+                if (this.confirmForm) {
+                    this.confirmForm.submit();
+                }
+            }
+        }"
+        @confirm-open.window="openConfirm($event.detail)">
         {% if request.user.is_authenticated %}
             <header class="border-b border-slate-200 bg-white">
                 <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
@@ -41,9 +62,46 @@
                 </nav>
             </header>
         {% endif %}
+        {% if messages %}
+            <div class="pointer-events-none fixed right-4 top-4 z-50 w-full max-w-sm space-y-2">
+                {% for message in messages %}
+                    <div
+                        x-data="{ show: true }"
+                        x-init="setTimeout(() => show = false, 3500)"
+                        x-show="show"
+                        x-transition
+                        class="pointer-events-auto rounded-lg border px-4 py-3 text-sm shadow-lg
+                            {% if message.tags == 'success' %}border-emerald-300 bg-emerald-50 text-emerald-800{% endif %}
+                            {% if message.tags == 'error' %}border-red-300 bg-red-50 text-red-800{% endif %}
+                            {% if message.tags == 'warning' %}border-amber-300 bg-amber-50 text-amber-800{% endif %}
+                            {% if message.tags == 'info' %}border-sky-300 bg-sky-50 text-sky-800{% endif %}">
+                        <div class="flex items-start justify-between gap-3">
+                            <p>{{ message }}</p>
+                            <button @click="show = false" class="text-xs font-medium">Tutup</button>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
         <main class="mx-auto max-w-7xl px-4 py-6">
             {% block content %}{% endblock %}
         </main>
+        <div
+            x-show="confirmOpen"
+            x-transition
+            x-cloak
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+            <div @click.outside="confirmOpen = false" class="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+                <h2 class="text-lg font-semibold" x-text="confirmTitle"></h2>
+                <p class="mt-2 text-sm text-slate-600" x-text="confirmMessage"></p>
+                <div class="mt-5 flex justify-end gap-2">
+                    <button @click="confirmOpen = false" class="rounded-md border px-3 py-2 text-sm">Batal</button>
+                    <button
+                        @click="submitConfirm()"
+                        class="rounded-md bg-red-600 px-3 py-2 text-sm text-white">Ya, Lanjutkan</button>
+                </div>
+            </div>
+        </div>
     </div>
 </body>
 </html>

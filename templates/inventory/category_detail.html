@@ -11,10 +11,6 @@
             <p class="font-medium">{{ category.name }}</p>
         </div>
         <div>
-            <p class="text-slate-500">UUID</p>
-            <p class="font-medium">{{ category.uuid }}</p>
-        </div>
-        <div>
             <p class="text-slate-500">Dibuat</p>
             <p class="font-medium">{{ category.created_at }}</p>
         </div>
@@ -26,10 +22,13 @@
 
     <div class="mt-6 flex flex-wrap gap-2">
         <a href="{% url 'category_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>
-        <a href="{% url 'category_edit' category.uuid %}" class="rounded-md border px-3 py-2 text-sm">Edit</a>
-        <form method="post" action="{% url 'category_delete' category.uuid %}" onsubmit="return confirm('Yakin ingin menghapus kategori ini?');">
+        <a href="{% url 'category_edit' category.uuid %}?next={{ request.path|urlencode }}" class="rounded-md border px-3 py-2 text-sm">Edit</a>
+        <form method="post" action="{% url 'category_delete' category.uuid %}">
             {% csrf_token %}
-            <button class="rounded-md bg-red-600 px-3 py-2 text-sm text-white">Hapus</button>
+            <button
+                type="submit"
+                @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Hapus', message: 'Kategori ini akan dihapus permanen.' })"
+                class="rounded-md bg-red-600 px-3 py-2 text-sm text-white">Hapus</button>
         </form>
     </div>
 </div>

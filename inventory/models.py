@@ -24,6 +24,15 @@ class Product(BaseModel):
 
 
 class ProductPriceTier(BaseModel):
+    PRICE_MODE_CHOICES = (
+        ('final', 'Harga Jadi'),
+        ('discount', 'Diskon'),
+    )
+    DISCOUNT_TYPE_CHOICES = (
+        ('percent', 'Persen'),
+        ('nominal', 'Nominal'),
+    )
+
     product = models.ForeignKey(
         Product,
         on_delete=models.CASCADE,
@@ -35,6 +44,23 @@ class ProductPriceTier(BaseModel):
     price = models.DecimalField(
         max_digits=12,
         decimal_places=2
+    )
+    source_mode = models.CharField(
+        max_length=10,
+        choices=PRICE_MODE_CHOICES,
+        default='final',
+    )
+    discount_type = models.CharField(
+        max_length=10,
+        choices=DISCOUNT_TYPE_CHOICES,
+        blank=True,
+        default='',
+    )
+    discount_value = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
     )
 
     class Meta:

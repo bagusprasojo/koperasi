@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Tambah Produk | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Form Tambah Produk</h1>
+    <form method="post" class="grid gap-4" x-data="{ tiers: [] }" x-init="tiers = JSON.parse('{{ tier_rows_json|escapejs }}')">
+        {% csrf_token %}
+        <div>
+            <label class="mb-1 block text-sm font-medium">Nama Produk</label>
+            <input type="text" name="name" value="{{ request.POST.name }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+        </div>
+        <div>
+            <label class="mb-1 block text-sm font-medium">SKU</label>
+            <input type="text" name="sku" value="{{ request.POST.sku }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+        </div>
+        <div>
+            <label class="mb-1 block text-sm font-medium">Kategori</label>
+            <select name="category_id" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                <option value="">Pilih kategori</option>
+                {% for category in categories %}
+                    <option value="{{ category.id }}" {% if request.POST.category_id == category.id|stringformat:"s" %}selected{% endif %}>{{ category.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="rounded-lg border border-slate-200 p-4">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-sm font-semibold">Level Harga (Fixed 3 Level)</h2>
+            </div>
+            <div class="grid gap-2">
+                <template x-for="(tier, idx) in tiers" :key="idx">
+                    <div class="grid gap-2 md:grid-cols-12">
+                        <div class="rounded-md bg-slate-100 px-2 py-2 text-sm md:col-span-1" x-text="'L' + tier.level"></div>
+                        <input :name="'tier_' + tier.level + '_min_qty'" x-model="tier.min_qty" type="number" min="1" placeholder="Min Qty" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-2">
+                        <input :name="'tier_' + tier.level + '_max_qty'" x-model="tier.max_qty" type="number" min="1" placeholder="Max Qty" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-2">
+                        <template x-if="tier.level == '1'">
+                            <input :name="'tier_' + tier.level + '_value'" x-model="tier.input_value" type="number" step="0.01" min="0" placeholder="Harga Dasar" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-7">
+                        </template>
+                        <template x-if="tier.level != '1'">
+                            <div class="grid gap-2 md:col-span-7 md:grid-cols-3">
+                                <select :name="'tier_' + tier.level + '_mode'" x-model="tier.mode" class="rounded-md border border-slate-300 px-2 py-2 text-sm">
+                                    <option value="final">Harga Jadi</option>
+                                    <option value="discount">Diskon</option>
+                                </select>
+                                <select :name="'tier_' + tier.level + '_discount_type'" x-model="tier.discount_type" :disabled="tier.mode !== 'discount'" class="rounded-md border border-slate-300 px-2 py-2 text-sm disabled:bg-slate-100">
+                                    <option value="percent">Diskon %</option>
+                                    <option value="nominal">Diskon Nominal</option>
+                                </select>
+                                <input :name="'tier_' + tier.level + '_value'" x-model="tier.input_value" type="number" step="0.01" min="0" :placeholder="tier.mode === 'final' ? 'Harga Jadi' : 'Nilai Diskon'" class="rounded-md border border-slate-300 px-2 py-2 text-sm">
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+        {% if error_message %}
+            <p class="text-sm text-red-600">{{ error_message }}</p>
+        {% endif %}
+        <div class="flex gap-2">
+            <a href="{% url 'product_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

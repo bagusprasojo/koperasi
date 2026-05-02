@@ -1,19 +1,18 @@
 {% extends "base.html" %}
 
-{% block title %}Edit Kategori | POS Koperasi{% endblock %}
+{% block title %}Tambah Kategori | POS Koperasi{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-xl rounded-xl bg-white p-6 shadow-sm">
-    <h1 class="mb-4 text-xl font-semibold">Form Edit Kategori</h1>
+    <h1 class="mb-4 text-xl font-semibold">Form Tambah Kategori</h1>
     <form method="post" class="grid gap-4">
         {% csrf_token %}
-        <input type="hidden" name="next" value="{{ next_url }}">
         <div>
             <label class="mb-1 block text-sm font-medium">Nama Kategori</label>
             <input
                 type="text"
                 name="name"
-                value="{{ category.name }}"
+                value="{{ request.POST.name }}"
                 class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800"
             >
         </div>
@@ -21,7 +20,7 @@
             <p class="text-sm text-red-600">{{ error_message }}</p>
         {% endif %}
         <div class="flex gap-2">
-            <a href="{{ back_url }}" class="rounded-md border px-3 py-2 text-sm">Back</a>
+            <a href="{% url 'category_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>
             <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan</button>
         </div>
     </form>
