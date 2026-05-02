@@ -7,9 +7,20 @@ from django.db import IntegrityError, transaction
 from django.core.exceptions import ValidationError
 from decimal import Decimal, InvalidOperation
 import json
+from datetime import date
 
 from core.decorators import role_required
-from .models import Category, Product, ProductPriceTier
+from .models import Category, DailyClosing, InventoryTransaction, Product, ProductPriceTier, Supplier, Unit
+from .services import (
+    close_daily,
+    create_purchase_transaction,
+    delete_purchase_transaction,
+    edit_purchase_transaction,
+    post_internal_used,
+    post_purchase,
+    post_stock_opname,
+    low_stock_products,
+)
 
 TWOPLACES = Decimal('0.01')
 
@@ -194,12 +205,14 @@ def _default_tier_rows():
 @role_required('admin_toko', 'kasir', 'pembelian')
 def product_list(request):
     query = request.GET.get('q', '').strip()
-    products = Product.objects.select_related('category').prefetch_related('price_tiers').order_by('name')
+    products = Product.objects.select_related('category', 'unit').prefetch_related('price_tiers').order_by('name')
     if query:
         products = products.filter(
             Q(name__icontains=query) |
             Q(sku__icontains=query) |
-            Q(category__name__icontains=query)
+            Q(category__name__icontains=query) |
+            Q(unit__name__icontains=query) |
+            Q(unit__code__icontains=query)
         )
 
     paginator = Paginator(products, 10)
@@ -215,21 +228,30 @@ def product_list(request):
 def product_create(request):
     error_message = ''
     categories = Category.objects.order_by('name')
+    units = Unit.objects.filter(is_active=True).order_by('name')
     tier_rows = _default_tier_rows()
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         sku = request.POST.get('sku', '').strip()
         category_id = request.POST.get('category_id', '').strip()
+        unit_id = request.POST.get('unit_id', '').strip()
         tier_rows = _extract_tier_rows(request)
 
-        if not all([name, sku, category_id]):
-            error_message = 'Nama, SKU, dan kategori wajib diisi.'
+        if not all([name, sku, category_id, unit_id]):
+            error_message = 'Nama, SKU, kategori, dan satuan wajib diisi.'
             messages.error(request, error_message)
         else:
             try:
                 category = Category.objects.get(id=category_id)
+                unit = Unit.objects.get(id=unit_id, is_active=True)
                 with transaction.atomic():
-                    product = Product.objects.create(name=name, sku=sku, stock=0, category=category)
+                    product = Product.objects.create(
+                        name=name,
+                        sku=sku,
+                        stock=0,
+                        category=category,
+                        unit=unit,
+                    )
                     _create_price_tiers(product, tier_rows)
                 messages.success(request, 'Produk berhasil ditambahkan.')
                 return redirect('product_list')
@@ -242,6 +264,9 @@ def product_create(request):
             except Category.DoesNotExist:
                 error_message = 'Kategori tidak valid.'
                 messages.error(request, error_message)
+            except Unit.DoesNotExist:
+                error_message = 'Satuan tidak valid atau nonaktif.'
+                messages.error(request, error_message)
             except IntegrityError:
                 error_message = 'SKU sudah dipakai atau data tidak valid.'
                 messages.error(request, error_message)
@@ -252,6 +277,7 @@ def product_create(request):
         {
             'error_message': error_message,
             'categories': categories,
+            'units': units,
             'tier_rows': tier_rows,
             'tier_rows_json': _to_json_payload(tier_rows),
         },
@@ -261,7 +287,7 @@ def product_create(request):
 @role_required('admin_toko', 'kasir', 'pembelian')
 def product_detail(request, uuid):
     product = get_object_or_404(
-        Product.objects.select_related('category').prefetch_related('price_tiers'),
+        Product.objects.select_related('category', 'unit').prefetch_related('price_tiers'),
         uuid=uuid,
     )
     return render(request, 'inventory/product_detail.html', {'product': product})
@@ -271,6 +297,7 @@ def product_detail(request, uuid):
 def product_edit(request, uuid):
     product = get_object_or_404(Product.objects.prefetch_related('price_tiers'), uuid=uuid)
     categories = Category.objects.order_by('name')
+    units = Unit.objects.filter(is_active=True).order_by('name')
     error_message = ''
     next_url = _get_safe_next_url(request)
     back_url = next_url or f"/inventory/products/{product.uuid}/"
@@ -280,14 +307,16 @@ def product_edit(request, uuid):
         name = request.POST.get('name', '').strip()
         sku = request.POST.get('sku', '').strip()
         category_id = request.POST.get('category_id', '').strip()
+        unit_id = request.POST.get('unit_id', '').strip()
         tier_rows = _extract_tier_rows(request)
 
-        if not all([name, sku, category_id]):
-            error_message = 'Nama, SKU, dan kategori wajib diisi.'
+        if not all([name, sku, category_id, unit_id]):
+            error_message = 'Nama, SKU, kategori, dan satuan wajib diisi.'
             messages.error(request, error_message)
         else:
             try:
                 category = Category.objects.get(id=category_id)
+                unit = Unit.objects.get(id=unit_id, is_active=True)
                 if Product.objects.exclude(id=product.id).filter(sku=sku).exists():
                     error_message = 'SKU sudah dipakai.'
                     messages.error(request, error_message)
@@ -297,6 +326,7 @@ def product_edit(request, uuid):
                         {
                             'product': product,
                             'categories': categories,
+                            'units': units,
                             'error_message': error_message,
                             'back_url': back_url,
                             'next_url': next_url,
@@ -308,6 +338,7 @@ def product_edit(request, uuid):
                     product.name = name
                     product.sku = sku
                     product.category = category
+                    product.unit = unit
                     product.save()
                     product.price_tiers.all().delete()
                     _create_price_tiers(product, tier_rows)
@@ -322,6 +353,9 @@ def product_edit(request, uuid):
             except Category.DoesNotExist:
                 error_message = 'Kategori tidak valid.'
                 messages.error(request, error_message)
+            except Unit.DoesNotExist:
+                error_message = 'Satuan tidak valid atau nonaktif.'
+                messages.error(request, error_message)
             except IntegrityError:
                 error_message = 'SKU sudah dipakai atau data tidak valid.'
                 messages.error(request, error_message)
@@ -332,6 +366,7 @@ def product_edit(request, uuid):
         {
             'product': product,
             'categories': categories,
+            'units': units,
             'error_message': error_message,
             'back_url': back_url,
             'next_url': next_url,
@@ -355,7 +390,234 @@ def product_delete(request, uuid):
 
 @role_required('admin_toko', 'pembelian')
 def purchase_page(request):
-    return render(request, 'inventory/purchase_page.html')
+    query = request.GET.get('q', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+    txs = InventoryTransaction.objects.select_related('supplier').filter(
+        tx_type=InventoryTransaction.TYPE_PURCHASE
+    ).order_by('-tx_date', '-created_at')
+    if query:
+        txs = txs.filter(Q(tx_number__icontains=query) | Q(supplier__name__icontains=query))
+    if date_from:
+        txs = txs.filter(tx_date__gte=date_from)
+    if date_to:
+        txs = txs.filter(tx_date__lte=date_to)
+    close_dates = set(
+        DailyClosing.objects.filter(
+            is_locked=True,
+            close_date__in=txs.values_list('tx_date', flat=True),
+        ).values_list('close_date', flat=True)
+    )
+    page_obj = Paginator(txs, 10).get_page(request.GET.get('page'))
+    for tx in page_obj:
+        tx.can_modify = tx.tx_date not in close_dates
+    return render(
+        request,
+        'inventory/purchase_list.html',
+        {'page_obj': page_obj, 'query': query, 'date_from': date_from, 'date_to': date_to},
+    )
+
+
+def _extract_purchase_items(request):
+    product_ids = request.POST.getlist('product_id[]')
+    qtys = request.POST.getlist('qty[]')
+    costs = request.POST.getlist('unit_cost[]')
+    items = []
+    size = max(len(product_ids), len(qtys), len(costs))
+    for i in range(size):
+        pid = product_ids[i].strip() if i < len(product_ids) else ''
+        q = qtys[i].strip() if i < len(qtys) else ''
+        c = costs[i].strip() if i < len(costs) else ''
+        if not any([pid, q, c]):
+            continue
+        if not all([pid, q, c]):
+            raise ValidationError('Setiap baris item pembelian wajib diisi lengkap.')
+        product = Product.objects.get(id=pid)
+        items.append({'product': product, 'qty': int(q), 'unit_cost': Decimal(c)})
+    return items
+
+
+@role_required('admin_toko', 'pembelian')
+def purchase_create(request):
+    products = Product.objects.order_by('name')
+    suppliers = Supplier.objects.filter(is_active=True).order_by('name')
+    if request.method == 'POST':
+        try:
+            supplier = Supplier.objects.get(id=request.POST.get('supplier_id', '').strip())
+            tx_date_raw = request.POST.get('tx_date', '').strip()
+            tx_date = date.fromisoformat(tx_date_raw) if tx_date_raw else date.today()
+            note = request.POST.get('note', '').strip()
+            items = _extract_purchase_items(request)
+            create_purchase_transaction(
+                supplier=supplier,
+                tx_date=tx_date,
+                items=items,
+                user=request.user,
+                note=note,
+            )
+            messages.success(request, 'Transaksi pembelian berhasil disimpan.')
+            return redirect('purchase_page')
+        except Exception as exc:
+            messages.error(request, str(exc))
+    return render(request, 'inventory/purchase_create.html', {'products': products, 'suppliers': suppliers})
+
+
+@role_required('admin_toko', 'pembelian')
+def purchase_detail(request, uuid):
+    tx = get_object_or_404(
+        InventoryTransaction.objects.select_related('supplier').prefetch_related('items__product'),
+        uuid=uuid,
+        tx_type=InventoryTransaction.TYPE_PURCHASE,
+    )
+    can_modify = not DailyClosing.objects.filter(close_date=tx.tx_date, is_locked=True).exists()
+    return render(request, 'inventory/purchase_detail.html', {'tx': tx, 'can_modify': can_modify})
+
+
+@role_required('admin_toko', 'pembelian')
+def purchase_edit(request, uuid):
+    tx = get_object_or_404(
+        InventoryTransaction.objects.select_related('supplier').prefetch_related('items__product'),
+        uuid=uuid,
+        tx_type=InventoryTransaction.TYPE_PURCHASE,
+    )
+    if DailyClosing.objects.filter(close_date=tx.tx_date, is_locked=True).exists():
+        messages.error(request, 'Transaksi pembelian ini tidak bisa diedit karena tanggalnya sudah tutup harian.')
+        return redirect('purchase_detail', uuid=tx.uuid)
+    products = Product.objects.order_by('name')
+    suppliers = Supplier.objects.filter(is_active=True).order_by('name')
+    next_url = _get_safe_next_url(request)
+    back_url = next_url or f'/inventory/purchases/{tx.uuid}/'
+    if request.method == 'POST':
+        try:
+            supplier = Supplier.objects.get(id=request.POST.get('supplier_id', '').strip())
+            tx_date_raw = request.POST.get('tx_date', '').strip()
+            tx_date = date.fromisoformat(tx_date_raw) if tx_date_raw else tx.tx_date
+            note = request.POST.get('note', '').strip()
+            items = _extract_purchase_items(request)
+            edit_purchase_transaction(
+                tx=tx,
+                supplier=supplier,
+                tx_date=tx_date,
+                items=items,
+                user=request.user,
+                note=note,
+            )
+            messages.success(request, 'Transaksi pembelian berhasil diperbarui.')
+            return redirect('purchase_page')
+        except Exception as exc:
+            messages.error(request, str(exc))
+    return render(
+        request,
+        'inventory/purchase_edit.html',
+        {
+            'tx': tx,
+            'products': products,
+            'suppliers': suppliers,
+            'next_url': next_url,
+            'back_url': back_url,
+            'selected_supplier_id': str(tx.supplier_id) if tx.supplier_id else '',
+        },
+    )
+
+
+@role_required('admin_toko', 'pembelian')
+def purchase_delete(request, uuid):
+    tx = get_object_or_404(
+        InventoryTransaction.objects.select_related('supplier').prefetch_related('items__product'),
+        uuid=uuid,
+        tx_type=InventoryTransaction.TYPE_PURCHASE,
+    )
+    if DailyClosing.objects.filter(close_date=tx.tx_date, is_locked=True).exists():
+        messages.error(request, 'Transaksi pembelian ini tidak bisa dihapus karena tanggalnya sudah tutup harian.')
+        return redirect('purchase_detail', uuid=tx.uuid)
+    if request.method == 'POST':
+        try:
+            delete_purchase_transaction(tx)
+            messages.warning(request, 'Transaksi pembelian berhasil dihapus.')
+        except Exception as exc:
+            messages.error(request, str(exc))
+    return redirect('purchase_page')
+
+
+@role_required('admin_toko', 'pembelian')
+def internal_used_page(request):
+    products = Product.objects.order_by('name')
+    if request.method == 'POST':
+        try:
+            product = Product.objects.get(id=request.POST.get('product_id'))
+            qty = int(request.POST.get('qty', '0'))
+            note = request.POST.get('note', '').strip()
+            post_internal_used(product=product, qty=qty, user=request.user, note=note)
+            messages.success(request, 'Transaksi internal used berhasil diposting.')
+            return redirect('internal_used_page')
+        except Exception as exc:
+            messages.error(request, str(exc))
+    return render(request, 'inventory/internal_used_page.html', {'products': products})
+
+
+@role_required('admin_toko', 'pembelian')
+def stock_opname_page(request):
+    products = Product.objects.order_by('name')
+    if request.method == 'POST':
+        try:
+            product = Product.objects.get(id=request.POST.get('product_id'))
+            actual_stock = int(request.POST.get('actual_stock', '0'))
+            note = request.POST.get('note', '').strip()
+            post_stock_opname(product=product, actual_stock=actual_stock, user=request.user, note=note)
+            messages.success(request, 'Transaksi stock opname berhasil diposting.')
+            return redirect('stock_opname_page')
+        except Exception as exc:
+            messages.error(request, str(exc))
+    return render(request, 'inventory/stock_opname_page.html', {'products': products})
+
+
+@role_required('admin_toko')
+def daily_closing_page(request):
+    if request.method == 'POST':
+        try:
+            close_date_raw = request.POST.get('close_date', '')
+            close_date = date.fromisoformat(close_date_raw) if close_date_raw else date.today()
+            note = request.POST.get('note', '').strip()
+            close_daily(closing_date=close_date, user=request.user, note=note)
+            messages.success(request, f'Tutup harian {close_date} berhasil.')
+            return redirect('daily_closing_page')
+        except Exception as exc:
+            messages.error(request, str(exc))
+    return render(request, 'inventory/daily_closing_page.html')
+
+
+@role_required('admin_toko', 'pembelian', 'kasir')
+def stock_card_report(request):
+    products = Product.objects.order_by('name')
+    product_id = request.GET.get('product_id', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+    ledgers = []
+    selected_product = None
+    if product_id:
+        selected_product = Product.objects.filter(id=product_id).first()
+        if selected_product:
+            ledgers = selected_product.stock_ledgers.select_related('tx').order_by('tx_date', 'created_at')
+            if date_from:
+                ledgers = ledgers.filter(tx_date__gte=date_from)
+            if date_to:
+                ledgers = ledgers.filter(tx_date__lte=date_to)
+    return render(
+        request,
+        'inventory/stock_card_report.html',
+        {
+            'products': products,
+            'selected_product': selected_product,
+            'ledgers': ledgers,
+            'date_from': date_from,
+            'date_to': date_to,
+        },
+    )
+
+
+@role_required('admin_toko', 'pembelian')
+def reorder_alert_page(request):
+    return render(request, 'inventory/reorder_alert_page.html', {'products': low_stock_products()})
 
 
 @role_required('admin_toko', 'pembelian')
@@ -430,3 +692,205 @@ def category_delete(request, uuid):
     else:
         messages.info(request, 'Penghapusan dibatalkan.')
     return redirect('category_list')
+
+
+@role_required('admin_toko', 'pembelian')
+def unit_list(request):
+    query = request.GET.get('q', '').strip()
+    units = Unit.objects.order_by('name')
+    if query:
+        units = units.filter(Q(name__icontains=query) | Q(code__icontains=query))
+
+    page_obj = Paginator(units, 10).get_page(request.GET.get('page'))
+    return render(request, 'inventory/unit_list.html', {'page_obj': page_obj, 'query': query})
+
+
+@role_required('admin_toko', 'pembelian')
+def unit_create(request):
+    error_message = ''
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        code = request.POST.get('code', '').strip().upper()
+        description = request.POST.get('description', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+        if not name or not code:
+            error_message = 'Nama dan kode satuan wajib diisi.'
+            messages.error(request, error_message)
+        elif Unit.objects.filter(code__iexact=code).exists():
+            error_message = 'Kode satuan sudah dipakai.'
+            messages.error(request, error_message)
+        else:
+            Unit.objects.create(name=name, code=code, description=description, is_active=is_active)
+            messages.success(request, 'Satuan berhasil ditambahkan.')
+            return redirect('unit_list')
+    return render(request, 'inventory/unit_create.html', {'error_message': error_message})
+
+
+@role_required('admin_toko', 'pembelian')
+def unit_detail(request, uuid):
+    unit = get_object_or_404(Unit, uuid=uuid)
+    return render(request, 'inventory/unit_detail.html', {'unit': unit})
+
+
+@role_required('admin_toko', 'pembelian')
+def unit_edit(request, uuid):
+    unit = get_object_or_404(Unit, uuid=uuid)
+    next_url = _get_safe_next_url(request)
+    back_url = next_url or f'/inventory/units/{unit.uuid}/'
+    error_message = ''
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        code = request.POST.get('code', '').strip().upper()
+        description = request.POST.get('description', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+        if not name or not code:
+            error_message = 'Nama dan kode satuan wajib diisi.'
+            messages.error(request, error_message)
+        elif Unit.objects.exclude(id=unit.id).filter(code__iexact=code).exists():
+            error_message = 'Kode satuan sudah dipakai.'
+            messages.error(request, error_message)
+        else:
+            unit.name = name
+            unit.code = code
+            unit.description = description
+            unit.is_active = is_active
+            unit.save()
+            messages.success(request, 'Satuan berhasil diperbarui.')
+            return redirect('unit_list')
+    return render(
+        request,
+        'inventory/unit_edit.html',
+        {'unit': unit, 'next_url': next_url, 'back_url': back_url, 'error_message': error_message},
+    )
+
+
+@role_required('admin_toko', 'pembelian')
+def unit_delete(request, uuid):
+    unit = get_object_or_404(Unit, uuid=uuid)
+    if request.method == 'POST':
+        try:
+            name = unit.name
+            unit.delete()
+            messages.warning(request, f'Satuan "{name}" berhasil dihapus.')
+        except Exception:
+            messages.error(request, 'Satuan tidak bisa dihapus karena sudah dipakai produk.')
+    return redirect('unit_list')
+
+
+@role_required('admin_toko', 'pembelian')
+def supplier_list(request):
+    query = request.GET.get('q', '').strip()
+    suppliers = Supplier.objects.order_by('name')
+    if query:
+        suppliers = suppliers.filter(
+            Q(code__icontains=query)
+            | Q(name__icontains=query)
+            | Q(contact_name__icontains=query)
+            | Q(phone__icontains=query)
+            | Q(email__icontains=query)
+            | Q(city__icontains=query)
+        )
+    page_obj = Paginator(suppliers, 10).get_page(request.GET.get('page'))
+    return render(request, 'inventory/supplier_list.html', {'page_obj': page_obj, 'query': query})
+
+
+@role_required('admin_toko', 'pembelian')
+def supplier_create(request):
+    error_message = ''
+    if request.method == 'POST':
+        code = request.POST.get('code', '').strip().upper()
+        name = request.POST.get('name', '').strip()
+        contact_name = request.POST.get('contact_name', '').strip()
+        phone = request.POST.get('phone', '').strip()
+        email = request.POST.get('email', '').strip()
+        address = request.POST.get('address', '').strip()
+        city = request.POST.get('city', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+        if not code or not name:
+            error_message = 'Kode dan nama supplier wajib diisi.'
+            messages.error(request, error_message)
+        elif Supplier.objects.filter(code__iexact=code).exists():
+            error_message = 'Kode supplier sudah dipakai.'
+            messages.error(request, error_message)
+        elif Supplier.objects.filter(name__iexact=name).exists():
+            error_message = 'Nama supplier sudah dipakai.'
+            messages.error(request, error_message)
+        else:
+            Supplier.objects.create(
+                code=code,
+                name=name,
+                contact_name=contact_name,
+                phone=phone,
+                email=email,
+                address=address,
+                city=city,
+                is_active=is_active,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+            messages.success(request, 'Supplier berhasil ditambahkan.')
+            return redirect('supplier_list')
+    return render(request, 'inventory/supplier_create.html', {'error_message': error_message})
+
+
+@role_required('admin_toko', 'pembelian')
+def supplier_detail(request, uuid):
+    supplier = get_object_or_404(Supplier, uuid=uuid)
+    return render(request, 'inventory/supplier_detail.html', {'supplier': supplier})
+
+
+@role_required('admin_toko', 'pembelian')
+def supplier_edit(request, uuid):
+    supplier = get_object_or_404(Supplier, uuid=uuid)
+    next_url = _get_safe_next_url(request)
+    back_url = next_url or f'/inventory/suppliers/{supplier.uuid}/'
+    error_message = ''
+    if request.method == 'POST':
+        code = request.POST.get('code', '').strip().upper()
+        name = request.POST.get('name', '').strip()
+        contact_name = request.POST.get('contact_name', '').strip()
+        phone = request.POST.get('phone', '').strip()
+        email = request.POST.get('email', '').strip()
+        address = request.POST.get('address', '').strip()
+        city = request.POST.get('city', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+        if not code or not name:
+            error_message = 'Kode dan nama supplier wajib diisi.'
+            messages.error(request, error_message)
+        elif Supplier.objects.exclude(id=supplier.id).filter(code__iexact=code).exists():
+            error_message = 'Kode supplier sudah dipakai.'
+            messages.error(request, error_message)
+        elif Supplier.objects.exclude(id=supplier.id).filter(name__iexact=name).exists():
+            error_message = 'Nama supplier sudah dipakai.'
+            messages.error(request, error_message)
+        else:
+            supplier.code = code
+            supplier.name = name
+            supplier.contact_name = contact_name
+            supplier.phone = phone
+            supplier.email = email
+            supplier.address = address
+            supplier.city = city
+            supplier.is_active = is_active
+            supplier.updated_by = request.user
+            supplier.save()
+            messages.success(request, 'Supplier berhasil diperbarui.')
+            return redirect('supplier_list')
+    return render(
+        request,
+        'inventory/supplier_edit.html',
+        {'supplier': supplier, 'next_url': next_url, 'back_url': back_url, 'error_message': error_message},
+    )
+
+
+@role_required('admin_toko', 'pembelian')
+def supplier_delete(request, uuid):
+    supplier = get_object_or_404(Supplier, uuid=uuid)
+    if request.method == 'POST':
+        try:
+            supplier_name = supplier.name
+            supplier.delete()
+            messages.warning(request, f'Supplier "{supplier_name}" berhasil dihapus.')
+        except Exception:
+            messages.error(request, 'Supplier tidak bisa dihapus karena sudah dipakai transaksi.')
+    return redirect('supplier_list')

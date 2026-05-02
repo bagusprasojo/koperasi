@@ -1,3 +1,376 @@
-from django.shortcuts import render
+from decimal import Decimal, InvalidOperation
 
-# Create your views here.
+from django.contrib import messages
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
+
+from core.decorators import role_required
+from .models import Member, MemberCard, MemberLedger, MemberTopUp
+from .services import (
+    approve_topup,
+    bulk_admin_topup,
+    create_admin_topup,
+    get_or_create_wallet,
+    reject_topup,
+    request_member_topup,
+    reverse_topup,
+)
+
+
+def _safe_next_url(request):
+    next_url = request.GET.get('next') or request.POST.get('next') or ''
+    if not url_has_allowed_host_and_scheme(
+        url=next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return ''
+    return next_url
+
+
+@role_required('admin_toko', 'pembelian', 'kasir')
+def member_list(request):
+    query = request.GET.get('q', '').strip()
+    members = Member.objects.select_related('wallet').order_by('full_name')
+    if query:
+        members = members.filter(Q(full_name__icontains=query) | Q(phone__icontains=query))
+    page_obj = Paginator(members, 10).get_page(request.GET.get('page'))
+    return render(request, 'members/member_list.html', {'page_obj': page_obj, 'query': query})
+
+
+@role_required('admin_toko', 'pembelian')
+def member_create(request):
+    if request.method == 'POST':
+        full_name = request.POST.get('full_name', '').strip()
+        phone = request.POST.get('phone', '').strip()
+        email = request.POST.get('email', '').strip()
+        address = request.POST.get('address', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+        if not full_name or not phone:
+            messages.error(request, 'Nama dan nomor telepon wajib diisi.')
+        elif Member.objects.filter(phone=phone).exists():
+            messages.error(request, 'Nomor telepon sudah dipakai.')
+        else:
+            member = Member.objects.create(
+                full_name=full_name,
+                phone=phone,
+                email=email,
+                address=address,
+                is_active=is_active,
+            )
+            get_or_create_wallet(member)
+            messages.success(request, 'Member berhasil ditambahkan.')
+            return redirect('member_list')
+    return render(request, 'members/member_create.html')
+
+
+@role_required('admin_toko', 'pembelian', 'kasir')
+def member_detail(request, uuid):
+    member = get_object_or_404(Member.objects.select_related('wallet'), uuid=uuid)
+    wallet = get_or_create_wallet(member)
+    return render(request, 'members/member_detail.html', {'member': member, 'wallet': wallet})
+
+
+@role_required('admin_toko', 'pembelian')
+def member_edit(request, uuid):
+    member = get_object_or_404(Member, uuid=uuid)
+    next_url = _safe_next_url(request)
+    back_url = next_url or f'/members/{member.uuid}/'
+    if request.method == 'POST':
+        full_name = request.POST.get('full_name', '').strip()
+        phone = request.POST.get('phone', '').strip()
+        email = request.POST.get('email', '').strip()
+        address = request.POST.get('address', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+        if not full_name or not phone:
+            messages.error(request, 'Nama dan nomor telepon wajib diisi.')
+        elif Member.objects.exclude(id=member.id).filter(phone=phone).exists():
+            messages.error(request, 'Nomor telepon sudah dipakai.')
+        else:
+            member.full_name = full_name
+            member.phone = phone
+            member.email = email
+            member.address = address
+            member.is_active = is_active
+            member.save()
+            messages.success(request, 'Member berhasil diperbarui.')
+            return redirect('member_list')
+    return render(request, 'members/member_edit.html', {'member': member, 'next_url': next_url, 'back_url': back_url})
+
+
+@role_required('admin_toko')
+def member_delete(request, uuid):
+    member = get_object_or_404(Member, uuid=uuid)
+    if request.method == 'POST':
+        name = member.full_name
+        member.delete()
+        messages.warning(request, f'Member "{name}" berhasil dihapus.')
+    return redirect('member_list')
+
+
+@role_required('admin_toko', 'pembelian', 'kasir')
+def card_list(request):
+    query = request.GET.get('q', '').strip()
+    cards = MemberCard.objects.select_related('member').order_by('-created_at')
+    if query:
+        cards = cards.filter(Q(card_number__icontains=query) | Q(member__full_name__icontains=query))
+    page_obj = Paginator(cards, 10).get_page(request.GET.get('page'))
+    return render(request, 'members/card_list.html', {'page_obj': page_obj, 'query': query})
+
+
+@role_required('admin_toko', 'pembelian')
+def card_create(request):
+    members = Member.objects.filter(card__isnull=True).order_by('full_name')
+    if request.method == 'POST':
+        member_id = request.POST.get('member_id', '').strip()
+        card_number = request.POST.get('card_number', '').strip()
+        status = request.POST.get('status', MemberCard.STATUS_ACTIVE)
+        if not member_id or not card_number:
+            messages.error(request, 'Member dan nomor kartu wajib diisi.')
+        elif MemberCard.objects.filter(card_number=card_number).exists():
+            messages.error(request, 'Nomor kartu sudah dipakai.')
+        else:
+            member = get_object_or_404(Member, id=member_id)
+            if hasattr(member, 'card'):
+                messages.error(request, 'Member ini sudah punya kartu.')
+            else:
+                MemberCard.objects.create(member=member, card_number=card_number, status=status)
+                get_or_create_wallet(member)
+                messages.success(request, 'Kartu member berhasil diterbitkan.')
+                return redirect('card_list')
+    return render(request, 'members/card_create.html', {'members': members})
+
+
+@role_required('admin_toko', 'pembelian', 'kasir')
+def card_detail(request, uuid):
+    card = get_object_or_404(MemberCard.objects.select_related('member', 'member__wallet'), uuid=uuid)
+    wallet = get_or_create_wallet(card.member)
+    return render(request, 'members/card_detail.html', {'card': card, 'wallet': wallet})
+
+
+@role_required('admin_toko', 'pembelian')
+def card_edit(request, uuid):
+    card = get_object_or_404(MemberCard.objects.select_related('member'), uuid=uuid)
+    next_url = _safe_next_url(request)
+    back_url = next_url or f'/members/cards/{card.uuid}/'
+    if request.method == 'POST':
+        card_number = request.POST.get('card_number', '').strip()
+        status = request.POST.get('status', MemberCard.STATUS_ACTIVE)
+        if not card_number:
+            messages.error(request, 'Nomor kartu wajib diisi.')
+        elif MemberCard.objects.exclude(id=card.id).filter(card_number=card_number).exists():
+            messages.error(request, 'Nomor kartu sudah dipakai.')
+        else:
+            card.card_number = card_number
+            card.status = status
+            card.save()
+            messages.success(request, 'Kartu member berhasil diperbarui.')
+            return redirect('card_list')
+    return render(request, 'members/card_edit.html', {'card': card, 'next_url': next_url, 'back_url': back_url})
+
+
+@role_required('admin_toko')
+def card_delete(request, uuid):
+    card = get_object_or_404(MemberCard, uuid=uuid)
+    if request.method == 'POST':
+        number = card.card_number
+        card.delete()
+        messages.warning(request, f'Kartu "{number}" berhasil dihapus.')
+    return redirect('card_list')
+
+
+@role_required('admin_toko')
+def topup_page(request):
+    query = request.GET.get('q', '').strip()
+    members = Member.objects.order_by('full_name')
+    if query:
+        members = members.filter(Q(full_name__icontains=query) | Q(phone__icontains=query))
+
+    if request.method == 'POST':
+        member_id = request.POST.get('member_id', '').strip()
+        amount_raw = request.POST.get('amount', '').strip()
+        note = request.POST.get('note', '').strip()
+        try:
+            member = Member.objects.get(id=member_id)
+            amount = Decimal(amount_raw)
+            create_admin_topup(member=member, amount=amount, created_by=request.user, note=note)
+            messages.success(request, 'Topup admin berhasil diproses.')
+            return redirect('member_topup')
+        except (Member.DoesNotExist, InvalidOperation):
+            messages.error(request, 'Data topup tidak valid.')
+        except Exception as exc:
+            messages.error(request, str(exc))
+
+    page_obj = Paginator(members, 10).get_page(request.GET.get('page'))
+    return render(request, 'members/topup_page.html', {'page_obj': page_obj, 'query': query})
+
+
+@role_required('member')
+def member_topup_request(request):
+    member = getattr(request.user, 'member_profile', None)
+    if not member:
+        messages.error(request, 'Akun ini tidak terhubung ke data member.')
+        return redirect('dashboard')
+    if request.method == 'POST':
+        amount_raw = request.POST.get('amount', '').strip()
+        note = request.POST.get('note', '').strip()
+        proof_file = request.FILES.get('proof_file')
+        try:
+            amount = Decimal(amount_raw)
+            if amount < Decimal('5000'):
+                raise ValueError('Nominal topup minimal 5000.')
+            if not proof_file:
+                raise ValueError('Bukti transfer wajib diunggah.')
+            if proof_file.size > (2 * 1024 * 1024):
+                raise ValueError('Ukuran bukti transfer maksimal 2MB.')
+            request_member_topup(
+                member=member,
+                amount=amount,
+                requested_by=request.user,
+                note=note,
+                proof_file=proof_file,
+            )
+            messages.success(request, 'Request topup dikirim. Menunggu validasi admin.')
+            return redirect('member_topup_request')
+        except (InvalidOperation, ValueError, Exception) as exc:
+            messages.error(request, str(exc))
+
+    topups = MemberTopUp.objects.filter(member=member).order_by('-created_at')[:20]
+    return render(request, 'members/member_topup_request.html', {'member': member, 'topups': topups})
+
+
+@role_required('member')
+def member_my_balance(request):
+    member = getattr(request.user, 'member_profile', None)
+    if not member:
+        messages.error(request, 'Akun ini tidak terhubung ke data member.')
+        return redirect('dashboard')
+    wallet = get_or_create_wallet(member)
+    return render(request, 'members/member_my_balance.html', {'member': member, 'wallet': wallet})
+
+
+@role_required('member')
+def member_my_ledger(request):
+    member = getattr(request.user, 'member_profile', None)
+    if not member:
+        messages.error(request, 'Akun ini tidak terhubung ke data member.')
+        return redirect('dashboard')
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+    ledgers = MemberLedger.objects.filter(member=member).order_by('-created_at')
+    if date_from:
+        ledgers = ledgers.filter(created_at__date__gte=date_from)
+    if date_to:
+        ledgers = ledgers.filter(created_at__date__lte=date_to)
+    page_obj = Paginator(ledgers, 15).get_page(request.GET.get('page'))
+    return render(
+        request,
+        'members/member_my_ledger.html',
+        {'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'member': member},
+    )
+
+
+@role_required('admin_toko')
+def topup_validation_list(request):
+    query = request.GET.get('q', '').strip()
+    status = request.GET.get('status', '').strip() or MemberTopUp.STATUS_PENDING
+    topups = MemberTopUp.objects.select_related('member', 'requested_by', 'validated_by').order_by('-created_at')
+    if query:
+        topups = topups.filter(Q(member__full_name__icontains=query) | Q(member__phone__icontains=query))
+    if status:
+        topups = topups.filter(status=status)
+    page_obj = Paginator(topups, 15).get_page(request.GET.get('page'))
+    return render(request, 'members/topup_validation_list.html', {'page_obj': page_obj, 'query': query, 'status': status})
+
+
+@role_required('admin_toko')
+def topup_approve_action(request, uuid):
+    topup = get_object_or_404(MemberTopUp, uuid=uuid)
+    if request.method == 'POST':
+        note = request.POST.get('validation_note', '').strip()
+        try:
+            approve_topup(topup=topup, validated_by=request.user, validation_note=note)
+            messages.success(request, 'Topup berhasil di-approve.')
+        except Exception as exc:
+            messages.error(request, str(exc))
+    return redirect('topup_validation_list')
+
+
+@role_required('admin_toko')
+def topup_reject_action(request, uuid):
+    topup = get_object_or_404(MemberTopUp, uuid=uuid)
+    if request.method == 'POST':
+        note = request.POST.get('validation_note', '').strip()
+        try:
+            reject_topup(topup=topup, validated_by=request.user, validation_note=note)
+            messages.warning(request, 'Topup ditolak.')
+        except Exception as exc:
+            messages.error(request, str(exc))
+    return redirect('topup_validation_list')
+
+
+@role_required('admin_toko')
+def topup_reverse_action(request, uuid):
+    topup = get_object_or_404(MemberTopUp, uuid=uuid)
+    if request.method == 'POST':
+        note = request.POST.get('validation_note', '').strip()
+        try:
+            reverse_topup(topup=topup, admin_user=request.user, note=note)
+            messages.warning(request, 'Topup berhasil direversal.')
+        except Exception as exc:
+            messages.error(request, str(exc))
+    return redirect('topup_validation_list')
+
+
+@role_required('admin_toko')
+def topup_bulk_admin(request):
+    if request.method == 'POST':
+        rows = request.POST.get('rows', '').strip().splitlines()
+        items = []
+        for row in rows:
+            parts = [p.strip() for p in row.split(',')]
+            if len(parts) < 2:
+                continue
+            phone, amount_raw = parts[0], parts[1]
+            note = parts[2] if len(parts) > 2 else ''
+            member = Member.objects.filter(phone=phone).first()
+            if not member:
+                continue
+            try:
+                amount = Decimal(amount_raw)
+            except InvalidOperation:
+                continue
+            items.append({'member': member, 'amount': amount, 'note': note})
+        results = bulk_admin_topup(items=items, created_by=request.user)
+        success_count = len([r for r in results if r[1]])
+        fail_count = len(results) - success_count
+        messages.info(request, f'Bulk topup selesai. Sukses: {success_count}, Gagal: {fail_count}.')
+        return redirect('topup_bulk_admin')
+    return render(request, 'members/topup_bulk_admin.html')
+
+
+@role_required('admin_toko', 'pembelian', 'kasir')
+def ledger_list(request):
+    query = request.GET.get('q', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+    ledgers = MemberLedger.objects.select_related('member', 'card').order_by('-created_at')
+    if query:
+        ledgers = ledgers.filter(
+            Q(member__full_name__icontains=query) |
+            Q(member__phone__icontains=query) |
+            Q(card__card_number__icontains=query) |
+            Q(reference_code__icontains=query)
+        )
+    if date_from:
+        ledgers = ledgers.filter(created_at__date__gte=date_from)
+    if date_to:
+        ledgers = ledgers.filter(created_at__date__lte=date_to)
+    page_obj = Paginator(ledgers, 15).get_page(request.GET.get('page'))
+    return render(
+        request,
+        'members/ledger_list.html',
+        {'page_obj': page_obj, 'query': query, 'date_from': date_from, 'date_to': date_to},
+    )

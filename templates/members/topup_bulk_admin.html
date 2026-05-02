@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Topup Bulk Admin{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-3xl rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-2 text-xl font-semibold">Topup Bulk Admin</h1>
+    <p class="mb-4 text-sm text-slate-600">Format per baris: <code>phone,amount,note</code>. Contoh: <code>08123456789,50000,Promo Mei</code></p>
+    <form method="post" class="grid gap-3">{% csrf_token %}
+        <textarea name="rows" rows="12" class="rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="08123456789,50000,Topup promo"></textarea>
+        <div class="flex gap-2">
+            <a href="{% url 'member_topup' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Proses Bulk Topup</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

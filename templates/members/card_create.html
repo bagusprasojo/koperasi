@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Terbitkan Kartu{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Form Terbitkan Kartu</h1>
+    <form method="post" class="grid gap-4">{% csrf_token %}
+        <select name="member_id" class="rounded-md border border-slate-300 px-3 py-2">
+            <option value="">Pilih member</option>{% for m in members %}<option value="{{ m.id }}" {% if request.POST.member_id == m.id|stringformat:"s" %}selected{% endif %}>{{ m.full_name }} ({{ m.phone }})</option>{% endfor %}
+        </select>
+        <input name="card_number" value="{{ request.POST.card_number }}" placeholder="Nomor kartu" class="rounded-md border border-slate-300 px-3 py-2">
+        <select name="status" class="rounded-md border border-slate-300 px-3 py-2"><option value="active">Active</option><option value="blocked">Blocked</option><option value="expired">Expired</option></select>
+        <div class="flex gap-2"><a href="{% url 'card_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a><button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan</button></div>
+    </form>
+</div>
+{% endblock %}

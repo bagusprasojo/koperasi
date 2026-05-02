@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Edit Member{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Form Edit Member</h1>
+    <form method="post" class="grid gap-4">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <input name="full_name" value="{{ request.POST.full_name|default:member.full_name }}" class="rounded-md border border-slate-300 px-3 py-2">
+        <input name="phone" value="{{ request.POST.phone|default:member.phone }}" class="rounded-md border border-slate-300 px-3 py-2">
+        <input name="email" value="{{ request.POST.email|default:member.email }}" class="rounded-md border border-slate-300 px-3 py-2">
+        <textarea name="address" class="rounded-md border border-slate-300 px-3 py-2">{{ request.POST.address|default:member.address }}</textarea>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" {% if request.POST.is_active or member.is_active %}checked{% endif %}> Member aktif</label>
+        <div class="flex gap-2"><a href="{{ back_url }}" class="rounded-md border px-3 py-2 text-sm">Back</a><button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan</button></div>
+    </form>
+</div>
+{% endblock %}

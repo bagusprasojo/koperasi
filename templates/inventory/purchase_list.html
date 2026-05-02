@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Pembelian | POS Koperasi{% endblock %}
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <div class="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <h1 class="text-xl font-semibold">Sampul Transaksi Pembelian</h1>
+        <div class="flex flex-wrap gap-2">
+            <a href="{% url 'purchase_create' %}" class="rounded-md bg-emerald-600 px-3 py-2 text-sm text-white">Tambah Pembelian</a>
+            <a href="{% url 'internal_used_page' %}" class="rounded-md border px-3 py-2 text-sm">Internal Used</a>
+            <a href="{% url 'stock_opname_page' %}" class="rounded-md border px-3 py-2 text-sm">Stock Opname</a>
+            <a href="{% url 'daily_closing_page' %}" class="rounded-md border px-3 py-2 text-sm">Tutup Harian</a>
+        </div>
+    </div>
+    <form method="get" class="mb-4 grid gap-2 md:grid-cols-4">
+        <input name="q" value="{{ query }}" placeholder="Cari no transaksi / supplier..." class="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-2">
+        <input type="date" name="date_from" value="{{ date_from }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+        <input type="date" name="date_to" value="{{ date_to }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+        <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white md:col-span-4">Filter</button>
+    </form>
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm">
+            <thead class="border-b bg-slate-50"><tr><th class="px-3 py-2">No Transaksi</th><th class="px-3 py-2">Tanggal</th><th class="px-3 py-2">Supplier</th><th class="px-3 py-2">Total Pembelian</th><th class="px-3 py-2 text-right">Aksi</th></tr></thead>
+            <tbody>
+                {% for tx in page_obj %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ tx.tx_number }}</td>
+                        <td class="px-3 py-2">{{ tx.tx_date }}</td>
+                        <td class="px-3 py-2">{% if tx.supplier %}{{ tx.supplier.name }}{% else %}-{% endif %}</td>
+                        <td class="px-3 py-2">{{ tx.total_amount|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">
+                            <div class="flex justify-end gap-2">
+                                <a href="{% url 'purchase_detail' tx.uuid %}" class="rounded-md border px-3 py-1">Detail</a>
+                                {% if tx.can_modify %}
+                                    <a href="{% url 'purchase_edit' tx.uuid %}?next={{ request.get_full_path|urlencode }}" class="rounded-md border px-3 py-1">Edit</a>
+                                    <form method="post" action="{% url 'purchase_delete' tx.uuid %}">{% csrf_token %}
+                                        <button type="submit" @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Hapus', message: 'Transaksi pembelian ini akan dihapus.' })" class="rounded-md bg-red-600 px-3 py-1 text-white">Hapus</button>
+                                    </form>
+                                {% else %}
+                                    <span class="rounded-md bg-slate-200 px-3 py-1 text-xs text-slate-700">Terkunci Tutup Harian</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="5" class="px-3 py-4 text-slate-500">Belum ada transaksi pembelian.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="mt-4 flex items-center justify-between text-sm">
+        <p>Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}</p>
+        <div class="flex gap-2">
+            {% if page_obj.has_previous %}<a href="?q={{ query }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page_obj.previous_page_number }}" class="rounded-md border px-3 py-1">Sebelumnya</a>{% endif %}
+            {% if page_obj.has_next %}<a href="?q={{ query }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page_obj.next_page_number }}" class="rounded-md border px-3 py-1">Berikutnya</a>{% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

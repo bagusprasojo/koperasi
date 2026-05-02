@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Tambah Supplier | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Form Tambah Supplier</h1>
+    <form method="post" class="grid gap-4">
+        {% csrf_token %}
+        <div class="grid gap-4 md:grid-cols-2">
+            <div>
+                <label class="mb-1 block text-sm font-medium">Kode Supplier</label>
+                <input name="code" value="{{ request.POST.code }}" class="w-full rounded-md border border-slate-300 px-3 py-2">
+            </div>
+            <div>
+                <label class="mb-1 block text-sm font-medium">Nama Supplier</label>
+                <input name="name" value="{{ request.POST.name }}" class="w-full rounded-md border border-slate-300 px-3 py-2">
+            </div>
+            <div>
+                <label class="mb-1 block text-sm font-medium">Nama Kontak (PIC)</label>
+                <input name="contact_name" value="{{ request.POST.contact_name }}" class="w-full rounded-md border border-slate-300 px-3 py-2">
+            </div>
+            <div>
+                <label class="mb-1 block text-sm font-medium">Telepon</label>
+                <input name="phone" value="{{ request.POST.phone }}" class="w-full rounded-md border border-slate-300 px-3 py-2">
+            </div>
+            <div>
+                <label class="mb-1 block text-sm font-medium">Email</label>
+                <input type="email" name="email" value="{{ request.POST.email }}" class="w-full rounded-md border border-slate-300 px-3 py-2">
+            </div>
+            <div>
+                <label class="mb-1 block text-sm font-medium">Kota</label>
+                <input name="city" value="{{ request.POST.city }}" class="w-full rounded-md border border-slate-300 px-3 py-2">
+            </div>
+        </div>
+        <div>
+            <label class="mb-1 block text-sm font-medium">Alamat</label>
+            <textarea name="address" class="w-full rounded-md border border-slate-300 px-3 py-2">{{ request.POST.address }}</textarea>
+        </div>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" {% if request.POST.is_active %}checked{% endif %}> Supplier aktif</label>
+        {% if error_message %}
+            <p class="text-sm text-red-600">{{ error_message }}</p>
+        {% endif %}
+        <div class="flex gap-2">
+            <a href="{% url 'supplier_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

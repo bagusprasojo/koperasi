@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Tambah Satuan | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Form Tambah Satuan</h1>
+    <form method="post" class="grid gap-4">
+        {% csrf_token %}
+        <div>
+            <label class="mb-1 block text-sm font-medium">Nama Satuan</label>
+            <input name="name" value="{{ request.POST.name }}" class="w-full rounded-md border border-slate-300 px-3 py-2">
+        </div>
+        <div>
+            <label class="mb-1 block text-sm font-medium">Kode Satuan</label>
+            <input name="code" value="{{ request.POST.code }}" class="w-full rounded-md border border-slate-300 px-3 py-2">
+        </div>
+        <div>
+            <label class="mb-1 block text-sm font-medium">Deskripsi</label>
+            <textarea name="description" class="w-full rounded-md border border-slate-300 px-3 py-2">{{ request.POST.description }}</textarea>
+        </div>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" {% if request.POST.is_active %}checked{% endif %}> Satuan aktif</label>
+        {% if error_message %}
+            <p class="text-sm text-red-600">{{ error_message }}</p>
+        {% endif %}
+        <div class="flex gap-2">
+            <a href="{% url 'unit_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

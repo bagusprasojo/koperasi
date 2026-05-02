@@ -27,6 +27,26 @@
             </select>
             {% endwith %}
         </div>
+        <div>
+            <label class="mb-1 block text-sm font-medium">Satuan</label>
+            {% if product.unit %}
+                {% with selected_unit=request.POST.unit_id|default:product.unit.id|stringformat:"s" %}
+                <select name="unit_id" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                    <option value="">Pilih satuan</option>
+                    {% for unit in units %}
+                        <option value="{{ unit.id }}" {% if selected_unit == unit.id|stringformat:"s" %}selected{% endif %}>{{ unit.name }} ({{ unit.code }})</option>
+                    {% endfor %}
+                </select>
+                {% endwith %}
+            {% else %}
+            <select name="unit_id" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                <option value="">Pilih satuan</option>
+                {% for unit in units %}
+                    <option value="{{ unit.id }}" {% if request.POST.unit_id == unit.id|stringformat:"s" %}selected{% endif %}>{{ unit.name }} ({{ unit.code }})</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+        </div>
         <div class="rounded-lg border border-slate-200 p-4">
             <div class="mb-3 flex items-center justify-between">
                 <h2 class="text-sm font-semibold">Level Harga (Fixed 3 Level)</h2>

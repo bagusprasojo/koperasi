@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Kartu Stok{% endblock %}
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Laporan Kartu Stok per Produk</h1>
+    <form method="get" class="mb-4 grid gap-2 md:grid-cols-4">
+        <select name="product_id" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="">Pilih produk</option>
+            {% for p in products %}
+                <option value="{{ p.id }}" {% if selected_product and selected_product.id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" name="date_from" value="{{ date_from }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+        <input type="date" name="date_to" value="{{ date_to }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+        <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Tampilkan</button>
+    </form>
+    {% if selected_product %}
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm">
+            <thead class="border-b bg-slate-50">
+                <tr><th class="px-3 py-2">Tanggal</th><th class="px-3 py-2">No Tx</th><th class="px-3 py-2">Jenis</th><th class="px-3 py-2">In</th><th class="px-3 py-2">Out</th><th class="px-3 py-2">Saldo</th><th class="px-3 py-2">HPP</th></tr>
+            </thead>
+            <tbody>
+                {% for l in ledgers %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ l.tx_date }}</td>
+                        <td class="px-3 py-2">{{ l.tx.tx_number }}</td>
+                        <td class="px-3 py-2">{{ l.tx.get_tx_type_display }}</td>
+                        <td class="px-3 py-2">{{ l.qty_in|intcomma }}</td>
+                        <td class="px-3 py-2">{{ l.qty_out|intcomma }}</td>
+                        <td class="px-3 py-2">{{ l.balance_after|intcomma }}</td>
+                        <td class="px-3 py-2">{{ l.unit_cost_at_txn|floatformat:2|intcomma }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="7" class="px-3 py-4 text-slate-500">Belum ada mutasi.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

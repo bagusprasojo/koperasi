@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Satuan | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Detail Satuan</h1>
+    <div class="grid gap-3 text-sm">
+        <div><p class="text-slate-500">Nama</p><p class="font-medium">{{ unit.name }}</p></div>
+        <div><p class="text-slate-500">Kode</p><p class="font-medium">{{ unit.code }}</p></div>
+        <div><p class="text-slate-500">Status</p><p class="font-medium">{% if unit.is_active %}Aktif{% else %}Nonaktif{% endif %}</p></div>
+        <div><p class="text-slate-500">Deskripsi</p><p class="font-medium">{{ unit.description|default:'-' }}</p></div>
+    </div>
+    <div class="mt-6 flex gap-2">
+        <a href="{% url 'unit_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>
+        <a href="{% url 'unit_edit' unit.uuid %}?next={{ request.path|urlencode }}" class="rounded-md border px-3 py-2 text-sm">Edit</a>
+        <form method="post" action="{% url 'unit_delete' unit.uuid %}">
+            {% csrf_token %}
+            <button type="submit" @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Hapus', message: 'Satuan ini akan dihapus.' })" class="rounded-md bg-red-600 px-3 py-2 text-sm text-white">Hapus</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

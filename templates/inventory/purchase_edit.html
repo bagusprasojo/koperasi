@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Edit Pembelian{% endblock %}
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm" x-data="{
+    rows: [{ product_id: '', qty: 1, unit_cost: '' }],
+    grandTotal() {
+        return this.rows.reduce((acc, row) => acc + ((parseFloat(row.qty) || 0) * (parseFloat(row.unit_cost) || 0)), 0)
+    },
+    grandTotalLabel() {
+        return this.grandTotal().toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    }
+}" x-init="rows = [{% for it in tx.items.all %}{ product_id: '{{ it.product.id }}', qty: '{{ it.qty }}', unit_cost: '{{ it.unit_cost }}' }{% if not forloop.last %},{% endif %}{% endfor %}]; if (!rows.length) { rows = [{ product_id: '', qty: 1, unit_cost: '' }] }">
+    <h1 class="mb-4 text-xl font-semibold">Form Edit Pembelian</h1>
+    <form method="post" class="grid gap-4">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <div class="grid gap-3 md:grid-cols-3">
+            <input type="date" name="tx_date" value="{{ request.POST.tx_date|default:tx.tx_date|date:'Y-m-d' }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            {% with selected_supplier=request.POST.supplier_id|default:selected_supplier_id %}
+            <select name="supplier_id" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <option value="">Pilih supplier</option>
+                {% for s in suppliers %}
+                    <option value="{{ s.id }}" {% if selected_supplier == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                {% endfor %}
+            </select>
+            {% endwith %}
+            <input name="note" value="{{ request.POST.note|default:tx.note }}" placeholder="Catatan" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+        </div>
+        <div class="rounded-lg border border-slate-200 p-4">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-sm font-semibold">Item Pembelian</h2>
+                <button type="button" @click="rows.push({ product_id: '', qty: 1, unit_cost: '' })" class="rounded-md border px-3 py-1 text-sm">Tambah Baris</button>
+            </div>
+            <template x-for="(row, i) in rows" :key="i">
+                <div class="mb-2 grid gap-2 md:grid-cols-12">
+                    <select name="product_id[]" x-model="row.product_id" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-6">
+                        <option value="">Pilih produk</option>
+                        {% for p in products %}
+                            <option value="{{ p.id }}">{{ p.name }} (Stok: {{ p.stock|intcomma }})</option>
+                        {% endfor %}
+                    </select>
+                    <input type="number" min="1" name="qty[]" x-model="row.qty" placeholder="Qty" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-2">
+                    <input type="number" min="0.01" step="0.01" name="unit_cost[]" x-model="row.unit_cost" placeholder="Harga/unit" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-3">
+                    <button type="button" @click="rows.splice(i,1)" class="rounded-md border px-2 py-2 text-sm md:col-span-1">X</button>
+                </div>
+            </template>
+            <div class="mt-4 border-t border-slate-200 pt-3 text-right text-sm font-semibold">
+                Total Pembelian: <span x-text="grandTotalLabel()"></span>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ back_url }}" class="rounded-md border px-3 py-2 text-sm">Back</a>
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

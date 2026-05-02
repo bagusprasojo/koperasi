@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Supplier | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Detail Supplier</h1>
+    <div class="grid gap-3 text-sm md:grid-cols-2">
+        <div><p class="text-slate-500">Kode</p><p class="font-medium">{{ supplier.code }}</p></div>
+        <div><p class="text-slate-500">Nama</p><p class="font-medium">{{ supplier.name }}</p></div>
+        <div><p class="text-slate-500">Nama Kontak (PIC)</p><p class="font-medium">{{ supplier.contact_name|default:'-' }}</p></div>
+        <div><p class="text-slate-500">Telepon</p><p class="font-medium">{{ supplier.phone|default:'-' }}</p></div>
+        <div><p class="text-slate-500">Email</p><p class="font-medium">{{ supplier.email|default:'-' }}</p></div>
+        <div><p class="text-slate-500">Kota</p><p class="font-medium">{{ supplier.city|default:'-' }}</p></div>
+        <div class="md:col-span-2"><p class="text-slate-500">Alamat</p><p class="font-medium">{{ supplier.address|default:'-' }}</p></div>
+        <div><p class="text-slate-500">Status</p><p class="font-medium">{% if supplier.is_active %}Aktif{% else %}Nonaktif{% endif %}</p></div>
+        <div><p class="text-slate-500">Dibuat Oleh</p><p class="font-medium">{{ supplier.created_by.username|default:'-' }}</p></div>
+        <div><p class="text-slate-500">Diperbarui Oleh</p><p class="font-medium">{{ supplier.updated_by.username|default:'-' }}</p></div>
+    </div>
+    <div class="mt-6 flex gap-2">
+        <a href="{% url 'supplier_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>
+        <a href="{% url 'supplier_edit' supplier.uuid %}?next={{ request.path|urlencode }}" class="rounded-md border px-3 py-2 text-sm">Edit</a>
+        <form method="post" action="{% url 'supplier_delete' supplier.uuid %}">
+            {% csrf_token %}
+            <button type="submit" @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Hapus', message: 'Supplier ini akan dihapus.' })" class="rounded-md bg-red-600 px-3 py-2 text-sm text-white">Hapus</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

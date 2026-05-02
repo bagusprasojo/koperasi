@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Supplier | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <div class="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <h1 class="text-xl font-semibold">Sampul Supplier</h1>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="{% url 'supplier_create' %}" class="rounded-md bg-emerald-600 px-3 py-2 text-sm text-white">Tambah Supplier</a>
+            <form method="get" class="flex gap-2">
+                <input name="q" value="{{ query }}" placeholder="Cari kode / nama / kontak..." class="w-72 rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Cari</button>
+            </form>
+        </div>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm">
+            <thead class="border-b bg-slate-50">
+                <tr>
+                    <th class="px-3 py-2">Kode</th>
+                    <th class="px-3 py-2">Nama</th>
+                    <th class="px-3 py-2">PIC</th>
+                    <th class="px-3 py-2">Telepon</th>
+                    <th class="px-3 py-2">Kota</th>
+                    <th class="px-3 py-2">Status</th>
+                    <th class="px-3 py-2 text-right">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for supplier in page_obj %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ supplier.code }}</td>
+                        <td class="px-3 py-2">{{ supplier.name }}</td>
+                        <td class="px-3 py-2">{{ supplier.contact_name|default:'-' }}</td>
+                        <td class="px-3 py-2">{{ supplier.phone|default:'-' }}</td>
+                        <td class="px-3 py-2">{{ supplier.city|default:'-' }}</td>
+                        <td class="px-3 py-2">{% if supplier.is_active %}Aktif{% else %}Nonaktif{% endif %}</td>
+                        <td class="px-3 py-2">
+                            <div class="flex justify-end gap-2">
+                                <a href="{% url 'supplier_detail' supplier.uuid %}" class="rounded-md border px-3 py-1">Detail</a>
+                                <a href="{% url 'supplier_edit' supplier.uuid %}?next={{ request.get_full_path|urlencode }}" class="rounded-md border px-3 py-1">Edit</a>
+                                <form method="post" action="{% url 'supplier_delete' supplier.uuid %}">
+                                    {% csrf_token %}
+                                    <button type="submit" @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Hapus', message: 'Supplier {{ supplier.name|escapejs }} akan dihapus.' })" class="rounded-md bg-red-600 px-3 py-1 text-white">Hapus</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="7" class="px-3 py-4 text-slate-500">Belum ada data supplier.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="mt-4 flex items-center justify-between text-sm">
+        <p>Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}</p>
+        <div class="flex gap-2">
+            {% if page_obj.has_previous %}<a href="?q={{ query }}&page={{ page_obj.previous_page_number }}" class="rounded-md border px-3 py-1">Sebelumnya</a>{% endif %}
+            {% if page_obj.has_next %}<a href="?q={{ query }}&page={{ page_obj.next_page_number }}" class="rounded-md border px-3 py-1">Berikutnya</a>{% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

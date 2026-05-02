@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Request Topup Member{% endblock %}
+{% block content %}
+<div class="grid gap-4 lg:grid-cols-3">
+    <div class="rounded-xl bg-white p-6 shadow-sm lg:col-span-2">
+        <h1 class="mb-4 text-xl font-semibold">Riwayat Request Topup</h1>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50"><tr><th class="px-3 py-2">No Transaksi</th><th class="px-3 py-2">Tanggal Request</th><th class="px-3 py-2">Nominal</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Tanggal Efektif</th></tr></thead>
+                <tbody>
+                    {% for t in topups %}
+                        <tr class="border-b {% if t.status == 'pending' %}bg-amber-50{% elif t.status == 'reversed' %}bg-rose-50{% endif %}">
+                            <td class="px-3 py-2">{{ t.topup_number|default:'-' }}</td>
+                            <td class="px-3 py-2">{{ t.created_at }}</td>
+                            <td class="px-3 py-2">{{ t.amount|floatformat:2|intcomma }}</td>
+                            <td class="px-3 py-2">{{ t.get_status_display }}</td>
+                            <td class="px-3 py-2">{{ t.effective_at|default:'-' }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5" class="px-3 py-4 text-slate-500">Belum ada request topup.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <h2 class="mb-4 text-lg font-semibold">Form Request Topup</h2>
+        <form method="post" enctype="multipart/form-data" class="grid gap-3">{% csrf_token %}
+            <input value="{{ member.full_name }}" disabled class="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm">
+            <input name="amount" type="number" step="0.01" min="5000" placeholder="Nominal topup (minimal 5000)" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <input name="proof_file" type="file" accept="image/*,.pdf" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <p class="text-xs text-slate-500">Bukti transfer wajib diisi. Maksimal ukuran file 2MB.</p>
+            <textarea name="note" placeholder="Catatan" class="rounded-md border border-slate-300 px-3 py-2 text-sm"></textarea>
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Kirim Request</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, Product, ProductPriceTier
+from .models import Category, Product, ProductPriceTier, Supplier
 from django.forms.models import BaseInlineFormSet
 from django.core.exceptions import ValidationError
 
@@ -58,3 +58,9 @@ class ProductPriceTierAdmin(admin.ModelAdmin):
         'max_qty',
         'price'
     ]
+
+
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ['code', 'name', 'contact_name', 'phone', 'city', 'is_active']
+    search_fields = ['code', 'name', 'contact_name', 'phone', 'email', 'city']

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Topup Member{% endblock %}
+{% block content %}
+<div class="grid gap-4 lg:grid-cols-3">
+    <div class="rounded-xl bg-white p-6 shadow-sm lg:col-span-2">
+        <h1 class="mb-4 text-xl font-semibold">Sampul Member (Topup)</h1>
+        <form method="get" class="mb-4 flex gap-2"><input name="q" value="{{ query }}" placeholder="Cari nama / telepon..." class="w-72 rounded-md border border-slate-300 px-3 py-2 text-sm"><button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Cari</button></form>
+        <div class="overflow-x-auto"><table class="min-w-full text-left text-sm"><thead class="border-b bg-slate-50"><tr><th class="px-3 py-2">Nama</th><th class="px-3 py-2">Telepon</th><th class="px-3 py-2">Saldo</th><th class="px-3 py-2">Kartu</th></tr></thead><tbody>{% for m in page_obj %}<tr class="border-b"><td class="px-3 py-2">{{ m.full_name }}</td><td class="px-3 py-2">{{ m.phone }}</td><td class="px-3 py-2">{{ m.wallet.balance|default:0|floatformat:2|intcomma }}</td><td class="px-3 py-2">{% if m.card %}{{ m.card.card_number }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="px-3 py-4 text-slate-500">Belum ada member.</td></tr>{% endfor %}</tbody></table></div>
+        <div class="mt-4 flex items-center justify-between text-sm"><p>Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}</p><div class="flex gap-2">{% if page_obj.has_previous %}<a href="?q={{ query }}&page={{ page_obj.previous_page_number }}" class="rounded-md border px-3 py-1">Sebelumnya</a>{% endif %}{% if page_obj.has_next %}<a href="?q={{ query }}&page={{ page_obj.next_page_number }}" class="rounded-md border px-3 py-1">Berikutnya</a>{% endif %}</div></div>
+    </div>
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <h2 class="mb-4 text-lg font-semibold">Form Topup Admin (Langsung)</h2>
+        <form method="post" class="grid gap-3">{% csrf_token %}
+            <input name="member_id" placeholder="ID Member (angka)" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <input name="amount" type="number" step="0.01" min="0.01" placeholder="Nominal topup" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <textarea name="note" placeholder="Catatan" class="rounded-md border border-slate-300 px-3 py-2 text-sm"></textarea>
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Proses Topup</button>
+            <a href="{% url 'topup_validation_list' %}?status=pending" class="rounded-md border px-3 py-2 text-center text-sm">
+                Validasi Topup Member
+                {% if pending_topup_count > 0 %}
+                    <span class="ml-1 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white">{{ pending_topup_count }}</span>
+                {% endif %}
+            </a>
+            <a href="{% url 'topup_bulk_admin' %}" class="rounded-md border px-3 py-2 text-center text-sm">Topup Bulk Admin</a>
+            <a href="{% url 'member_ledger' %}" class="rounded-md border px-3 py-2 text-center text-sm">Lihat Ledger</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

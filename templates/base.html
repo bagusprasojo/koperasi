@@ -37,10 +37,53 @@
                     <button class="rounded-md border px-3 py-1 text-sm md:hidden" @click="open = !open">Menu</button>
                     <nav class="hidden items-center gap-3 md:flex">
                         <a href="{% url 'dashboard' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Dashboard</a>
-                        <a href="{% url 'product_list' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Produk</a>
-                        <a href="{% url 'category_list' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Kategori</a>
-                        <a href="{% url 'purchase_page' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Pembelian</a>
-                        <a href="{% url 'pos_page' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Kasir</a>
+                        {% if is_member_role %}
+                            <a href="{% url 'member_topup_request' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Topup Saya</a>
+                            <a href="{% url 'member_my_balance' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Cek Saldo</a>
+                            <a href="{% url 'member_my_ledger' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Mutasi Saya</a>
+                        {% endif %}
+                        {% if is_admin_toko_role or is_kasir_role or is_pembelian_role %}
+                            <div class="relative" x-data="{ mOpen: false }">
+                                <button @click="mOpen=!mOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Master</button>
+                                <div x-show="mOpen" x-cloak @click.outside="mOpen=false" class="absolute left-0 z-40 mt-1 w-52 rounded-md border bg-white p-1 shadow">
+                                    <a href="{% url 'category_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kategori</a>
+                                    <a href="{% url 'unit_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Satuan</a>
+                                    <a href="{% url 'supplier_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Supplier</a>
+                                    <a href="{% url 'product_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Produk</a>
+                                    <a href="{% url 'member_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Member</a>
+                                    <a href="{% url 'card_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Member</a>
+                                </div>
+                            </div>
+                            <div class="relative" x-data="{ tOpen: false }">
+                                <button @click="tOpen=!tOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Transaksi</button>
+                                <div x-show="tOpen" x-cloak @click.outside="tOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
+                                    <a href="{% url 'pos_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kasir (POS)</a>
+                                    <a href="{% url 'purchase_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Pembelian</a>
+                                    <a href="{% url 'internal_used_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Internal Used</a>
+                                    <a href="{% url 'stock_opname_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Stock Opname</a>
+                                    {% if is_admin_toko_role %}
+                                        <a href="{% url 'member_topup' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Topup Admin</a>
+                                        <a href="{% url 'daily_closing_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Tutup Harian</a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="relative" x-data="{ rOpen: false }">
+                                <button @click="rOpen=!rOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Laporan</button>
+                                <div x-show="rOpen" x-cloak @click.outside="rOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
+                                    <a href="{% url 'stock_card_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Stok</a>
+                                    <a href="{% url 'reorder_alert_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Reorder Alert</a>
+                                    <a href="{% url 'member_ledger' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Ledger Member</a>
+                                </div>
+                            </div>
+                            {% if is_admin_toko_role %}
+                                <a href="{% url 'topup_validation_list' %}?status=pending" class="rounded-md bg-slate-100 px-3 py-2 text-sm hover:bg-slate-200">
+                                    Validasi Topup
+                                    {% if pending_topup_count > 0 %}
+                                        <span class="ml-1 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white">{{ pending_topup_count }}</span>
+                                    {% endif %}
+                                </a>
+                            {% endif %}
+                        {% endif %}
                         <form method="post" action="{% url 'logout' %}">
                             {% csrf_token %}
                             <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Logout</button>
@@ -50,10 +93,41 @@
                 <nav class="mx-auto max-w-7xl px-4 pb-4 md:hidden" x-show="open" x-transition>
                     <div class="grid gap-2">
                         <a href="{% url 'dashboard' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Dashboard</a>
-                        <a href="{% url 'product_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Produk</a>
-                        <a href="{% url 'category_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kategori</a>
-                        <a href="{% url 'purchase_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Pembelian</a>
-                        <a href="{% url 'pos_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kasir</a>
+                        {% if is_member_role %}
+                            <a href="{% url 'member_topup_request' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Topup Saya</a>
+                            <a href="{% url 'member_my_balance' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Cek Saldo</a>
+                            <a href="{% url 'member_my_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Mutasi Saya</a>
+                        {% endif %}
+                        {% if is_admin_toko_role or is_kasir_role or is_pembelian_role %}
+                            <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Master</p>
+                            <a href="{% url 'category_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kategori</a>
+                            <a href="{% url 'unit_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Satuan</a>
+                            <a href="{% url 'supplier_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Supplier</a>
+                            <a href="{% url 'product_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Produk</a>
+                            <a href="{% url 'member_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Member</a>
+                            <a href="{% url 'card_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Member</a>
+                            <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Transaksi</p>
+                            <a href="{% url 'pos_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kasir (POS)</a>
+                            <a href="{% url 'purchase_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Pembelian</a>
+                            <a href="{% url 'internal_used_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Internal Used</a>
+                            <a href="{% url 'stock_opname_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Stock Opname</a>
+                            {% if is_admin_toko_role %}
+                                <a href="{% url 'member_topup' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Topup Admin</a>
+                                <a href="{% url 'daily_closing_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Tutup Harian</a>
+                            {% endif %}
+                            <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Laporan</p>
+                            <a href="{% url 'stock_card_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Stok</a>
+                            <a href="{% url 'reorder_alert_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Reorder Alert</a>
+                            <a href="{% url 'member_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Ledger Member</a>
+                            {% if is_admin_toko_role %}
+                                <a href="{% url 'topup_validation_list' %}?status=pending" class="rounded-md bg-slate-100 px-3 py-2 text-sm">
+                                    Validasi Topup
+                                    {% if pending_topup_count > 0 %}
+                                        <span class="ml-1 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white">{{ pending_topup_count }}</span>
+                                    {% endif %}
+                                </a>
+                            {% endif %}
+                        {% endif %}
                         <form method="post" action="{% url 'logout' %}">
                             {% csrf_token %}
                             <button class="w-full rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Logout</button>

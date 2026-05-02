@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Detail Kartu{% endblock %}
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Detail Kartu Member</h1>
+    <div class="grid gap-3 text-sm">
+        <div><p class="text-slate-500">Nomor Kartu</p><p class="font-medium">{{ card.card_number }}</p></div>
+        <div><p class="text-slate-500">Member</p><p class="font-medium">{{ card.member.full_name }}</p></div>
+        <div><p class="text-slate-500">Status</p><p class="font-medium">{{ card.get_status_display }}</p></div>
+        <div><p class="text-slate-500">Saldo Deposit</p><p class="font-medium">{{ wallet.balance|floatformat:2|intcomma }}</p></div>
+    </div>
+    <div class="mt-6 flex gap-2"><a href="{% url 'card_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a><a href="{% url 'card_edit' card.uuid %}?next={{ request.path|urlencode }}" class="rounded-md border px-3 py-2 text-sm">Edit</a><form method="post" action="{% url 'card_delete' card.uuid %}">{% csrf_token %}<button type="submit" @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Hapus', message: 'Kartu ini akan dihapus.' })" class="rounded-md bg-red-600 px-3 py-2 text-sm text-white">Hapus</button></form></div>
+</div>
+{% endblock %}

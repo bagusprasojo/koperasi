@@ -9,6 +9,7 @@
     <div class="grid gap-3 text-sm">
         <div><p class="text-slate-500">Nama Produk</p><p class="font-medium">{{ product.name }}</p></div>
         <div><p class="text-slate-500">Kategori</p><p class="font-medium">{{ product.category.name }}</p></div>
+        <div><p class="text-slate-500">Satuan</p><p class="font-medium">{% if product.unit %}{{ product.unit.name }} ({{ product.unit.code }}){% else %}-{% endif %}</p></div>
         <div><p class="text-slate-500">SKU</p><p class="font-medium">{{ product.sku }}</p></div>
         <div><p class="text-slate-500">Stok</p><p class="font-medium">{{ product.stock|intcomma }}</p></div>
         <div><p class="text-slate-500">Dibuat</p><p class="font-medium">{{ product.created_at }}</p></div>

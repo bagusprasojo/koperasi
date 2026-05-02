@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Validasi Topup Member{% endblock %}
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="mb-4 text-xl font-semibold">Sampul Validasi Topup</h1>
+    <form method="get" class="mb-4 grid gap-2 md:grid-cols-4">
+        <input name="q" value="{{ query }}" placeholder="Cari member..." class="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-2">
+        <select name="status" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="">Semua Status</option>
+            <option value="pending" {% if status == 'pending' %}selected{% endif %}>Pending</option>
+            <option value="approved" {% if status == 'approved' %}selected{% endif %}>Approved</option>
+            <option value="rejected" {% if status == 'rejected' %}selected{% endif %}>Rejected</option>
+            <option value="reversed" {% if status == 'reversed' %}selected{% endif %}>Reversed</option>
+        </select>
+        <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Filter</button>
+    </form>
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm">
+            <thead class="border-b bg-slate-50"><tr><th class="px-3 py-2">No Transaksi</th><th class="px-3 py-2">Member</th><th class="px-3 py-2">Nominal</th><th class="px-3 py-2">Tipe Topup</th><th class="px-3 py-2">Jenis</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Bukti</th><th class="px-3 py-2 text-right">Aksi</th></tr></thead>
+            <tbody>
+                {% for t in page_obj %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ t.topup_number|default:'-' }}</td>
+                        <td class="px-3 py-2">{{ t.member.full_name }}</td>
+                        <td class="px-3 py-2">{{ t.amount|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ t.get_topup_type_display }}</td>
+                        <td class="px-3 py-2">{{ t.get_kind_display }}</td>
+                        <td class="px-3 py-2">{{ t.get_status_display }}</td>
+                        <td class="px-3 py-2">{% if t.proof_file %}<a href="{{ t.proof_file.url }}" target="_blank" class="underline">Lihat</a>{% else %}-{% endif %}</td>
+                        <td class="px-3 py-2">
+                            <div class="flex justify-end gap-2">
+                                {% if t.status == 'pending' %}
+                                <form method="post" action="{% url 'topup_approve_action' t.uuid %}">{% csrf_token %}<button class="rounded-md border px-3 py-1">Approve</button></form>
+                                <form method="post" action="{% url 'topup_reject_action' t.uuid %}">{% csrf_token %}<button class="rounded-md border px-3 py-1">Reject</button></form>
+                                {% endif %}
+                                {% if t.status == 'approved' and t.kind != 'reversal' %}
+                                <form method="post" action="{% url 'topup_reverse_action' t.uuid %}">{% csrf_token %}
+                                    <button type="submit" @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Reversal', message: 'Topup ini akan direversal.' })" class="rounded-md bg-red-600 px-3 py-1 text-white">Reversal</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="8" class="px-3 py-4 text-slate-500">Belum ada data topup.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="mt-4 flex items-center justify-between text-sm">
+        <p>Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}</p>
+        <div class="flex gap-2">
+            {% if page_obj.has_previous %}<a href="?q={{ query }}&status={{ status }}&page={{ page_obj.previous_page_number }}" class="rounded-md border px-3 py-1">Sebelumnya</a>{% endif %}
+            {% if page_obj.has_next %}<a href="?q={{ query }}&status={{ status }}&page={{ page_obj.next_page_number }}" class="rounded-md border px-3 py-1">Berikutnya</a>{% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
