@@ -439,7 +439,7 @@ def _extract_purchase_items(request):
 
 @role_required('admin_toko', 'pembelian')
 def purchase_create(request):
-    products = Product.objects.order_by('name')
+    products = Product.objects.select_related('unit').order_by('name')
     suppliers = Supplier.objects.filter(is_active=True).order_by('name')
     if request.method == 'POST':
         try:
@@ -459,7 +459,37 @@ def purchase_create(request):
             return redirect('purchase_page')
         except Exception as exc:
             messages.error(request, str(exc))
-    return render(request, 'inventory/purchase_create.html', {'products': products, 'suppliers': suppliers})
+    suppliers_data = [
+        {
+            'id': str(s.id),
+            'code': s.code or '',
+            'name': s.name,
+            'phone': s.phone or '',
+            'email': s.email or '',
+            'address': s.address or '',
+            'city': s.city or '',
+        }
+        for s in suppliers
+    ]
+    products_data = [
+        {
+            'id': str(p.id),
+            'name': p.name,
+            'sku': p.sku,
+            'unit': p.unit.name if p.unit else '-',
+        }
+        for p in products
+    ]
+    return render(
+        request,
+        'inventory/purchase_create.html',
+        {
+            'products': products,
+            'suppliers': suppliers,
+            'suppliers_json': _to_json_payload(suppliers_data),
+            'products_json': _to_json_payload(products_data),
+        },
+    )
 
 
 @role_required('admin_toko', 'pembelian')
@@ -483,7 +513,7 @@ def purchase_edit(request, uuid):
     if DailyClosing.objects.filter(close_date=tx.tx_date, is_locked=True).exists():
         messages.error(request, 'Transaksi pembelian ini tidak bisa diedit karena tanggalnya sudah tutup harian.')
         return redirect('purchase_detail', uuid=tx.uuid)
-    products = Product.objects.order_by('name')
+    products = Product.objects.select_related('unit').order_by('name')
     suppliers = Supplier.objects.filter(is_active=True).order_by('name')
     next_url = _get_safe_next_url(request)
     back_url = next_url or f'/inventory/purchases/{tx.uuid}/'
@@ -516,6 +546,41 @@ def purchase_edit(request, uuid):
             'next_url': next_url,
             'back_url': back_url,
             'selected_supplier_id': str(tx.supplier_id) if tx.supplier_id else '',
+            'suppliers_json': _to_json_payload(
+                [
+                    {
+                        'id': str(s.id),
+                        'code': s.code or '',
+                        'name': s.name,
+                        'phone': s.phone or '',
+                        'email': s.email or '',
+                        'address': s.address or '',
+                        'city': s.city or '',
+                    }
+                    for s in suppliers
+                ]
+            ),
+            'products_json': _to_json_payload(
+                [
+                    {
+                        'id': str(p.id),
+                        'name': p.name,
+                        'sku': p.sku,
+                        'unit': p.unit.name if p.unit else '-',
+                    }
+                    for p in products
+                ]
+            ),
+            'initial_items_json': _to_json_payload(
+                [
+                    {
+                        'product_id': str(it.product_id),
+                        'qty': it.qty,
+                        'unit_cost': str(it.unit_cost),
+                    }
+                    for it in tx.items.all()
+                ]
+            ),
         },
     )
 

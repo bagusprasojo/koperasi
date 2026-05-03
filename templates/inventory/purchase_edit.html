@@ -2,57 +2,178 @@
 {% load humanize %}
 {% block title %}Edit Pembelian{% endblock %}
 {% block content %}
-<div class="rounded-xl bg-white p-6 shadow-sm" x-data="{
-    rows: [{ product_id: '', qty: 1, unit_cost: '' }],
-    grandTotal() {
-        return this.rows.reduce((acc, row) => acc + ((parseFloat(row.qty) || 0) * (parseFloat(row.unit_cost) || 0)), 0)
-    },
-    grandTotalLabel() {
-        return this.grandTotal().toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    }
-}" x-init="rows = [{% for it in tx.items.all %}{ product_id: '{{ it.product.id }}', qty: '{{ it.qty }}', unit_cost: '{{ it.unit_cost }}' }{% if not forloop.last %},{% endif %}{% endfor %}]; if (!rows.length) { rows = [{ product_id: '', qty: 1, unit_cost: '' }] }">
+<div class="rounded-xl bg-white p-6 shadow-sm" x-data="purchaseEditForm()">
     <h1 class="mb-4 text-xl font-semibold">Form Edit Pembelian</h1>
     <form method="post" class="grid gap-4">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ next_url }}">
-        <div class="grid gap-3 md:grid-cols-3">
-            <input type="date" name="tx_date" value="{{ request.POST.tx_date|default:tx.tx_date|date:'Y-m-d' }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-            {% with selected_supplier=request.POST.supplier_id|default:selected_supplier_id %}
-            <select name="supplier_id" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-                <option value="">Pilih supplier</option>
-                {% for s in suppliers %}
-                    <option value="{{ s.id }}" {% if selected_supplier == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
-                {% endfor %}
-            </select>
-            {% endwith %}
-            <input name="note" value="{{ request.POST.note|default:tx.note }}" placeholder="Catatan" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-        </div>
-        <div class="rounded-lg border border-slate-200 p-4">
-            <div class="mb-3 flex items-center justify-between">
-                <h2 class="text-sm font-semibold">Item Pembelian</h2>
-                <button type="button" @click="rows.push({ product_id: '', qty: 1, unit_cost: '' })" class="rounded-md border px-3 py-1 text-sm">Tambah Baris</button>
-            </div>
-            <template x-for="(row, i) in rows" :key="i">
-                <div class="mb-2 grid gap-2 md:grid-cols-12">
-                    <select name="product_id[]" x-model="row.product_id" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-6">
-                        <option value="">Pilih produk</option>
-                        {% for p in products %}
-                            <option value="{{ p.id }}">{{ p.name }} (Stok: {{ p.stock|intcomma }})</option>
-                        {% endfor %}
-                    </select>
-                    <input type="number" min="1" name="qty[]" x-model="row.qty" placeholder="Qty" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-2">
-                    <input type="number" min="0.01" step="0.01" name="unit_cost[]" x-model="row.unit_cost" placeholder="Harga/unit" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-3">
-                    <button type="button" @click="rows.splice(i,1)" class="rounded-md border px-2 py-2 text-sm md:col-span-1">X</button>
+        <div class="grid gap-4 lg:grid-cols-12">
+            <div class="rounded-lg border border-slate-200 p-4 lg:col-span-4 lg:h-fit">
+                <h2 class="mb-3 text-sm font-semibold">Header Pembelian</h2>
+                <div class="grid gap-4">
+                    <div class="relative">
+                        <label class="mb-1 block text-sm font-medium">Supplier</label>
+                        <input type="hidden" name="supplier_id" :value="selectedSupplierId">
+                        <input
+                            type="text"
+                            x-model="supplierQuery"
+                            @input="filterSuppliers()"
+                            @focus="supplierOpen = true"
+                            @keydown.escape="supplierOpen = false"
+                            placeholder="Ketik kode / nama supplier..."
+                            class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                        <div x-show="supplierOpen && filteredSuppliers.length" x-cloak class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-white shadow">
+                            <template x-for="s in filteredSuppliers" :key="s.id">
+                                <button type="button" @click="pickSupplier(s)" class="block w-full border-b px-3 py-2 text-left text-sm hover:bg-slate-100">
+                                    <span class="font-medium" x-text="s.name"></span>
+                                    <span class="text-slate-500" x-text="' (' + (s.code || '-') + ')' "></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-medium">No HP</label>
+                        <input type="text" :value="selectedSupplier.phone || '-'" readonly class="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-medium">Email</label>
+                        <input type="text" :value="selectedSupplier.email || '-'" readonly class="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-medium">Catatan</label>
+                        <input name="note" value="{{ request.POST.note|default:tx.note }}" placeholder="Catatan" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    </div>
+                    <div class="flex gap-2 pt-1">
+                        <a href="{{ back_url }}" class="rounded-md border px-3 py-2 text-sm">Back</a>
+                        <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan</button>
+                    </div>
                 </div>
-            </template>
-            <div class="mt-4 border-t border-slate-200 pt-3 text-right text-sm font-semibold">
-                Total Pembelian: <span x-text="grandTotalLabel()"></span>
             </div>
-        </div>
-        <div class="flex gap-2">
-            <a href="{{ back_url }}" class="rounded-md border px-3 py-2 text-sm">Back</a>
-            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan</button>
+            <div class="rounded-lg border border-slate-200 p-4 lg:col-span-8">
+                <div class="mb-3 flex items-center justify-between">
+                    <h2 class="text-sm font-semibold">Detail Pembelian</h2>
+                    <button type="button" @click="addRow()" class="rounded-md border px-3 py-1 text-sm">Tambah Baris</button>
+                </div>
+                <template x-for="(row, i) in rows" :key="i">
+                    <div class="mb-2 grid gap-2 md:grid-cols-12">
+                        <div class="relative md:col-span-5">
+                            <input type="hidden" name="product_id[]" :value="row.product_id">
+                            <input
+                                type="text"
+                                x-model="row.product_query"
+                                @input="filterProducts(row)"
+                                @focus="row.open = true"
+                                @keydown.escape="row.open = false"
+                                placeholder="Ketik nama / SKU produk..."
+                                class="w-full rounded-md border border-slate-300 px-2 py-2 text-sm">
+                            <div x-show="row.open && row.filtered.length" x-cloak class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-white shadow">
+                                <template x-for="p in row.filtered" :key="p.id">
+                                    <button type="button" @click="pickProduct(row, p)" class="block w-full border-b px-3 py-2 text-left text-sm hover:bg-slate-100">
+                                        <span class="font-medium" x-text="p.name"></span>
+                                        <span class="text-slate-500" x-text="' (' + p.sku + ')' "></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                        <input type="text" :value="row.unit || '-'" readonly class="rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-sm md:col-span-2">
+                        <input type="number" min="1" name="qty[]" x-model="row.qty" placeholder="Qty" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-2">
+                        <input type="number" min="0.01" step="0.01" name="unit_cost[]" x-model="row.unit_cost" placeholder="Harga/unit" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-2">
+                        <button type="button" @click="removeRow(i)" class="rounded-md border px-2 py-2 text-sm md:col-span-1">X</button>
+                    </div>
+                </template>
+                <div class="mt-4 border-t border-slate-200 pt-3 text-right text-sm font-semibold">
+                    Total Pembelian: <span x-text="grandTotalLabel()"></span>
+                </div>
+            </div>
         </div>
     </form>
 </div>
+
+<script>
+function purchaseEditForm() {
+    const rawSuppliers = JSON.parse(document.getElementById('suppliers-json').textContent || '[]');
+    const rawProducts = JSON.parse(document.getElementById('products-json').textContent || '[]');
+    const suppliers = Array.isArray(rawSuppliers) ? rawSuppliers : JSON.parse(rawSuppliers || '[]');
+    const products = Array.isArray(rawProducts) ? rawProducts : JSON.parse(rawProducts || '[]');
+    const rawInitialRows = JSON.parse(document.getElementById('initial-items-json').textContent || '[]');
+    const initialRows = Array.isArray(rawInitialRows) ? rawInitialRows : JSON.parse(rawInitialRows || '[]');
+
+    return {
+        suppliers,
+        products,
+        supplierQuery: '',
+        selectedSupplierId: '',
+        selectedSupplier: {},
+        supplierOpen: false,
+        filteredSuppliers: suppliers,
+        rows: [],
+        init() {
+            const defaultSupplierId = '{{ selected_supplier_id }}';
+            if (defaultSupplierId) {
+                const found = this.suppliers.find(s => s.id === defaultSupplierId);
+                if (found) {
+                    this.pickSupplier(found);
+                }
+            }
+            this.rows = (initialRows || []).map(r => {
+                const found = this.products.find(p => p.id === r.product_id);
+                return {
+                    product_id: r.product_id,
+                    product_query: found ? `${found.name} (${found.sku})` : '',
+                    unit: found ? (found.unit || '-') : '-',
+                    qty: r.qty,
+                    unit_cost: r.unit_cost,
+                    open: false,
+                    filtered: this.products,
+                };
+            });
+            if (!this.rows.length) this.addRow();
+        },
+        filterSuppliers() {
+            const q = (this.supplierQuery || '').toLowerCase();
+            this.filteredSuppliers = this.suppliers.filter(s =>
+                (s.name || '').toLowerCase().includes(q) ||
+                (s.code || '').toLowerCase().includes(q)
+            );
+            this.supplierOpen = true;
+        },
+        pickSupplier(s) {
+            this.selectedSupplierId = s.id;
+            this.selectedSupplier = s;
+            this.supplierQuery = `${s.name} (${s.code || '-'})`;
+            this.supplierOpen = false;
+        },
+        addRow() {
+            this.rows.push({ product_id: '', product_query: '', unit: '', qty: 1, unit_cost: '', open: false, filtered: this.products });
+        },
+        removeRow(i) {
+            this.rows.splice(i, 1);
+            if (!this.rows.length) this.addRow();
+        },
+        filterProducts(row) {
+            const q = (row.product_query || '').toLowerCase();
+            row.filtered = this.products.filter(p =>
+                (p.name || '').toLowerCase().includes(q) ||
+                (p.sku || '').toLowerCase().includes(q)
+            );
+            row.open = true;
+        },
+        pickProduct(row, p) {
+            row.product_id = p.id;
+            row.product_query = `${p.name} (${p.sku})`;
+            row.unit = p.unit || '-';
+            row.open = false;
+        },
+        grandTotal() {
+            return this.rows.reduce((acc, row) => acc + ((parseFloat(row.qty) || 0) * (parseFloat(row.unit_cost) || 0)), 0);
+        },
+        grandTotalLabel() {
+            return this.grandTotal().toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+    }
+}
+</script>
+{{ suppliers_json|json_script:"suppliers-json" }}
+{{ products_json|json_script:"products-json" }}
+{{ initial_items_json|json_script:"initial-items-json" }}
 {% endblock %}

@@ -1,51 +1,342 @@
 {% extends "base.html" %}
-{% load humanize %}
-
 {% block title %}Kasir | POS Koperasi{% endblock %}
-
 {% block content %}
-<div class="grid gap-4 lg:grid-cols-3" x-data="{ q: '', method: 'cash' }">
-    <div class="rounded-xl bg-white p-6 shadow-sm lg:col-span-2">
-        <h1 class="mb-4 text-xl font-semibold">Transaksi Kasir</h1>
-        <input
-            x-model="q"
-            placeholder="Cari produk..."
-            class="mb-4 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800"
-        >
-        <div class="grid gap-3 md:grid-cols-2">
-            {% for product in products %}
-                <div class="rounded-lg border p-4" x-show="'{{ product.name|lower }}'.includes(q.toLowerCase())">
-                    <h2 class="font-medium">{{ product.name }}</h2>
-                    <p class="text-sm text-slate-500">SKU: {{ product.sku }}</p>
-                    <p class="mt-2 text-sm">Stok: {{ product.stock|intcomma }}</p>
+<div x-data="posApp()" x-init="init()" @keydown.window="handleShortcut($event)" class="grid gap-4 lg:grid-cols-12">
+    <div x-show="successMessage" x-cloak class="lg:col-span-12 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" x-text="successMessage"></div>
+    <div class="rounded-xl bg-white p-4 shadow-sm lg:col-span-3">
+        <h1 class="mb-3 text-lg font-semibold">Kasir POS</h1>
+        <div class="grid gap-3">
+            <div>
+                <label class="mb-1 block text-xs font-semibold uppercase text-slate-500">Scan / Cari Produk (F2)</label>
+                <input x-ref="scanInput" x-model="scanQuery" @keydown.enter.prevent="addByQuery()" placeholder="Scan barcode / ketik SKU / nama" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="mb-1 block text-xs font-semibold uppercase text-slate-500">Member</label>
+                <input x-model="memberQuery" @input.debounce.250ms="searchMember()" @focus="memberOpen = true" placeholder="Cari nama / no hp / no kartu" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <div x-show="memberOpen && memberResults.length" x-cloak class="relative">
+                    <div class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-white shadow">
+                        <template x-for="m in memberResults" :key="m.id">
+                            <button type="button" @click="pickMember(m)" class="block w-full border-b px-3 py-2 text-left text-sm hover:bg-slate-100">
+                                <span class="font-medium" x-text="m.full_name"></span>
+                                <span class="text-slate-500" x-text="' - ' + m.phone"></span>
+                            </button>
+                        </template>
+                    </div>
                 </div>
-            {% empty %}
-                <p class="text-slate-500">Belum ada produk untuk ditransaksikan.</p>
-            {% endfor %}
+            </div>
+            <div class="rounded-md bg-slate-50 p-3 text-sm">
+                <p class="text-slate-500">Member Aktif</p>
+                <p class="font-semibold" x-text="selectedMember.full_name"></p>
+                <p class="text-xs text-slate-600" x-text="selectedMember.card_number ? 'Kartu: ' + selectedMember.card_number : 'Tanpa kartu'"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-2 pt-2 text-xs">
+                <button type="button" @click="openCheckout()" class="rounded-md bg-slate-900 px-2 py-2 text-white">Checkout (F9)</button>
+                <button type="button" @click="clearCart()" class="rounded-md border px-2 py-2">Clear</button>
+            </div>
         </div>
     </div>
-    <div class="rounded-xl bg-white p-6 shadow-sm">
-        <h2 class="text-lg font-semibold">Checkout POS</h2>
-        <form method="post" class="mt-3 grid gap-3">
-            {% csrf_token %}
-            <select name="product_id" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-                <option value="">Pilih produk</option>
-                {% for p in products %}
-                    {% for tier in p.price_tiers.all %}
-                        {% if tier.level == 1 %}
-                            <option value="{{ p.id }}">{{ p.name }} (Harga Dasar: {{ tier.price|floatformat:2|intcomma }})</option>
-                        {% endif %}
-                    {% endfor %}
-                {% endfor %}
-            </select>
-            <input type="number" name="qty" min="1" value="1" class="rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="Qty">
-            <select x-model="method" name="method" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-                <option value="cash">Cash</option>
-                <option value="member_deposit">Member Deposit</option>
-            </select>
-            <input x-show="method === 'member_deposit'" x-cloak name="card_number" placeholder="Nomor kartu member" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Proses Checkout</button>
-        </form>
+
+    <div class="rounded-xl bg-white p-4 shadow-sm lg:col-span-9">
+        <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-lg font-semibold">Keranjang</h2>
+            <p class="text-sm text-slate-500">F10 simpan transaksi</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50">
+                    <tr>
+                        <th class="px-2 py-2">Produk</th>
+                        <th class="px-2 py-2">Satuan</th>
+                        <th class="px-2 py-2">Qty</th>
+                        <th class="px-2 py-2">Harga</th>
+                        <th class="px-2 py-2">Subtotal</th>
+                        <th class="px-2 py-2 text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(line, idx) in lines" :key="line.product_id">
+                        <tr class="border-b" :class="selectedLineIndex === idx ? 'bg-slate-50' : ''" @click="selectedLineIndex = idx">
+                            <td class="px-2 py-2" x-text="line.product_name"></td>
+                            <td class="px-2 py-2" x-text="line.unit"></td>
+                            <td class="px-2 py-2">
+                                <input type="number" min="1" x-model.number="line.qty" @change="refreshPreview()" class="w-20 rounded-md border border-slate-300 px-2 py-1">
+                            </td>
+                            <td class="px-2 py-2" x-text="formatMoney(line.unit_price)"></td>
+                            <td class="px-2 py-2" x-text="formatMoney(line.line_total)"></td>
+                            <td class="px-2 py-2 text-right">
+                                <button type="button" @click="removeLine(line.product_id)" class="rounded-md border px-2 py-1 text-xs">Hapus</button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="!lines.length"><td colspan="6" class="px-2 py-4 text-slate-500">Belum ada item.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-4 flex items-center justify-end gap-6 text-sm">
+            <p>Subtotal: <span class="font-semibold" x-text="formatMoney(subtotal)"></span></p>
+            <p>Total: <span class="text-lg font-bold" x-text="formatMoney(total)"></span></p>
+        </div>
+    </div>
+
+    <div x-show="checkoutOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div @click.outside="checkoutOpen=false" class="w-full max-w-2xl rounded-xl bg-white p-5 shadow-xl">
+            <h3 class="text-lg font-semibold">Pembayaran</h3>
+            <div class="mt-3 grid gap-3 md:grid-cols-2">
+                <div>
+                    <label class="mb-1 block text-sm">Tunai</label>
+                    <input type="number" min="0" step="0.01" x-model="payment.cash" @input="syncPayment()" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm">Deposit</label>
+                    <input type="number" min="0" step="0.01" x-model="payment.deposit" @input="syncPayment()" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                </div>
+                <div class="md:col-span-2" x-show="toNum(payment.deposit) > 0">
+                    <label class="mb-1 block text-sm">No Kartu</label>
+                    <input x-model="payment.card_number" placeholder="Nomor kartu member" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                </div>
+                <div class="md:col-span-2" x-show="toNum(payment.deposit) > 0">
+                    <label class="mb-1 block text-sm">Otorisasi Pemegang Kartu</label>
+                    <input x-model="payment.card_auth" placeholder="PIN/OTP/approval code" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between text-sm">
+                <p>Total belanja: <span class="font-semibold" x-text="formatMoney(total)"></span></p>
+                <p>Total bayar: <span class="font-semibold" x-text="formatMoney(paymentTotal())"></span></p>
+            </div>
+            <p class="mt-2 text-sm text-red-600" x-text="checkoutError"></p>
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" @click="checkoutOpen=false" class="rounded-md border px-3 py-2 text-sm">Batal</button>
+                <button type="button" @click="submitCheckout()" class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan (F10)</button>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="receiptOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div @click.outside="receiptOpen=false" class="w-full max-w-2xl rounded-xl bg-white p-5 shadow-xl">
+            <h3 class="text-lg font-semibold">Struk Siap Cetak</h3>
+            <div class="mt-3 text-sm">
+                <p>No: <span class="font-semibold" x-text="receipt.sale_number"></span></p>
+                <p>Member: <span x-text="receipt.member_name"></span></p>
+                <p>Total: <span class="font-semibold" x-text="formatMoney(receipt.total)"></span></p>
+            </div>
+            <div class="mt-3 max-h-52 overflow-auto rounded-md border">
+                <table class="min-w-full text-left text-xs">
+                    <thead class="border-b bg-slate-50"><tr><th class="px-2 py-1">Item</th><th class="px-2 py-1">Qty</th><th class="px-2 py-1">Subtotal</th></tr></thead>
+                    <tbody>
+                        <template x-for="it in (receipt.items || [])" :key="it.product_name + '-' + it.qty">
+                            <tr class="border-b"><td class="px-2 py-1" x-text="it.product_name"></td><td class="px-2 py-1" x-text="it.qty"></td><td class="px-2 py-1" x-text="formatMoney(it.line_total)"></td></tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <p class="mt-3 text-xs" :class="lastPrintJob.status === 'sent' ? 'text-emerald-700' : 'text-amber-700'">
+                Status print: <span x-text="lastPrintJob.status || '-'"></span>
+                <span x-show="lastPrintJob.last_error"> - <span x-text="lastPrintJob.last_error"></span></span>
+            </p>
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" @click="retryPendingPrintJobs()" class="rounded-md border px-3 py-2 text-sm">Retry Pending</button>
+                <button type="button" @click="reprintReceipt(receipt.sale_number)" class="rounded-md border px-3 py-2 text-sm">Print Ulang</button>
+                <button type="button" @click="receiptOpen=false" class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Tutup</button>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+function posApp() {
+    return {
+        products: [],
+        scanQuery: '',
+        memberQuery: '',
+        memberOpen: false,
+        memberResults: [],
+        selectedMember: { id: {{ default_member.id }}, full_name: '{{ default_member.full_name|escapejs }}', phone: '{{ default_member.phone|escapejs }}', card_number: '' },
+        lines: [],
+        selectedLineIndex: -1,
+        subtotal: '0.00',
+        total: '0.00',
+        checkoutOpen: false,
+        checkoutError: '',
+        payment: { cash: '', deposit: '', card_number: '', card_auth: '' },
+        successMessage: '',
+        receiptOpen: false,
+        receipt: { sale_number: '', member_name: '', total: '0.00', items: [] },
+        lastPrintJob: { status: '', last_error: '' },
+        init() {
+            const rawProducts = JSON.parse(document.getElementById('pos-products-json').textContent || '[]');
+            this.products = Array.isArray(rawProducts) ? rawProducts : JSON.parse(rawProducts || '[]');
+            this.$nextTick(() => this.$refs.scanInput.focus());
+        },
+        toNum(v) { return parseFloat(v || 0) || 0; },
+        formatMoney(v) {
+            const n = this.toNum(v);
+            return n.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+        handleShortcut(e) {
+            if (e.key === 'F2') { e.preventDefault(); this.$refs.scanInput.focus(); }
+            if (e.key === 'F9') { e.preventDefault(); this.openCheckout(); }
+            if (e.key === 'F10') { if (this.checkoutOpen) { e.preventDefault(); this.submitCheckout(); } }
+            if (e.key === 'Escape') { this.checkoutOpen = false; this.memberOpen = false; }
+            if (e.ctrlKey && e.key === 'Delete') { e.preventDefault(); this.removeSelectedLine(); }
+        },
+        async searchMember() {
+            const q = (this.memberQuery || '').trim();
+            if (!q) { this.memberResults = []; return; }
+            const res = await fetch(`/sales/pos/api/members?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            this.memberResults = data.data || [];
+            this.memberOpen = true;
+        },
+        pickMember(m) {
+            this.selectedMember = m;
+            this.memberQuery = `${m.full_name} - ${m.phone}`;
+            this.memberOpen = false;
+            if (!this.payment.card_number && m.card_number) this.payment.card_number = m.card_number;
+        },
+        findProductByQuery(q) {
+            const needle = (q || '').toLowerCase().trim();
+            if (!needle) return null;
+            return this.products.find(p => p.sku.toLowerCase() === needle)
+                || this.products.find(p => p.name.toLowerCase() === needle)
+                || this.products.find(p => p.name.toLowerCase().includes(needle))
+                || null;
+        },
+        async addByQuery() {
+            const product = this.findProductByQuery(this.scanQuery);
+            if (!product) return;
+            const existing = this.lines.find(l => String(l.product_id) === String(product.id));
+            if (existing) existing.qty = this.toNum(existing.qty) + 1;
+            else this.lines.push({ product_id: product.id, product_name: product.name, unit: product.unit, qty: 1, unit_price: 0, line_total: 0 });
+            this.scanQuery = '';
+            await this.refreshPreview();
+        },
+        async refreshPreview() {
+            if (!this.lines.length) {
+                this.subtotal = '0.00'; this.total = '0.00';
+                return;
+            }
+            const items = this.lines.map(l => ({ product_id: l.product_id, qty: this.toNum(l.qty) }));
+            const res = await fetch('/sales/pos/api/price-preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCsrfToken() },
+                body: JSON.stringify({ items })
+            });
+            const data = await res.json();
+            if (!data.success) return;
+            this.subtotal = data.data.subtotal;
+            this.total = data.data.total;
+            const byId = {};
+            (data.data.lines || []).forEach(x => { byId[String(x.product_id)] = x; });
+            this.lines = this.lines.map(old => {
+                const latest = byId[String(old.product_id)];
+                if (!latest) return old;
+                return { ...old, qty: latest.qty, unit_price: latest.unit_price, line_total: latest.line_total, product_name: latest.product_name };
+            });
+            this.syncPayment();
+        },
+        removeLine(productId) {
+            this.lines = this.lines.filter(l => String(l.product_id) !== String(productId));
+            this.refreshPreview();
+        },
+        removeSelectedLine() {
+            if (this.selectedLineIndex < 0 || this.selectedLineIndex >= this.lines.length) return;
+            const id = this.lines[this.selectedLineIndex].product_id;
+            this.removeLine(id);
+            this.selectedLineIndex = -1;
+        },
+        openCheckout() {
+            if (!this.lines.length) return;
+            this.checkoutError = '';
+            this.checkoutOpen = true;
+            this.syncPayment();
+        },
+        paymentTotal() {
+            return this.toNum(this.payment.cash) + this.toNum(this.payment.deposit);
+        },
+        syncPayment() {
+            if (!this.checkoutOpen) return;
+            const total = this.toNum(this.total);
+            const deposit = this.toNum(this.payment.deposit);
+            const cash = total - deposit;
+            this.payment.cash = cash >= 0 ? cash.toFixed(2) : '0.00';
+        },
+        getCsrfToken() {
+            const m = document.cookie.match(/csrftoken=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        },
+        makeClientTxnId() {
+            return `POS-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+        },
+        async submitCheckout() {
+            this.checkoutError = '';
+            if (!this.lines.length) { this.checkoutError = 'Keranjang masih kosong.'; return; }
+            const total = this.toNum(this.total);
+            const cash = this.toNum(this.payment.cash);
+            const deposit = this.toNum(this.payment.deposit);
+            if ((cash + deposit).toFixed(2) !== total.toFixed(2)) {
+                this.checkoutError = 'Total bayar harus sama dengan total belanja.';
+                return;
+            }
+            const payments = [];
+            if (cash > 0) payments.push({ method: 'cash', amount: cash.toFixed(2) });
+            if (deposit > 0) payments.push({ method: 'member_deposit', amount: deposit.toFixed(2) });
+            const payload = {
+                member_id: this.selectedMember.id,
+                items: this.lines.map(l => ({ product_id: l.product_id, qty: this.toNum(l.qty) })),
+                payments,
+                card_number: this.payment.card_number || '',
+                card_auth: this.payment.card_auth || '',
+                client_txn_id: this.makeClientTxnId(),
+            };
+            const res = await fetch('/sales/pos/api/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCsrfToken() },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!data.success) {
+                this.checkoutError = data.message || 'Checkout gagal.';
+                return;
+            }
+            await this.openReceiptModal(data.data.sale_number, data.data.last_print_job || {});
+            this.checkoutOpen = false;
+            this.lines = [];
+            this.subtotal = '0.00';
+            this.total = '0.00';
+            this.payment = { cash: '', deposit: '', card_number: '', card_auth: '' };
+            this.selectedLineIndex = -1;
+            this.successMessage = `Transaksi ${data.data.sale_number} berhasil.`;
+            setTimeout(() => { this.successMessage = ''; }, 3000);
+            this.$nextTick(() => this.$refs.scanInput.focus());
+        },
+        async openReceiptModal(saleNumber, lastPrintJob = {}) {
+            const res = await fetch(`/sales/pos/api/receipt/${encodeURIComponent(saleNumber)}`);
+            const data = await res.json();
+            if (!data.success) return;
+            this.receipt = data.data;
+            this.lastPrintJob = lastPrintJob || { status: '', last_error: '' };
+            this.receiptOpen = true;
+        },
+        async reprintReceipt(saleNumber) {
+            const res = await fetch(`/sales/pos/api/reprint/${encodeURIComponent(saleNumber)}`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': this.getCsrfToken() },
+            });
+            const data = await res.json();
+            if (!data.success) {
+                this.lastPrintJob = data.data || { status: 'failed', last_error: data.message || 'Reprint gagal' };
+                return;
+            }
+            this.lastPrintJob = data.data;
+        },
+        async retryPendingPrintJobs() {
+            await fetch('/sales/pos/api/print/dispatch-pending', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': this.getCsrfToken() },
+            });
+        }
+    }
+}
+</script>
+{{ products_json|json_script:"pos-products-json" }}
 {% endblock %}

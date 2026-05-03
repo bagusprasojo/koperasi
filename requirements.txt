@@ -6,3 +6,4 @@ mysqlclient==2.2.8
 packaging==26.2
 python-dotenv==1.2.2
 sqlparse==0.5.5
+pywin32==311; platform_system=="Windows"

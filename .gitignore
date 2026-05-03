@@ -16,3 +16,6 @@ media/
 .vscode/
 
 .DS_Store
+
+# Print bridge simulator artifacts
+tmp/print-sim/
