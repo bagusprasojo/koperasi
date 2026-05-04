@@ -24,3 +24,4 @@ node_modules/
 
 static/css/
 staticfiles/
+*.log
