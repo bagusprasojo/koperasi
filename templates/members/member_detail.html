@@ -4,14 +4,14 @@
 {% block content %}
 <div class="rounded-xl bg-white p-6 shadow-sm">
     <h1 class="mb-4 text-xl font-semibold">Detail Member</h1>
-    <div class="grid gap-3 text-sm">
+    <div class="grid gap-3 text-sm md:grid-cols-2">
         <div><p class="text-slate-500">Kode</p><p class="font-medium">{{ member.code|default:'-' }}</p></div>
         <div><p class="text-slate-500">Nama</p><p class="font-medium">{{ member.full_name }}</p></div>
         <div><p class="text-slate-500">Telepon</p><p class="font-medium">{{ member.phone }}</p></div>
         <div><p class="text-slate-500">Email</p><p class="font-medium">{{ member.email|default:'-' }}</p></div>
         <div><p class="text-slate-500">Saldo Deposit</p><p class="font-medium">{{ wallet.balance|floatformat:2|intcomma }}</p></div>
         <div><p class="text-slate-500">Status</p><p class="font-medium">{% if member.is_active %}Aktif{% else %}Nonaktif{% endif %}</p></div>
-        <div><p class="text-slate-500">Kartu</p><p class="font-medium">{% if member.card %}{{ member.card.card_number }}{% else %}-{% endif %}</p></div>
+        <div class="md:col-span-2"><p class="text-slate-500">Kartu</p><p class="font-medium">{% if member.card %}{{ member.card.card_number }}{% else %}-{% endif %}</p></div>
     </div>
     <div class="mt-6 flex gap-2">
         <a href="{% url 'member_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>

@@ -5,7 +5,7 @@
     <h1 class="mb-4 text-xl font-semibold">Form Edit Member</h1>
     <form method="post" class="grid gap-4">{% csrf_token %}
         <input type="hidden" name="next" value="{{ next_url }}">
-        <input name="code" value="{{ request.POST.code|default:member.code }}" placeholder="Kode member (unik)" class="rounded-md border border-slate-300 px-3 py-2">
+        <input name="code" value="{{ member.code }}" placeholder="Kode member (unik)" readonly class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-slate-500">
         <input name="full_name" value="{{ request.POST.full_name|default:member.full_name }}" class="rounded-md border border-slate-300 px-3 py-2">
         <input name="phone" value="{{ request.POST.phone|default:member.phone }}" class="rounded-md border border-slate-300 px-3 py-2">
         <input name="email" value="{{ request.POST.email|default:member.email }}" class="rounded-md border border-slate-300 px-3 py-2">
