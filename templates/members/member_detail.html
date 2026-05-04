@@ -5,6 +5,7 @@
 <div class="rounded-xl bg-white p-6 shadow-sm">
     <h1 class="mb-4 text-xl font-semibold">Detail Member</h1>
     <div class="grid gap-3 text-sm">
+        <div><p class="text-slate-500">Kode</p><p class="font-medium">{{ member.code|default:'-' }}</p></div>
         <div><p class="text-slate-500">Nama</p><p class="font-medium">{{ member.full_name }}</p></div>
         <div><p class="text-slate-500">Telepon</p><p class="font-medium">{{ member.phone }}</p></div>
         <div><p class="text-slate-500">Email</p><p class="font-medium">{{ member.email|default:'-' }}</p></div>

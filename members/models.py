@@ -5,6 +5,7 @@ from core.models import BaseModel
 
 
 class Member(BaseModel):
+    code = models.CharField(max_length=30, unique=True, null=True, blank=True)
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

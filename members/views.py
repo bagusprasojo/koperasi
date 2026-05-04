@@ -1,7 +1,12 @@
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.contrib.auth.password_validation import validate_password
 from django.core.paginator import Paginator
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -17,6 +22,8 @@ from .services import (
     request_member_topup,
     reverse_topup,
 )
+
+User = get_user_model()
 
 
 def _safe_next_url(request):
@@ -35,7 +42,11 @@ def member_list(request):
     query = request.GET.get('q', '').strip()
     members = Member.objects.select_related('wallet').order_by('full_name')
     if query:
-        members = members.filter(Q(full_name__icontains=query) | Q(phone__icontains=query))
+        members = members.filter(
+            Q(code__icontains=query) |
+            Q(full_name__icontains=query) |
+            Q(phone__icontains=query)
+        )
     page_obj = Paginator(members, 10).get_page(request.GET.get('page'))
     return render(request, 'members/member_list.html', {'page_obj': page_obj, 'query': query})
 
@@ -43,26 +54,48 @@ def member_list(request):
 @role_required('admin_toko', 'pembelian')
 def member_create(request):
     if request.method == 'POST':
+        code = request.POST.get('code', '').strip().upper()
         full_name = request.POST.get('full_name', '').strip()
         phone = request.POST.get('phone', '').strip()
         email = request.POST.get('email', '').strip()
         address = request.POST.get('address', '').strip()
+        password = request.POST.get('password', '')
         is_active = request.POST.get('is_active') == 'on'
-        if not full_name or not phone:
-            messages.error(request, 'Nama dan nomor telepon wajib diisi.')
+        if not code or not full_name or not phone or not password:
+            messages.error(request, 'Kode, nama, telepon, dan password wajib diisi.')
+        elif Member.objects.filter(code__iexact=code).exists():
+            messages.error(request, 'Kode member sudah dipakai.')
         elif Member.objects.filter(phone=phone).exists():
             messages.error(request, 'Nomor telepon sudah dipakai.')
+        elif User.objects.filter(username__iexact=code).exists():
+            messages.error(request, 'Kode member sudah dipakai untuk akun login.')
         else:
-            member = Member.objects.create(
-                full_name=full_name,
-                phone=phone,
-                email=email,
-                address=address,
-                is_active=is_active,
-            )
-            get_or_create_wallet(member)
-            messages.success(request, 'Member berhasil ditambahkan.')
-            return redirect('member_list')
+            try:
+                validate_password(password)
+                with transaction.atomic():
+                    user = User.objects.create_user(
+                        username=code,
+                        password=password,
+                        is_active=is_active,
+                    )
+                    member_group, _ = Group.objects.get_or_create(name='member')
+                    user.groups.add(member_group)
+                    member = Member.objects.create(
+                        code=code,
+                        user=user,
+                        full_name=full_name,
+                        phone=phone,
+                        email=email,
+                        address=address,
+                        is_active=is_active,
+                    )
+                    get_or_create_wallet(member)
+                messages.success(request, 'Member berhasil ditambahkan dan akun login dibuat.')
+                return redirect('member_list')
+            except ValidationError as exc:
+                messages.error(request, exc.messages[0] if exc.messages else str(exc))
+            except Exception as exc:
+                messages.error(request, str(exc))
     return render(request, 'members/member_create.html')
 
 
@@ -79,24 +112,39 @@ def member_edit(request, uuid):
     next_url = _safe_next_url(request)
     back_url = next_url or f'/members/{member.uuid}/'
     if request.method == 'POST':
+        code = request.POST.get('code', '').strip().upper()
         full_name = request.POST.get('full_name', '').strip()
         phone = request.POST.get('phone', '').strip()
         email = request.POST.get('email', '').strip()
         address = request.POST.get('address', '').strip()
         is_active = request.POST.get('is_active') == 'on'
-        if not full_name or not phone:
-            messages.error(request, 'Nama dan nomor telepon wajib diisi.')
+        if not code or not full_name or not phone:
+            messages.error(request, 'Kode, nama, dan nomor telepon wajib diisi.')
+        elif Member.objects.exclude(id=member.id).filter(code__iexact=code).exists():
+            messages.error(request, 'Kode member sudah dipakai.')
         elif Member.objects.exclude(id=member.id).filter(phone=phone).exists():
             messages.error(request, 'Nomor telepon sudah dipakai.')
+        elif User.objects.exclude(id=member.user_id).filter(username__iexact=code).exists():
+            messages.error(request, 'Kode member sudah dipakai untuk akun login lain.')
         else:
-            member.full_name = full_name
-            member.phone = phone
-            member.email = email
-            member.address = address
-            member.is_active = is_active
-            member.save()
-            messages.success(request, 'Member berhasil diperbarui.')
-            return redirect('member_list')
+            try:
+                with transaction.atomic():
+                    member.code = code
+                    member.full_name = full_name
+                    member.phone = phone
+                    member.email = email
+                    member.address = address
+                    member.is_active = is_active
+
+                    if member.user:
+                        member.user.username = code
+                        member.user.is_active = is_active
+                        member.user.save(update_fields=['username', 'is_active'])
+                    member.save()
+                messages.success(request, 'Member berhasil diperbarui.')
+                return redirect('member_list')
+            except Exception as exc:
+                messages.error(request, str(exc))
     return render(request, 'members/member_edit.html', {'member': member, 'next_url': next_url, 'back_url': back_url})
 
 

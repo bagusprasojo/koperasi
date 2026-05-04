@@ -13,17 +13,18 @@
         </div>
     </div>
     <form method="get" class="mb-4 flex gap-2">
-        <input name="q" value="{{ query }}" placeholder="Cari nama / telepon..." class="w-72 rounded-md border border-slate-300 px-3 py-2 text-sm">
+        <input name="q" value="{{ query }}" placeholder="Cari kode / nama / telepon..." class="w-72 rounded-md border border-slate-300 px-3 py-2 text-sm">
         <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Cari</button>
     </form>
     <div class="overflow-x-auto">
         <table class="min-w-full text-left text-sm">
             <thead class="border-b bg-slate-50">
-                <tr><th class="px-3 py-2">Nama</th><th class="px-3 py-2">Telepon</th><th class="px-3 py-2">Saldo Deposit</th><th class="px-3 py-2">Status</th><th class="px-3 py-2 text-right">Aksi</th></tr>
+                <tr><th class="px-3 py-2">Kode</th><th class="px-3 py-2">Nama</th><th class="px-3 py-2">Telepon</th><th class="px-3 py-2">Saldo Deposit</th><th class="px-3 py-2">Status</th><th class="px-3 py-2 text-right">Aksi</th></tr>
             </thead>
             <tbody>
                 {% for m in page_obj %}
                     <tr class="border-b">
+                        <td class="px-3 py-2">{{ m.code|default:'-' }}</td>
                         <td class="px-3 py-2">{{ m.full_name }}</td>
                         <td class="px-3 py-2">{{ m.phone }}</td>
                         <td class="px-3 py-2">{{ m.wallet.balance|default:0|floatformat:2|intcomma }}</td>
@@ -39,7 +40,7 @@
                         </td>
                     </tr>
                 {% empty %}
-                    <tr><td colspan="5" class="px-3 py-4 text-slate-500">Belum ada member.</td></tr>
+                    <tr><td colspan="6" class="px-3 py-4 text-slate-500">Belum ada member.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
