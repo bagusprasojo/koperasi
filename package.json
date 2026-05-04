@@ -7,9 +7,9 @@
     "doc": "docs"
   },
   "scripts": {
-  "dev": "tailwindcss -i ./static/src/input.css -o ./static/css/app.css --watch",
-  "build": "tailwindcss -i ./static/src/input.css -o ./staticfiles/css/app.css --minify"
-},
+    "dev": "tailwindcss -i ./static/src/input.css -o ./static/css/app.css --watch",
+    "build": "tailwindcss -i ./static/src/input.css -o ./staticfiles/css/app.css --minify"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bagusprasojo/koperasi.git"
