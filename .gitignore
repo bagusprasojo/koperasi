@@ -19,3 +19,8 @@ media/
 
 # Print bridge simulator artifacts
 tmp/print-sim/
+
+node_modules/
+
+static/css/
+staticfiles/
