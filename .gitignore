@@ -23,6 +23,7 @@ tmp/print-sim/
 node_modules/
 
 static/css/
+
 staticfiles/
 
 *.log
