@@ -43,6 +43,8 @@ class SalePayment(BaseModel):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='payments')
     method = models.CharField(max_length=30, choices=METHOD_CHOICES)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
+    received_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    change_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     reference = models.CharField(max_length=100, blank=True, default='')
 
 

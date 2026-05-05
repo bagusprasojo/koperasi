@@ -82,26 +82,34 @@
         <div @click.outside="checkoutOpen=false" class="w-full max-w-2xl rounded-xl bg-white p-5 shadow-xl">
             <h3 class="text-lg font-semibold">Pembayaran</h3>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
-                <div>
-                    <label class="mb-1 block text-sm">Tunai</label>
-                    <input type="number" min="0" step="0.01" x-model="payment.cash" @input="syncPayment()" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <div x-show="!isNonMemberSelected()">
+                    <label class="mb-1 block text-sm">Bayar Deposit</label>
+                    <input x-ref="depositInput" type="number" min="0" step="0.01" x-model="payment.deposit" @input="syncPayment()" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
                 </div>
                 <div>
-                    <label class="mb-1 block text-sm">Deposit</label>
-                    <input type="number" min="0" step="0.01" x-model="payment.deposit" @input="syncPayment()" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    <label class="mb-1 block text-sm">Tunai Dipakai</label>
+                    <input type="text" :value="formatMoney(cashDue())" readonly class="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                 </div>
-                <div class="md:col-span-2" x-show="toNum(payment.deposit) > 0">
+                <div>
+                    <label class="mb-1 block text-sm">Tunai Diterima</label>
+                    <input x-ref="cashReceivedInput" type="number" min="0" step="0.01" x-model="payment.cash_received" :readonly="cashDue() <= 0" :class="cashDue() <= 0 ? 'bg-slate-50 border-slate-200 text-slate-500' : ''" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm">Kembalian</label>
+                    <input type="text" :value="formatMoney(changeAmount())" readonly class="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                </div>
+                <div class="md:col-span-2" x-show="!isNonMemberSelected() && toNum(payment.deposit) > 0">
                     <label class="mb-1 block text-sm">No Kartu</label>
                     <input x-model="payment.card_number" placeholder="Nomor kartu member" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
                 </div>
-                <div class="md:col-span-2" x-show="toNum(payment.deposit) > 0">
-                    <label class="mb-1 block text-sm">Otorisasi Pemegang Kartu</label>
-                    <input x-model="payment.card_auth" placeholder="PIN/OTP/approval code" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <div class="md:col-span-2" x-show="!isNonMemberSelected() && toNum(payment.deposit) > 0">
+                    <label class="mb-1 block text-sm">Password User Member</label>
+                    <input type="password" x-model="payment.card_auth" placeholder="Masukkan password user member" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
                 </div>
             </div>
             <div class="mt-4 flex items-center justify-between text-sm">
                 <p>Total belanja: <span class="font-semibold" x-text="formatMoney(total)"></span></p>
-                <p>Total bayar: <span class="font-semibold" x-text="formatMoney(paymentTotal())"></span></p>
+                <p>Total bayar dipakai: <span class="font-semibold" x-text="formatMoney(paymentUsedTotal())"></span></p>
             </div>
             <p class="mt-2 text-sm text-red-600" x-text="checkoutError"></p>
             <div class="mt-4 flex justify-end gap-2">
@@ -118,6 +126,8 @@
                 <p>No: <span class="font-semibold" x-text="receipt.sale_number"></span></p>
                 <p>Member: <span x-text="receipt.member_name"></span></p>
                 <p>Total: <span class="font-semibold" x-text="formatMoney(receipt.total)"></span></p>
+                <p>Tunai Diterima: <span class="font-semibold" x-text="formatMoney(receipt.cash_received)"></span></p>
+                <p>Kembalian: <span class="font-semibold" x-text="formatMoney(receipt.change_amount)"></span></p>
             </div>
             <div class="mt-3 max-h-52 overflow-auto rounded-md border">
                 <table class="min-w-full text-left text-xs">
@@ -151,13 +161,14 @@ function posApp() {
         memberOpen: false,
         memberResults: [],
         selectedMember: { id: {{ default_member.id }}, full_name: '{{ default_member.full_name|escapejs }}', phone: '{{ default_member.phone|escapejs }}', card_number: '' },
+        defaultMemberId: {{ default_member.id }},
         lines: [],
         selectedLineIndex: -1,
         subtotal: '0.00',
         total: '0.00',
         checkoutOpen: false,
         checkoutError: '',
-        payment: { cash: '', deposit: '', card_number: '', card_auth: '' },
+        payment: { deposit: '', cash_received: '', card_number: '', card_auth: '' },
         successMessage: '',
         receiptOpen: false,
         receipt: { sale_number: '', member_name: '', total: '0.00', items: [] },
@@ -192,7 +203,13 @@ function posApp() {
             this.selectedMember = m;
             this.memberQuery = `${m.full_name} - ${m.phone}`;
             this.memberOpen = false;
+            if (this.isNonMemberSelected()) {
+                this.payment.deposit = '0.00';
+            }
             if (!this.payment.card_number && m.card_number) this.payment.card_number = m.card_number;
+        },
+        isNonMemberSelected() {
+            return String(this.selectedMember.id) === String(this.defaultMemberId);
         },
         findProductByQuery(q) {
             const needle = (q || '').toLowerCase().trim();
@@ -249,17 +266,35 @@ function posApp() {
             if (!this.lines.length) return;
             this.checkoutError = '';
             this.checkoutOpen = true;
+            if (this.isNonMemberSelected()) this.payment.deposit = '0.00';
             this.syncPayment();
+            this.$nextTick(() => {
+                if (this.isNonMemberSelected()) this.$refs.cashReceivedInput.focus();
+                else this.$refs.depositInput.focus();
+            });
         },
-        paymentTotal() {
-            return this.toNum(this.payment.cash) + this.toNum(this.payment.deposit);
+        cashDue() {
+            const total = this.toNum(this.total);
+            const deposit = this.toNum(this.payment.deposit);
+            const due = total - deposit;
+            return due > 0 ? due : 0;
+        },
+        paymentUsedTotal() {
+            return this.toNum(this.payment.deposit) + this.cashDue();
+        },
+        changeAmount() {
+            const received = this.toNum(this.payment.cash_received);
+            const due = this.cashDue();
+            const ch = received - due;
+            return ch > 0 ? ch : 0;
         },
         syncPayment() {
             if (!this.checkoutOpen) return;
             const total = this.toNum(this.total);
-            const deposit = this.toNum(this.payment.deposit);
-            const cash = total - deposit;
-            this.payment.cash = cash >= 0 ? cash.toFixed(2) : '0.00';
+            const deposit = this.isNonMemberSelected() ? 0 : this.toNum(this.payment.deposit);
+            if (this.isNonMemberSelected()) this.payment.deposit = '0.00';
+            if (deposit > total) this.payment.deposit = total.toFixed(2);
+            if (this.cashDue() <= 0) this.payment.cash_received = '0.00';
         },
         getCsrfToken() {
             const m = document.cookie.match(/csrftoken=([^;]+)/);
@@ -272,19 +307,29 @@ function posApp() {
             this.checkoutError = '';
             if (!this.lines.length) { this.checkoutError = 'Keranjang masih kosong.'; return; }
             const total = this.toNum(this.total);
-            const cash = this.toNum(this.payment.cash);
             const deposit = this.toNum(this.payment.deposit);
-            if ((cash + deposit).toFixed(2) !== total.toFixed(2)) {
-                this.checkoutError = 'Total bayar harus sama dengan total belanja.';
+            const cashDue = this.cashDue();
+            const cashReceived = this.toNum(this.payment.cash_received);
+            if ((deposit + cashDue).toFixed(2) !== total.toFixed(2)) {
+                this.checkoutError = 'Komposisi pembayaran tidak valid.';
+                return;
+            }
+            if (cashDue > 0 && cashReceived < cashDue) {
+                this.checkoutError = 'Uang tunai diterima kurang dari yang harus dibayar.';
+                return;
+            }
+            if (cashDue <= 0 && cashReceived > 0) {
+                this.checkoutError = 'Tidak perlu isi tunai diterima untuk transaksi tanpa tunai.';
                 return;
             }
             const payments = [];
-            if (cash > 0) payments.push({ method: 'cash', amount: cash.toFixed(2) });
+            if (cashDue > 0) payments.push({ method: 'cash', amount: cashDue.toFixed(2) });
             if (deposit > 0) payments.push({ method: 'member_deposit', amount: deposit.toFixed(2) });
             const payload = {
                 member_id: this.selectedMember.id,
                 items: this.lines.map(l => ({ product_id: l.product_id, qty: this.toNum(l.qty) })),
                 payments,
+                cash_received: cashReceived.toFixed(2),
                 card_number: this.payment.card_number || '',
                 card_auth: this.payment.card_auth || '',
                 client_txn_id: this.makeClientTxnId(),
@@ -304,7 +349,7 @@ function posApp() {
             this.lines = [];
             this.subtotal = '0.00';
             this.total = '0.00';
-            this.payment = { cash: '', deposit: '', card_number: '', card_auth: '' };
+            this.payment = { deposit: '', cash_received: '', card_number: '', card_auth: '' };
             this.selectedLineIndex = -1;
             this.successMessage = `Transaksi ${data.data.sale_number} berhasil.`;
             setTimeout(() => { this.successMessage = ''; }, 3000);

@@ -102,6 +102,7 @@ def pos_checkout_api(request):
             user=request.user,
             card_number=(payload.get('card_number') or '').strip(),
             card_auth=(payload.get('card_auth') or '').strip(),
+            cash_received_raw=payload.get('cash_received', '0'),
         )
         print_status = {'queued': False, 'sent': False, 'message': ''}
         if created:

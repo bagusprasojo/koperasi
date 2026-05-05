@@ -73,10 +73,12 @@ def build_price_preview(items: list):
         product = products.get(product_id)
         if not product:
             raise ValidationError('Produk tidak ditemukan.')
-        tier1 = product.price_tiers.filter(level=1).first()
-        if not tier1:
-            raise ValidationError(f'Produk {product.name} belum punya harga level 1.')
-        unit_price = tier1.price
+        selected_tier = product.price_tiers.filter(min_qty__lte=qty, max_qty__gte=qty).order_by('level').first()
+        if not selected_tier:
+            raise ValidationError(
+                f'Qty {qty} untuk produk {product.name} tidak masuk range level harga manapun.'
+            )
+        unit_price = selected_tier.price
         line_total = (unit_price * Decimal(qty)).quantize(Decimal('0.01'))
         subtotal += line_total
         lines.append(
@@ -84,6 +86,7 @@ def build_price_preview(items: list):
                 'product_id': product_id,
                 'product_name': product.name,
                 'qty': qty,
+                'price_level': selected_tier.level,
                 'unit_price': unit_price,
                 'line_total': line_total,
             }
@@ -94,7 +97,7 @@ def build_price_preview(items: list):
 
 
 @transaction.atomic
-def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number='', card_auth=''):
+def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number='', card_auth='', cash_received_raw='0'):
     if not client_txn_id:
         raise ValidationError('client_txn_id wajib diisi.')
 
@@ -114,6 +117,7 @@ def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number
 
     parsed_payments = []
     paid_total = Decimal('0.00')
+    cash_used_total = Decimal('0.00')
     for p in payments:
         method = (p.get('method') or '').strip()
         amount = _to_decimal(p.get('amount', '0'), 'amount')
@@ -123,6 +127,15 @@ def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number
             raise ValidationError('Nominal pembayaran harus > 0.')
         parsed_payments.append({'method': method, 'amount': amount})
         paid_total += amount
+        if method == SalePayment.METHOD_CASH:
+            cash_used_total += amount
+
+    if cash_used_total > 0:
+        cash_received = _to_decimal(cash_received_raw, 'cash_received')
+        if cash_received < cash_used_total:
+            raise ValidationError('Uang tunai diterima tidak boleh kurang dari tunai yang dipakai.')
+    else:
+        cash_received = _to_decimal('0', 'cash_received')
 
     if paid_total != total:
         raise ValidationError('Total pembayaran harus sama dengan total belanja.')
@@ -132,12 +145,16 @@ def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number
         if not card_number:
             raise ValidationError('Nomor kartu wajib diisi untuk pembayaran deposit.')
         if not card_auth:
-            raise ValidationError('Otorisasi pemegang kartu wajib diisi.')
+            raise ValidationError('Password user member wajib diisi untuk otorisasi deposit.')
         card = MemberCard.objects.select_related('member').filter(card_number=card_number).first()
         if not card:
             raise ValidationError('Kartu member tidak ditemukan.')
         if card.member_id != member.id:
             raise ValidationError('Kartu tidak sesuai dengan member transaksi.')
+        if not card.member.user:
+            raise ValidationError('Member belum memiliki akun user untuk otorisasi.')
+        if not card.member.user.check_password(card_auth):
+            raise ValidationError('Password user member tidak sesuai.')
 
     sale = Sale.objects.create(
         sale_number=f'SL-{uuid4().hex[:10].upper()}',
@@ -160,8 +177,14 @@ def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number
         )
         product_ids_for_stock_post.append((product, line['qty']))
 
+    cash_change = (cash_received - cash_used_total).quantize(Decimal('0.01')) if cash_used_total > 0 else Decimal('0.00')
+    if cash_change < 0:
+        raise ValidationError('Kembalian tidak valid.')
+
     for p in parsed_payments:
         reference = ''
+        received_amount = p['amount']
+        change_amount = Decimal('0.00')
         if p['method'] == SalePayment.METHOD_MEMBER:
             charge_member_by_card(
                 card_number=card_number,
@@ -170,10 +193,15 @@ def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number
                 description='Pembayaran POS',
             )
             reference = card_number
+        elif p['method'] == SalePayment.METHOD_CASH:
+            received_amount = cash_received
+            change_amount = cash_change
         SalePayment.objects.create(
             sale=sale,
             method=p['method'],
             amount=p['amount'],
+            received_amount=received_amount,
+            change_amount=change_amount,
             reference=reference,
         )
 
@@ -194,15 +222,24 @@ def get_receipt_detail(sale: Sale):
         for it in sale.items.select_related('product').all()
     ]
     payments = [
-        {'method': p.method, 'amount': str(p.amount), 'reference': p.reference}
+        {
+            'method': p.method,
+            'amount': str(p.amount),
+            'received_amount': str(p.received_amount),
+            'change_amount': str(p.change_amount),
+            'reference': p.reference,
+        }
         for p in sale.payments.all()
     ]
+    cash_payment = next((p for p in sale.payments.all() if p.method == SalePayment.METHOD_CASH), None)
     return {
         'sale_number': sale.sale_number,
         'sale_date': sale.created_at.strftime('%Y-%m-%d %H:%M:%S'),
         'member_name': sale.member.full_name if sale.member else 'NON MEMBER',
         'subtotal': str(sale.subtotal),
         'total': str(sale.total),
+        'cash_received': str(cash_payment.received_amount if cash_payment else Decimal('0.00')),
+        'change_amount': str(cash_payment.change_amount if cash_payment else Decimal('0.00')),
         'items': items,
         'payments': payments,
     }
@@ -222,6 +259,8 @@ def _build_escpos_payload(sale: Sale, copies: int = 1):
         lines.append(f"{it['qty']} x {it['unit_price']} = {it['line_total']}")
     lines.append('-------------------------------')
     lines.append(f"TOTAL: {rc['total']}")
+    lines.append(f"TUNAI DITERIMA: {rc['cash_received']}")
+    lines.append(f"KEMBALIAN: {rc['change_amount']}")
     for p in rc['payments']:
         lines.append(f"BYR {p['method']}: {p['amount']}")
     lines.append('Terima kasih')
