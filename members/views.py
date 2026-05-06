@@ -7,6 +7,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models.deletion import ProtectedError
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -152,9 +153,15 @@ def member_edit(request, uuid):
 def member_delete(request, uuid):
     member = get_object_or_404(Member, uuid=uuid)
     if request.method == 'POST':
-        name = member.full_name
-        member.delete()
-        messages.warning(request, f'Member "{name}" berhasil dihapus.')
+        try:
+            name = member.full_name
+            member.delete()
+            messages.warning(request, f'Member "{name}" berhasil dihapus.')
+        except ProtectedError:
+            messages.error(
+                request,
+                'Member tidak bisa dihapus karena sudah memiliki transaksi. Nonaktifkan member untuk menghentikan penggunaan.',
+            )
     return redirect('member_list')
 
 

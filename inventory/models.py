@@ -196,7 +196,7 @@ class InventoryTransaction(BaseModel):
     total_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     reference = models.CharField(max_length=100, blank=True, default='')
     note = models.CharField(max_length=255, blank=True, default='')
-    member = models.ForeignKey(Member, on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
+    member = models.ForeignKey(Member, on_delete=models.PROTECT, null=True, blank=True, related_name='inventory_transactions')
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

@@ -9,7 +9,7 @@ from members.models import Member
 class Sale(BaseModel):
     sale_number = models.CharField(max_length=50, unique=True)
     client_txn_id = models.CharField(max_length=80, unique=True, null=True, blank=True, db_index=True)
-    member = models.ForeignKey(Member, on_delete=models.SET_NULL, null=True, blank=True, related_name='sales')
+    member = models.ForeignKey(Member, on_delete=models.PROTECT, null=True, blank=True, related_name='sales')
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     created_by = models.ForeignKey(

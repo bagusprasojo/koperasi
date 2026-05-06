@@ -89,7 +89,7 @@ class MemberTopUp(BaseModel):
         (STATUS_REVERSED, 'Reversed'),
     )
 
-    member = models.ForeignKey(Member, on_delete=models.CASCADE, related_name='topups')
+    member = models.ForeignKey(Member, on_delete=models.PROTECT, related_name='topups')
     topup_number = models.CharField(max_length=40, unique=True, db_index=True, blank=True, default='')
     topup_type = models.CharField(max_length=20, choices=TOPUP_TYPE_CHOICES, default=TOPUP_TYPE_MEMBER)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
@@ -147,7 +147,7 @@ class MemberLedger(BaseModel):
         (TYPE_REVERSAL_TOPUP, 'Reversal Topup'),
     )
 
-    member = models.ForeignKey(Member, on_delete=models.CASCADE, related_name='ledger_entries')
+    member = models.ForeignKey(Member, on_delete=models.PROTECT, related_name='ledger_entries')
     card = models.ForeignKey(
         MemberCard,
         on_delete=models.SET_NULL,

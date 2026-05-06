@@ -42,7 +42,9 @@
             </div>
             <div class="grid grid-cols-2 gap-2 pt-2 text-xs">
                 <button type="button" @click="openCheckout()" class="rounded-md bg-slate-900 px-2 py-2 text-white">Checkout (F9)</button>
-                <button type="button" @click="clearCart()" class="rounded-md border px-2 py-2">Clear</button>
+                <button type="button" @click="holdActiveCart()" class="rounded-md border px-2 py-2">Hold (F8)</button>
+                <button type="button" @click="openPendingModal()" class="rounded-md border px-2 py-2">Recall (F7)</button>
+                <button type="button" @click="clearCart()" class="rounded-md border px-2 py-2">Clear (F6)</button>
             </div>
         </div>
     </div>
@@ -50,7 +52,7 @@
     <div class="rounded-xl bg-white p-4 shadow-sm lg:col-span-9">
         <div class="mb-3 flex items-center justify-between">
             <h2 class="text-lg font-semibold">Keranjang</h2>
-            <p class="text-sm text-slate-500">F10 simpan transaksi</p>
+            <p class="text-sm text-slate-500">F10 simpan transaksi | Pending: <span x-text="pendingTxns.length"></span></p>
         </div>
         <div class="overflow-x-auto">
             <table class="min-w-full text-left text-sm">
@@ -86,6 +88,39 @@
         <div class="mt-4 flex items-center justify-end gap-6 text-sm">
             <p>Subtotal: <span class="font-semibold" x-text="formatMoney(subtotal)"></span></p>
             <p>Total: <span class="text-lg font-bold" x-text="formatMoney(total)"></span></p>
+        </div>
+    </div>
+
+    <div x-show="pendingOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div @click.outside="pendingOpen=false" class="w-full max-w-2xl rounded-xl bg-white p-5 shadow-xl">
+            <h3 class="text-lg font-semibold">Recall Transaksi Hold</h3>
+            <div class="mt-3 max-h-80 overflow-auto rounded-md border">
+                <table class="min-w-full text-left text-sm">
+                    <thead class="border-b bg-slate-50">
+                        <tr><th class="px-2 py-2">Waktu</th><th class="px-2 py-2">Member</th><th class="px-2 py-2">Item</th><th class="px-2 py-2">Total</th><th class="px-2 py-2 text-right">Aksi</th></tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="p in pendingTxns" :key="p.id">
+                            <tr class="border-b">
+                                <td class="px-2 py-2" x-text="p.held_at"></td>
+                                <td class="px-2 py-2" x-text="p.member_name"></td>
+                                <td class="px-2 py-2" x-text="p.item_count"></td>
+                                <td class="px-2 py-2" x-text="formatMoney(p.total)"></td>
+                                <td class="px-2 py-2 text-right">
+                                    <div class="flex justify-end gap-2">
+                                        <button type="button" @click="resumePending(p.id)" class="rounded-md border px-2 py-1 text-xs">Resume</button>
+                                        <button type="button" @click="deletePending(p.id)" class="rounded-md border px-2 py-1 text-xs">Hapus</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="!pendingTxns.length"><td colspan="5" class="px-2 py-4 text-slate-500">Belum ada transaksi pending.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button type="button" @click="pendingOpen=false" class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Tutup</button>
+            </div>
         </div>
     </div>
 
@@ -182,15 +217,18 @@ function posApp() {
         subtotal: '0.00',
         total: '0.00',
         checkoutOpen: false,
+        pendingOpen: false,
         checkoutError: '',
         payment: { deposit: '', cash_received: '', card_number: '', card_auth: '' },
         successMessage: '',
         receiptOpen: false,
         receipt: { sale_number: '', member_name: '', total: '0.00', items: [] },
         lastPrintJob: { status: '', last_error: '' },
+        pendingTxns: [],
         init() {
             const rawProducts = JSON.parse(document.getElementById('pos-products-json').textContent || '[]');
             this.products = Array.isArray(rawProducts) ? rawProducts : JSON.parse(rawProducts || '[]');
+            this.loadPendingTxns();
             this.$nextTick(() => this.$refs.scanInput.focus());
         },
         toNum(v) { return parseFloat(v || 0) || 0; },
@@ -201,10 +239,78 @@ function posApp() {
         handleShortcut(e) {
             if (e.key === 'F2') { e.preventDefault(); this.$refs.scanInput.focus(); }
             if (e.key === 'F3') { e.preventDefault(); this.$refs.memberInput.focus(); }
+            if (e.key === 'F6') { e.preventDefault(); this.clearCart(); }
+            if (e.key === 'F7') { e.preventDefault(); this.openPendingModal(); }
+            if (e.key === 'F8') { e.preventDefault(); this.holdActiveCart(); }
             if (e.key === 'F9') { e.preventDefault(); this.openCheckout(); }
             if (e.key === 'F10') { if (this.checkoutOpen) { e.preventDefault(); this.submitCheckout(); } }
             if (e.key === 'Escape') { this.checkoutOpen = false; this.memberOpen = false; }
             if (e.ctrlKey && e.key === 'Delete') { e.preventDefault(); this.removeSelectedLine(); }
+        },
+        pendingStorageKey() {
+            return 'koperasi_pos_pending_v1';
+        },
+        loadPendingTxns() {
+            try {
+                const raw = localStorage.getItem(this.pendingStorageKey()) || '[]';
+                const parsed = JSON.parse(raw);
+                this.pendingTxns = Array.isArray(parsed) ? parsed : [];
+            } catch (_) {
+                this.pendingTxns = [];
+            }
+        },
+        savePendingTxns() {
+            localStorage.setItem(this.pendingStorageKey(), JSON.stringify(this.pendingTxns));
+        },
+        openPendingModal() {
+            this.pendingOpen = true;
+        },
+        holdActiveCart() {
+            if (!this.lines.length) {
+                this.productWarning = 'Tidak ada item untuk di-hold.';
+                return;
+            }
+            const now = new Date();
+            this.pendingTxns.unshift({
+                id: `PEND-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+                held_at: now.toLocaleString('id-ID'),
+                member_id: this.selectedMember.id,
+                member_name: this.selectedMember.full_name,
+                member_phone: this.selectedMember.phone || '',
+                member_card_number: this.selectedMember.card_number || '',
+                lines: this.lines,
+                subtotal: this.subtotal,
+                total: this.total,
+                item_count: this.lines.reduce((a, x) => a + this.toNum(x.qty), 0),
+            });
+            this.savePendingTxns();
+            this.clearCart();
+            this.productWarning = 'Transaksi berhasil di-hold.';
+            this.$nextTick(() => this.$refs.scanInput.focus());
+        },
+        resumePending(id) {
+            const idx = this.pendingTxns.findIndex(p => p.id === id);
+            if (idx < 0) return;
+            const p = this.pendingTxns[idx];
+            this.lines = (p.lines || []).map(x => ({ ...x }));
+            this.subtotal = p.subtotal || '0.00';
+            this.total = p.total || '0.00';
+            this.selectedMember = {
+                id: p.member_id,
+                full_name: p.member_name || 'NON MEMBER',
+                phone: p.member_phone || '',
+                card_number: p.member_card_number || '',
+            };
+            this.memberQuery = `${this.selectedMember.full_name}${this.selectedMember.phone ? ' - ' + this.selectedMember.phone : ''}`;
+            this.pendingTxns.splice(idx, 1);
+            this.savePendingTxns();
+            this.pendingOpen = false;
+            this.productWarning = 'Transaksi pending berhasil di-resume.';
+            this.$nextTick(() => this.$refs.scanInput.focus());
+        },
+        deletePending(id) {
+            this.pendingTxns = this.pendingTxns.filter(p => p.id !== id);
+            this.savePendingTxns();
         },
         async searchMember() {
             const q = (this.memberQuery || '').trim();
@@ -320,6 +426,13 @@ function posApp() {
             this.removeLine(id);
             this.selectedLineIndex = -1;
         },
+        clearCart() {
+            this.lines = [];
+            this.subtotal = '0.00';
+            this.total = '0.00';
+            this.selectedLineIndex = -1;
+            this.payment = { deposit: '', cash_received: '', card_number: '', card_auth: '' };
+        },
         openCheckout() {
             if (!this.lines.length) return;
             this.checkoutError = '';
@@ -404,11 +517,7 @@ function posApp() {
             }
             await this.openReceiptModal(data.data.sale_number, data.data.last_print_job || {});
             this.checkoutOpen = false;
-            this.lines = [];
-            this.subtotal = '0.00';
-            this.total = '0.00';
-            this.payment = { deposit: '', cash_received: '', card_number: '', card_auth: '' };
-            this.selectedLineIndex = -1;
+            this.clearCart();
             this.successMessage = `Transaksi ${data.data.sale_number} berhasil.`;
             setTimeout(() => { this.successMessage = ''; }, 3000);
             this.$nextTick(() => this.$refs.scanInput.focus());

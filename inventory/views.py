@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.db.models import Q
 from django.db import IntegrityError, transaction
+from django.db.models.deletion import ProtectedError
 from django.core.exceptions import ValidationError
 from decimal import Decimal, InvalidOperation
 import json
@@ -416,9 +417,12 @@ def product_edit(request, uuid):
 def product_delete(request, uuid):
     product = get_object_or_404(Product, uuid=uuid)
     if request.method == 'POST':
-        product_name = product.name
-        product.delete()
-        messages.warning(request, f'Produk "{product_name}" berhasil dihapus.')
+        try:
+            product_name = product.name
+            product.delete()
+            messages.warning(request, f'Produk "{product_name}" berhasil dihapus.')
+        except ProtectedError:
+            messages.error(request, 'Produk tidak bisa dihapus karena sudah dipakai transaksi.')
     else:
         messages.info(request, 'Penghapusan dibatalkan.')
     return redirect('product_list')
@@ -787,9 +791,12 @@ def category_edit(request, uuid):
 def category_delete(request, uuid):
     category = get_object_or_404(Category, uuid=uuid)
     if request.method == 'POST':
-        category_name = category.name
-        category.delete()
-        messages.warning(request, f'Kategori "{category_name}" berhasil dihapus.')
+        try:
+            category_name = category.name
+            category.delete()
+            messages.warning(request, f'Kategori "{category_name}" berhasil dihapus.')
+        except ProtectedError:
+            messages.error(request, 'Kategori tidak bisa dihapus karena sudah dipakai produk/transaksi.')
     else:
         messages.info(request, 'Penghapusan dibatalkan.')
     return redirect('category_list')
