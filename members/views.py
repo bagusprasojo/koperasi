@@ -243,23 +243,47 @@ def topup_page(request):
     if query:
         members = members.filter(Q(full_name__icontains=query) | Q(phone__icontains=query))
 
+    confirm_data = None
     if request.method == 'POST':
-        member_id = request.POST.get('member_id', '').strip()
+        member_code = request.POST.get('member_code', '').strip().upper()
         amount_raw = request.POST.get('amount', '').strip()
         note = request.POST.get('note', '').strip()
+        do_confirm = request.POST.get('do_confirm') == '1'
         try:
-            member = Member.objects.get(id=member_id)
+            if not member_code:
+                raise ValueError('Kode member wajib diisi.')
+            member = Member.objects.filter(code__iexact=member_code).first()
+            if not member:
+                raise Member.DoesNotExist
             amount = Decimal(amount_raw)
-            create_admin_topup(member=member, amount=amount, created_by=request.user, note=note)
-            messages.success(request, 'Topup admin berhasil diproses.')
-            return redirect('member_topup')
-        except (Member.DoesNotExist, InvalidOperation):
-            messages.error(request, 'Data topup tidak valid.')
+            if amount <= 0:
+                raise ValueError('Nominal topup harus lebih besar dari 0.')
+            if do_confirm:
+                create_admin_topup(member=member, amount=amount, created_by=request.user, note=note)
+                messages.success(request, 'Topup admin berhasil diproses.')
+                return redirect('member_topup')
+            confirm_data = {
+                'member_code': member_code,
+                'member_name': member.full_name,
+                'member_phone': member.phone,
+                'amount': amount,
+                'note': note,
+            }
+        except Member.DoesNotExist:
+            messages.error(request, 'Member tidak ditemukan. Gunakan kode member yang valid.')
+        except InvalidOperation:
+            messages.error(request, 'Nominal topup tidak valid.')
+        except ValueError as exc:
+            messages.error(request, str(exc))
         except Exception as exc:
             messages.error(request, str(exc))
 
     page_obj = Paginator(members, 10).get_page(request.GET.get('page'))
-    return render(request, 'members/topup_page.html', {'page_obj': page_obj, 'query': query})
+    return render(
+        request,
+        'members/topup_page.html',
+        {'page_obj': page_obj, 'query': query, 'confirm_data': confirm_data},
+    )
 
 
 @role_required('member')
