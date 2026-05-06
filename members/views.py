@@ -1,4 +1,7 @@
 from decimal import Decimal, InvalidOperation
+import csv
+import io
+import json
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -9,6 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 
@@ -16,7 +20,6 @@ from core.decorators import role_required
 from .models import Member, MemberCard, MemberLedger, MemberTopUp
 from .services import (
     approve_topup,
-    bulk_admin_topup,
     create_admin_topup,
     get_or_create_wallet,
     reject_topup,
@@ -405,29 +408,125 @@ def topup_reverse_action(request, uuid):
 
 @role_required('admin_toko')
 def topup_bulk_admin(request):
+    preview_rows = []
+    can_confirm = False
+    confirm_payload = '[]'
+
     if request.method == 'POST':
-        rows = request.POST.get('rows', '').strip().splitlines()
-        items = []
-        for row in rows:
-            parts = [p.strip() for p in row.split(',')]
-            if len(parts) < 2:
-                continue
-            phone, amount_raw = parts[0], parts[1]
-            note = parts[2] if len(parts) > 2 else ''
-            member = Member.objects.filter(phone=phone).first()
-            if not member:
-                continue
+        action = request.POST.get('action', 'preview')
+        if action == 'preview':
+            upload = request.FILES.get('csv_file')
+            if not upload:
+                messages.error(request, 'File CSV wajib diunggah.')
+            elif not upload.name.lower().endswith('.csv'):
+                messages.error(request, 'Format file harus .csv')
+            else:
+                try:
+                    text = io.TextIOWrapper(upload.file, encoding='utf-8-sig')
+                    reader = csv.DictReader(text)
+                    headers = [h.strip().lower() for h in (reader.fieldnames or [])]
+                    required = {'member_code', 'amount'}
+                    if not required.issubset(set(headers)):
+                        messages.error(request, 'Header CSV wajib: member_code,amount,note')
+                    else:
+                        seen_codes = set()
+                        valid_payload = []
+                        for i, row in enumerate(reader, start=2):
+                            code = (row.get('member_code') or '').strip().upper()
+                            amount_raw = (row.get('amount') or '').strip()
+                            note = (row.get('note') or '').strip()
+                            err = ''
+                            member = None
+                            amount = None
+                            if not code:
+                                err = 'Kode member kosong'
+                            elif code in seen_codes:
+                                err = 'Kode member duplikat dalam file bulk'
+                            else:
+                                member = Member.objects.filter(code__iexact=code).first()
+                                if not member:
+                                    err = 'Member tidak ditemukan'
+                            if not err:
+                                try:
+                                    amount = Decimal(amount_raw)
+                                    if amount <= 0:
+                                        err = 'Nominal harus > 0'
+                                except Exception:
+                                    err = 'Nominal tidak valid'
+                            item = {
+                                'line_no': i,
+                                'member_code': code,
+                                'member_name': member.full_name if member else '-',
+                                'amount_raw': amount_raw,
+                                'note': note,
+                                'is_valid': err == '',
+                                'error': err,
+                            }
+                            preview_rows.append(item)
+                            if not err:
+                                seen_codes.add(code)
+                                valid_payload.append(
+                                    {
+                                        'line_no': i,
+                                        'member_code': code,
+                                        'amount': str(amount),
+                                        'note': note,
+                                    }
+                                )
+                        if preview_rows and all(r['is_valid'] for r in preview_rows):
+                            can_confirm = True
+                            confirm_payload = json.dumps(valid_payload)
+                        elif not preview_rows:
+                            messages.error(request, 'CSV kosong atau tidak memiliki data baris.')
+                        else:
+                            messages.error(request, 'Ada baris tidak valid. Perbaiki file CSV lalu upload ulang.')
+                except Exception as exc:
+                    messages.error(request, f'Gagal membaca CSV: {exc}')
+        elif action == 'confirm':
+            rows_json = request.POST.get('rows_json', '[]')
             try:
-                amount = Decimal(amount_raw)
-            except InvalidOperation:
-                continue
-            items.append({'member': member, 'amount': amount, 'note': note})
-        results = bulk_admin_topup(items=items, created_by=request.user)
-        success_count = len([r for r in results if r[1]])
-        fail_count = len(results) - success_count
-        messages.info(request, f'Bulk topup selesai. Sukses: {success_count}, Gagal: {fail_count}.')
-        return redirect('topup_bulk_admin')
-    return render(request, 'members/topup_bulk_admin.html')
+                rows = json.loads(rows_json)
+                if not rows:
+                    raise ValueError('Data konfirmasi kosong.')
+                with transaction.atomic():
+                    for r in rows:
+                        code = (r.get('member_code') or '').strip().upper()
+                        note = (r.get('note') or '').strip()
+                        try:
+                            amount = Decimal(str(r.get('amount')))
+                        except Exception:
+                            raise ValueError(f'Baris {r.get("line_no")}: nominal tidak valid.')
+                        member = Member.objects.filter(code__iexact=code).first()
+                        if not member:
+                            raise ValueError(f'Baris {r.get("line_no")}: member code {code} tidak ditemukan.')
+                        if amount <= 0:
+                            raise ValueError(f'Baris {r.get("line_no")}: nominal harus > 0.')
+                        create_admin_topup(member=member, amount=amount, created_by=request.user, note=note)
+                messages.success(request, f'Bulk topup berhasil diproses: {len(rows)} baris.')
+                return redirect('topup_bulk_admin')
+            except Exception as exc:
+                messages.error(request, f'Bulk topup gagal: {exc}')
+
+    return render(
+        request,
+        'members/topup_bulk_admin.html',
+        {
+            'preview_rows': preview_rows,
+            'can_confirm': can_confirm,
+            'confirm_payload': confirm_payload,
+        },
+    )
+
+
+@role_required('admin_toko')
+def topup_bulk_template_csv(request):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="template_topup_bulk.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['member_code', 'amount', 'note'])
+    writer.writerow(['MBR001', '50000', 'Topup promo'])
+    writer.writerow(['MBR002', '25000', 'Topup reguler'])
+    return response
 
 
 @role_required('admin_toko', 'pembelian', 'kasir')

@@ -349,11 +349,14 @@ def close_daily(closing_date: date, user, note=''):
             closing_stock=opening + mut_in - mut_out,
         )
     members = Member.objects.all()
+    in_types = [MemberLedger.TYPE_TOPUP, MemberLedger.TYPE_REFUND]
+    out_types = [MemberLedger.TYPE_PURCHASE, MemberLedger.TYPE_REVERSAL_TOPUP]
     for m in members:
         prev_snap = MemberDailySnapshot.objects.filter(closing=prev, member=m).first() if prev else None
         opening = prev_snap.closing_balance if prev_snap else Decimal('0.00')
-        mut_in = MemberLedger.objects.filter(member=m, created_at__date=closing_date, txn_type=MemberLedger.TYPE_TOPUP).aggregate(v=Sum('amount'))['v'] or Decimal('0.00')
-        mut_out = MemberLedger.objects.filter(member=m, created_at__date=closing_date).exclude(txn_type=MemberLedger.TYPE_TOPUP).aggregate(v=Sum('amount'))['v'] or Decimal('0.00')
+        day_ledgers = MemberLedger.objects.filter(member=m, created_at__date=closing_date)
+        mut_in = day_ledgers.filter(txn_type__in=in_types).aggregate(v=Sum('amount'))['v'] or Decimal('0.00')
+        mut_out = day_ledgers.filter(txn_type__in=out_types).aggregate(v=Sum('amount'))['v'] or Decimal('0.00')
         MemberDailySnapshot.objects.create(
             closing=closing,
             member=m,

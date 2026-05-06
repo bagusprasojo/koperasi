@@ -1,15 +1,70 @@
 {% extends "base.html" %}
+{% load humanize %}
 {% block title %}Topup Bulk Admin{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-3xl rounded-xl bg-white p-6 shadow-sm">
-    <h1 class="mb-2 text-xl font-semibold">Topup Bulk Admin</h1>
-    <p class="mb-4 text-sm text-slate-600">Format per baris: <code>phone,amount,note</code>. Contoh: <code>08123456789,50000,Promo Mei</code></p>
-    <form method="post" class="grid gap-3">{% csrf_token %}
-        <textarea name="rows" rows="12" class="rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="08123456789,50000,Topup promo"></textarea>
+<div class="mx-auto max-w-5xl rounded-xl bg-white p-6 shadow-sm">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h1 class="text-xl font-semibold">Topup Bulk Admin (CSV)</h1>
+        <a href="{% url 'topup_bulk_template_csv' %}" class="rounded-md border px-3 py-2 text-sm">Download Template CSV</a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="grid gap-3">{% csrf_token %}
+        <input type="hidden" name="action" value="preview">
+        <label class="text-sm text-slate-600">Upload CSV dengan header: <code>member_code,amount,note</code></label>
+        <input type="file" name="csv_file" accept=".csv" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
         <div class="flex gap-2">
             <a href="{% url 'member_topup' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>
-            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Proses Bulk Topup</button>
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Preview Data</button>
         </div>
     </form>
+
+    {% if preview_rows %}
+    <div class="mt-6">
+        <h2 class="mb-2 text-sm font-semibold">Preview Per Baris</h2>
+        <div class="overflow-x-auto rounded-lg border border-slate-200">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50">
+                    <tr>
+                        <th class="px-3 py-2">Baris</th>
+                        <th class="px-3 py-2">Kode Member</th>
+                        <th class="px-3 py-2">Nama Member</th>
+                        <th class="px-3 py-2">Nominal</th>
+                        <th class="px-3 py-2">Catatan</th>
+                        <th class="px-3 py-2">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in preview_rows %}
+                    <tr class="border-b {% if not r.is_valid %}bg-red-50{% endif %}">
+                        <td class="px-3 py-2">{{ r.line_no }}</td>
+                        <td class="px-3 py-2">{{ r.member_code }}</td>
+                        <td class="px-3 py-2">{{ r.member_name }}</td>
+                        <td class="px-3 py-2">{{ r.amount_raw }}</td>
+                        <td class="px-3 py-2">{{ r.note|default:'-' }}</td>
+                        <td class="px-3 py-2">
+                            {% if r.is_valid %}
+                                <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Valid</span>
+                            {% else %}
+                                <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">{{ r.error }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-4 flex justify-end gap-2">
+            <a href="{% url 'topup_bulk_admin' %}" class="rounded-md border px-3 py-2 text-sm">Upload Ulang</a>
+            {% if can_confirm %}
+            <form method="post">{% csrf_token %}
+                <input type="hidden" name="action" value="confirm">
+                <input type="hidden" name="rows_json" value="{{ confirm_payload|escape }}">
+                <button class="rounded-md bg-emerald-600 px-3 py-2 text-sm text-white">Konfirmasi & Simpan</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

@@ -22,5 +22,6 @@ urlpatterns = [
     path('topup/<uuid:uuid>/reject/', views.topup_reject_action, name='topup_reject_action'),
     path('topup/<uuid:uuid>/reverse/', views.topup_reverse_action, name='topup_reverse_action'),
     path('topup/bulk/', views.topup_bulk_admin, name='topup_bulk_admin'),
+    path('topup/bulk/template.csv', views.topup_bulk_template_csv, name='topup_bulk_template_csv'),
     path('ledger/', views.ledger_list, name='member_ledger'),
 ]
