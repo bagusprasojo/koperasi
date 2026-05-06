@@ -210,6 +210,7 @@ def product_list(request):
         products = products.filter(
             Q(name__icontains=query) |
             Q(sku__icontains=query) |
+            Q(barcode__icontains=query) |
             Q(category__name__icontains=query) |
             Q(unit__name__icontains=query) |
             Q(unit__code__icontains=query)
@@ -233,6 +234,7 @@ def product_create(request):
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         sku = request.POST.get('sku', '').strip()
+        barcode = request.POST.get('barcode', '').strip()
         category_id = request.POST.get('category_id', '').strip()
         unit_id = request.POST.get('unit_id', '').strip()
         tier_rows = _extract_tier_rows(request)
@@ -244,10 +246,25 @@ def product_create(request):
             try:
                 category = Category.objects.get(id=category_id)
                 unit = Unit.objects.get(id=unit_id, is_active=True)
+                if barcode and Product.objects.filter(barcode=barcode).exists():
+                    error_message = 'Barcode sudah dipakai.'
+                    messages.error(request, error_message)
+                    return render(
+                        request,
+                        'inventory/product_create.html',
+                        {
+                            'error_message': error_message,
+                            'categories': categories,
+                            'units': units,
+                            'tier_rows': tier_rows,
+                            'tier_rows_json': _to_json_payload(tier_rows),
+                        },
+                    )
                 with transaction.atomic():
                     product = Product.objects.create(
                         name=name,
                         sku=sku,
+                        barcode=barcode or None,
                         stock=0,
                         category=category,
                         unit=unit,
@@ -306,6 +323,7 @@ def product_edit(request, uuid):
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         sku = request.POST.get('sku', '').strip()
+        barcode = request.POST.get('barcode', '').strip()
         category_id = request.POST.get('category_id', '').strip()
         unit_id = request.POST.get('unit_id', '').strip()
         tier_rows = _extract_tier_rows(request)
@@ -334,9 +352,27 @@ def product_edit(request, uuid):
                             'tier_rows_json': _to_json_payload(tier_rows),
                         },
                     )
+                if barcode and Product.objects.exclude(id=product.id).filter(barcode=barcode).exists():
+                    error_message = 'Barcode sudah dipakai.'
+                    messages.error(request, error_message)
+                    return render(
+                        request,
+                        'inventory/product_edit.html',
+                        {
+                            'product': product,
+                            'categories': categories,
+                            'units': units,
+                            'error_message': error_message,
+                            'back_url': back_url,
+                            'next_url': next_url,
+                            'tier_rows': tier_rows,
+                            'tier_rows_json': _to_json_payload(tier_rows),
+                        },
+                    )
                 with transaction.atomic():
                     product.name = name
                     product.sku = sku
+                    product.barcode = barcode or None
                     product.category = category
                     product.unit = unit
                     product.save()

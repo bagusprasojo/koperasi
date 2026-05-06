@@ -25,6 +25,7 @@ def pos_page(request):
             'id': str(p.id),
             'name': p.name,
             'sku': p.sku,
+            'barcode': p.barcode or '',
             'unit': p.unit.name if p.unit else '-',
         }
         for p in products

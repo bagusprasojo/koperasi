@@ -17,6 +17,10 @@
             <input type="text" name="sku" value="{{ request.POST.sku|default:product.sku }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
         </div>
         <div>
+            <label class="mb-1 block text-sm font-medium">Barcode</label>
+            <input type="text" name="barcode" value="{{ request.POST.barcode|default:product.barcode }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+        </div>
+        <div>
             <label class="mb-1 block text-sm font-medium">Kategori</label>
             {% with selected_category=request.POST.category_id|default:product.category.id|stringformat:"s" %}
             <select name="category_id" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">

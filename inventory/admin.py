@@ -44,8 +44,8 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'sku', 'stock']
-    search_fields = ['name', 'sku']
+    list_display = ['name', 'sku', 'barcode', 'stock']
+    search_fields = ['name', 'sku', 'barcode']
     inlines = [ProductPriceTierInline]
 
 

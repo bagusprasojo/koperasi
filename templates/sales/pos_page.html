@@ -8,7 +8,18 @@
         <div class="grid gap-3">
             <div>
                 <label class="mb-1 block text-xs font-semibold uppercase text-slate-500">Scan / Cari Produk (F2)</label>
-                <input x-ref="scanInput" x-model="scanQuery" @keydown.enter.prevent="addByQuery()" placeholder="Scan barcode / ketik SKU / nama" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <input x-ref="scanInput" x-model="scanQuery" @input="onScanInput()" @keydown.enter.prevent="addByQuery()" @keydown.arrow-down.prevent="moveProductCursor(1)" @keydown.arrow-up.prevent="moveProductCursor(-1)" placeholder="Scan barcode / ketik SKU / nama" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <div x-show="productSuggestOpen && productSuggestions.length" x-cloak class="relative">
+                    <div class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-white shadow">
+                        <template x-for="(p, idx) in productSuggestions" :key="p.id">
+                            <button type="button" @click="addProductDirect(p)" :class="productCursor === idx ? 'bg-slate-100' : ''" class="block w-full border-b px-3 py-2 text-left text-sm hover:bg-slate-100">
+                                <span class="font-medium" x-text="p.name"></span>
+                                <span class="text-slate-500" x-text="' | SKU: ' + p.sku + (p.barcode ? ' | BC: ' + p.barcode : '')"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+                <p x-show="productWarning" x-cloak class="mt-1 text-xs text-amber-700" x-text="productWarning"></p>
             </div>
             <div>
                 <label class="mb-1 block text-xs font-semibold uppercase text-slate-500">Member (F3)</label>
@@ -160,6 +171,10 @@ function posApp() {
         memberQuery: '',
         memberOpen: false,
         memberResults: [],
+        productSuggestions: [],
+        productSuggestOpen: false,
+        productCursor: -1,
+        productWarning: '',
         selectedMember: { id: {{ default_member.id }}, full_name: '{{ default_member.full_name|escapejs }}', phone: '{{ default_member.phone|escapejs }}', card_number: '' },
         defaultMemberId: {{ default_member.id }},
         lines: [],
@@ -214,19 +229,62 @@ function posApp() {
         findProductByQuery(q) {
             const needle = (q || '').toLowerCase().trim();
             if (!needle) return null;
-            return this.products.find(p => p.sku.toLowerCase() === needle)
+            return this.products.find(p => (p.barcode || '').toLowerCase() === needle)
+                || this.products.find(p => p.sku.toLowerCase() === needle)
                 || this.products.find(p => p.name.toLowerCase() === needle)
-                || this.products.find(p => p.name.toLowerCase().includes(needle))
                 || null;
         },
-        async addByQuery() {
-            const product = this.findProductByQuery(this.scanQuery);
-            if (!product) return;
+        onScanInput() {
+            const q = (this.scanQuery || '').toLowerCase().trim();
+            this.productWarning = '';
+            if (!q) {
+                this.productSuggestions = [];
+                this.productSuggestOpen = false;
+                this.productCursor = -1;
+                return;
+            }
+            this.productSuggestions = this.products
+                .filter(p =>
+                    (p.name || '').toLowerCase().includes(q) ||
+                    (p.sku || '').toLowerCase().includes(q) ||
+                    (p.barcode || '').toLowerCase().includes(q)
+                )
+                .slice(0, 8);
+            this.productSuggestOpen = this.productSuggestions.length > 0;
+            this.productCursor = -1;
+        },
+        moveProductCursor(step) {
+            if (!this.productSuggestOpen || !this.productSuggestions.length) return;
+            let next = this.productCursor + step;
+            if (next < 0) next = this.productSuggestions.length - 1;
+            if (next >= this.productSuggestions.length) next = 0;
+            this.productCursor = next;
+        },
+        async addProductDirect(product) {
             const existing = this.lines.find(l => String(l.product_id) === String(product.id));
             if (existing) existing.qty = this.toNum(existing.qty) + 1;
             else this.lines.push({ product_id: product.id, product_name: product.name, unit: product.unit, qty: 1, unit_price: 0, line_total: 0 });
             this.scanQuery = '';
+            this.productSuggestions = [];
+            this.productSuggestOpen = false;
+            this.productCursor = -1;
+            this.productWarning = '';
             await this.refreshPreview();
+        },
+        async addByQuery() {
+            const q = (this.scanQuery || '').trim();
+            if (!q) return;
+            const exact = this.findProductByQuery(q);
+            if (exact) {
+                await this.addProductDirect(exact);
+                return;
+            }
+            if (this.productSuggestOpen && this.productCursor >= 0 && this.productCursor < this.productSuggestions.length) {
+                await this.addProductDirect(this.productSuggestions[this.productCursor]);
+                return;
+            }
+            this.productWarning = `Produk tidak ditemukan untuk input "${q}".`;
+            this.productSuggestOpen = false;
         },
         async refreshPreview() {
             if (!this.lines.length) {

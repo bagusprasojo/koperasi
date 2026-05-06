@@ -69,6 +69,7 @@ class Product(BaseModel):
     )
     name = models.CharField(max_length=150)
     sku = models.CharField(max_length=50, unique=True)
+    barcode = models.CharField(max_length=80, unique=True, null=True, blank=True)
     stock = models.IntegerField(default=0)
     last_purchase_price = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     reorder_point = models.PositiveIntegerField(default=0)

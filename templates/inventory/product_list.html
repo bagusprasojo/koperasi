@@ -30,6 +30,7 @@
                     <th class="px-3 py-2 font-medium">Kategori</th>
                     <th class="px-3 py-2 font-medium">Satuan</th>
                     <th class="px-3 py-2 font-medium">SKU</th>
+                    <th class="px-3 py-2 font-medium">Barcode</th>
                     <th class="px-3 py-2 font-medium">Harga Dasar</th>
                     <th class="px-3 py-2 font-medium">Harga Beli Terakhir</th>
                     <th class="px-3 py-2 font-medium">Stok</th>
@@ -43,6 +44,7 @@
                         <td class="px-3 py-2">{{ product.category.name }}</td>
                         <td class="px-3 py-2">{% if product.unit %}{{ product.unit.name }} ({{ product.unit.code }}){% else %}-{% endif %}</td>
                         <td class="px-3 py-2">{{ product.sku }}</td>
+                        <td class="px-3 py-2">{{ product.barcode|default:'-' }}</td>
                         <td class="px-3 py-2">
                             {% for tier in product.price_tiers.all %}
                                 {% if tier.level == 1 %}
@@ -70,7 +72,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="8" class="px-3 py-4 text-slate-500">Belum ada data produk.</td>
+                        <td colspan="9" class="px-3 py-4 text-slate-500">Belum ada data produk.</td>
                     </tr>
                 {% endfor %}
             </tbody>
