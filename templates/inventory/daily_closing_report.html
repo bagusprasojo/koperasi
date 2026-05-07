@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Report Validasi Tutup Harian{% endblock %}
+{% block content %}
+<div class="space-y-4">
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-xl font-semibold">Report Validasi Tutup Harian</h1>
+            <a href="{% url 'daily_closing_page' %}" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50">Kembali ke Tutup Harian</a>
+        </div>
+        <form method="get" class="flex flex-wrap items-end gap-3">
+            <div>
+                <label class="mb-1 block text-sm text-slate-600">Tanggal Tutup</label>
+                <select name="close_date" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">-- Pilih tanggal --</option>
+                    {% for d in close_dates %}
+                        <option value="{{ d|date:'Y-m-d' }}" {% if selected_date == d|date:'Y-m-d' %}selected{% endif %}>{{ d }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Tampilkan</button>
+        </form>
+    </div>
+
+    {% if closing %}
+    <div class="grid gap-4 md:grid-cols-2">
+        <div class="rounded-xl bg-white p-4 shadow-sm">
+            <p class="text-sm text-slate-500">Tanggal Tutup</p>
+            <p class="text-lg font-semibold">{{ closing.close_date }}</p>
+        </div>
+        <div class="rounded-xl bg-white p-4 shadow-sm">
+            <p class="text-sm text-slate-500">Status Validasi</p>
+            {% if product_mismatch_count == 0 and member_mismatch_count == 0 %}
+                <p class="text-lg font-semibold text-emerald-700">Valid</p>
+            {% else %}
+                <p class="text-lg font-semibold text-amber-700">Perlu Cek</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <div class="mb-3 flex items-center justify-between">
+            <h2 class="font-semibold">Validasi Stok Produk</h2>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">Mismatch: {{ product_mismatch_count|intcomma }}</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50">
+                    <tr>
+                        <th class="px-3 py-2">Produk</th>
+                        <th class="px-3 py-2">Saldo Awal</th>
+                        <th class="px-3 py-2">Mutasi Masuk</th>
+                        <th class="px-3 py-2">Mutasi Keluar</th>
+                        <th class="px-3 py-2">Saldo Tutup</th>
+                        <th class="px-3 py-2">Stok Aktual</th>
+                        <th class="px-3 py-2">Selisih</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in product_rows %}
+                    <tr class="border-b {% if not r.is_match %}bg-amber-50{% endif %}">
+                        <td class="px-3 py-2">{{ r.product.name }}</td>
+                        <td class="px-3 py-2">{{ r.opening|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.mut_in|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.mut_out|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.closing|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.actual|intcomma }}</td>
+                        <td class="px-3 py-2 font-medium {% if r.diff != 0 %}text-amber-700{% else %}text-emerald-700{% endif %}">{{ r.diff|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="px-3 py-4 text-slate-500">Tidak ada snapshot produk.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <div class="mb-3 flex items-center justify-between">
+            <h2 class="font-semibold">Validasi Saldo Member</h2>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">Mismatch: {{ member_mismatch_count|intcomma }}</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50">
+                    <tr>
+                        <th class="px-3 py-2">Member</th>
+                        <th class="px-3 py-2">Saldo Awal</th>
+                        <th class="px-3 py-2">Mutasi Masuk</th>
+                        <th class="px-3 py-2">Mutasi Keluar</th>
+                        <th class="px-3 py-2">Saldo Tutup</th>
+                        <th class="px-3 py-2">Saldo Wallet</th>
+                        <th class="px-3 py-2">Selisih</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in member_rows %}
+                    <tr class="border-b {% if not r.is_match %}bg-amber-50{% endif %}">
+                        <td class="px-3 py-2">{{ r.member.full_name }}</td>
+                        <td class="px-3 py-2">{{ r.opening|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.mut_in|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.mut_out|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.closing|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.actual|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2 font-medium {% if r.diff != 0 %}text-amber-700{% else %}text-emerald-700{% endif %}">{{ r.diff|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="px-3 py-4 text-slate-500">Tidak ada snapshot member.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="rounded-xl bg-white p-6 shadow-sm text-sm text-slate-500">
+        Belum ada data tutup harian.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

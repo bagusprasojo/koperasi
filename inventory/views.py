@@ -691,6 +691,75 @@ def daily_closing_page(request):
     return render(request, 'inventory/daily_closing_page.html')
 
 
+@role_required('admin_toko')
+def daily_closing_report(request):
+    close_date = request.GET.get('close_date', '').strip()
+    closing = None
+    if close_date:
+        closing = DailyClosing.objects.filter(close_date=close_date).first()
+    if not closing:
+        closing = DailyClosing.objects.order_by('-close_date').first()
+
+    product_rows = []
+    member_rows = []
+    product_mismatch_count = 0
+    member_mismatch_count = 0
+
+    if closing:
+        for snap in closing.product_snapshots.select_related('product').order_by('product__name'):
+            current_stock = snap.product.stock
+            diff = current_stock - snap.closing_stock
+            is_match = diff == 0
+            if not is_match:
+                product_mismatch_count += 1
+            product_rows.append(
+                {
+                    'product': snap.product,
+                    'opening': snap.opening_stock,
+                    'mut_in': snap.mutation_in,
+                    'mut_out': snap.mutation_out,
+                    'closing': snap.closing_stock,
+                    'actual': current_stock,
+                    'diff': diff,
+                    'is_match': is_match,
+                }
+            )
+        for snap in closing.member_snapshots.select_related('member').order_by('member__full_name'):
+            wallet = getattr(snap.member, 'wallet', None)
+            current_balance = wallet.balance if wallet else Decimal('0.00')
+            diff = current_balance - snap.closing_balance
+            is_match = diff == 0
+            if not is_match:
+                member_mismatch_count += 1
+            member_rows.append(
+                {
+                    'member': snap.member,
+                    'opening': snap.opening_balance,
+                    'mut_in': snap.mutation_in,
+                    'mut_out': snap.mutation_out,
+                    'closing': snap.closing_balance,
+                    'actual': current_balance,
+                    'diff': diff,
+                    'is_match': is_match,
+                }
+            )
+
+    close_dates = DailyClosing.objects.order_by('-close_date').values_list('close_date', flat=True)
+    return render(
+        request,
+        'inventory/daily_closing_report.html',
+        {
+            'closing': closing,
+            'close_dates': close_dates,
+            'selected_date': close_date,
+            'product_rows': product_rows,
+            'member_rows': member_rows,
+            'product_mismatch_count': product_mismatch_count,
+            'member_mismatch_count': member_mismatch_count,
+        },
+    )
+
+
 @role_required('admin_toko', 'pembelian', 'kasir')
 def stock_card_report(request):
     products = Product.objects.order_by('name')

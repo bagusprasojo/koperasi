@@ -26,6 +26,7 @@ urlpatterns = [
     path('internal-used/', views.internal_used_page, name='internal_used_page'),
     path('stock-opname/', views.stock_opname_page, name='stock_opname_page'),
     path('daily-closing/', views.daily_closing_page, name='daily_closing_page'),
+    path('daily-closing/report/', views.daily_closing_report, name='daily_closing_report'),
     path('reports/stock-card/', views.stock_card_report, name='stock_card_report'),
     path('reorder-alert/', views.reorder_alert_page, name='reorder_alert_page'),
     path('categories/', views.category_list, name='category_list'),
