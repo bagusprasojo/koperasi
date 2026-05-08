@@ -55,9 +55,13 @@
         <h2 class="mb-4 text-lg font-semibold">Form Tarik Deposit</h2>
         <form method="post" class="grid gap-3">{% csrf_token %}
             <input type="hidden" name="action" value="preview">
-            <input name="member_code" value="{{ request.POST.member_code }}" placeholder="Kode Member" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <input name="member_code" list="member-codes" value="{{ request.POST.member_code }}" placeholder="Kode Member" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <datalist id="member-codes">
+                {% for m in active_members %}
+                <option value="{{ m.code }}">{{ m.full_name }} - {{ m.phone }}</option>
+                {% endfor %}
+            </datalist>
             <input name="amount" value="{{ request.POST.amount }}" type="number" step="0.01" min="0.01" placeholder="Nominal tarik deposit" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <input name="member_password" type="password" placeholder="Password member" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
             <textarea name="note" placeholder="Catatan" class="rounded-md border border-slate-300 px-3 py-2 text-sm">{{ request.POST.note }}</textarea>
             <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Proses</button>
         </form>
@@ -71,8 +75,9 @@
                 <p><span class="text-slate-600">Kode Member:</span> {{ confirm_data.member_code }}</p>
                 <p><span class="text-slate-600">Nama Member:</span> {{ confirm_data.member_name }}</p>
                 <p><span class="text-slate-600">Telepon:</span> {{ confirm_data.member_phone }}</p>
-                <p><span class="text-slate-600">Saldo Saat Ini:</span> {{ confirm_data.member_balance|floatformat:2|intcomma }}</p>
+                <p><span class="text-slate-600">Saldo Sebelum:</span> {{ confirm_data.member_balance_before|floatformat:2|intcomma }}</p>
                 <p><span class="text-slate-600">Nominal Tarik:</span> {{ confirm_data.amount|floatformat:2|intcomma }}</p>
+                <p><span class="text-slate-600">Saldo Akhir:</span> {{ confirm_data.member_balance_after|floatformat:2|intcomma }}</p>
                 <p><span class="text-slate-600">Catatan:</span> {{ confirm_data.note|default:'-' }}</p>
             </div>
             <form method="post" class="mt-4 grid gap-3">{% csrf_token %}

@@ -580,6 +580,7 @@ def withdrawal_page(request):
     if date_to:
         txs = txs.filter(created_at__date__lte=date_to)
     page_obj = Paginator(txs, 10).get_page(request.GET.get('page'))
+    active_members = Member.objects.filter(is_active=True).order_by('code', 'full_name')
 
     confirm_data = None
     if request.method == 'POST':
@@ -588,7 +589,6 @@ def withdrawal_page(request):
             member_code = request.POST.get('member_code', '').strip().upper()
             amount_raw = request.POST.get('amount', '').strip()
             note = request.POST.get('note', '').strip()
-            member_password = request.POST.get('member_password', '')
             try:
                 if not member_code:
                     raise ValueError('Kode member wajib diisi.')
@@ -603,14 +603,14 @@ def withdrawal_page(request):
                     raise ValueError('Saldo deposit member tidak mencukupi.')
                 if not member.user:
                     raise ValueError('Member belum memiliki user login untuk otorisasi.')
-                if not member.user.check_password(member_password):
-                    raise ValueError('Password member tidak sesuai.')
+                end_balance = wallet.balance - amount
                 confirm_data = {
                     'member_id': member.id,
                     'member_code': member.code,
                     'member_name': member.full_name,
                     'member_phone': member.phone,
-                    'member_balance': str(wallet.balance),
+                    'member_balance_before': str(wallet.balance),
+                    'member_balance_after': str(end_balance),
                     'amount': str(amount),
                     'note': note,
                 }
@@ -654,6 +654,7 @@ def withdrawal_page(request):
             'date_from': date_from,
             'date_to': date_to,
             'confirm_data': confirm_data,
+            'active_members': active_members,
         },
     )
 
