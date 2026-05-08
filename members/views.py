@@ -41,6 +41,12 @@ def _safe_next_url(request):
     return next_url
 
 
+def _exc_message(exc):
+    if isinstance(exc, ValidationError):
+        return exc.messages[0] if exc.messages else str(exc)
+    return str(exc)
+
+
 @role_required('admin_toko', 'pembelian', 'kasir')
 def member_list(request):
     query = request.GET.get('q', '').strip()
@@ -104,7 +110,7 @@ def member_create(request):
             except ValidationError as exc:
                 messages.error(request, exc.messages[0] if exc.messages else str(exc))
             except Exception as exc:
-                messages.error(request, str(exc))
+                messages.error(request, _exc_message(exc))
     return render(request, 'members/member_create.html')
 
 
@@ -148,7 +154,7 @@ def member_edit(request, uuid):
                 messages.success(request, 'Member berhasil diperbarui.')
                 return redirect('member_list')
             except Exception as exc:
-                messages.error(request, str(exc))
+                messages.error(request, _exc_message(exc))
     return render(request, 'members/member_edit.html', {'member': member, 'next_url': next_url, 'back_url': back_url})
 
 
@@ -279,7 +285,7 @@ def topup_page(request):
         except ValueError as exc:
             messages.error(request, str(exc))
         except Exception as exc:
-            messages.error(request, str(exc))
+            messages.error(request, _exc_message(exc))
 
     page_obj = Paginator(members, 10).get_page(request.GET.get('page'))
     return render(
@@ -317,7 +323,7 @@ def member_topup_request(request):
             messages.success(request, 'Request topup dikirim. Menunggu validasi admin.')
             return redirect('member_topup_request')
         except (InvalidOperation, ValueError, Exception) as exc:
-            messages.error(request, str(exc))
+            messages.error(request, _exc_message(exc))
 
     topups = MemberTopUp.objects.filter(member=member).order_by('-created_at')[:20]
     return render(request, 'members/member_topup_request.html', {'member': member, 'topups': topups})
@@ -376,7 +382,7 @@ def topup_approve_action(request, uuid):
             approve_topup(topup=topup, validated_by=request.user, validation_note=note)
             messages.success(request, 'Topup berhasil di-approve.')
         except Exception as exc:
-            messages.error(request, str(exc))
+            messages.error(request, _exc_message(exc))
     return redirect('topup_validation_list')
 
 
@@ -389,7 +395,7 @@ def topup_reject_action(request, uuid):
             reject_topup(topup=topup, validated_by=request.user, validation_note=note)
             messages.warning(request, 'Topup ditolak.')
         except Exception as exc:
-            messages.error(request, str(exc))
+            messages.error(request, _exc_message(exc))
     return redirect('topup_validation_list')
 
 
@@ -402,7 +408,7 @@ def topup_reverse_action(request, uuid):
             reverse_topup(topup=topup, admin_user=request.user, note=note)
             messages.warning(request, 'Topup berhasil direversal.')
         except Exception as exc:
-            messages.error(request, str(exc))
+            messages.error(request, _exc_message(exc))
     return redirect('topup_validation_list')
 
 

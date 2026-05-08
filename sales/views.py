@@ -1,5 +1,6 @@
 import json
 
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
@@ -14,6 +15,12 @@ from .services import (
     get_receipt_detail,
 )
 from .models import ReceiptPrintJob, Sale
+
+
+def _exc_message(exc):
+    if isinstance(exc, ValidationError):
+        return exc.messages[0] if exc.messages else str(exc)
+    return str(exc)
 
 
 @role_required('kasir', 'admin_toko')
@@ -87,7 +94,7 @@ def pos_price_preview_api(request):
             }
         )
     except Exception as exc:
-        return JsonResponse({'success': False, 'message': str(exc)}, status=400)
+        return JsonResponse({'success': False, 'message': _exc_message(exc)}, status=400)
 
 
 @role_required('kasir', 'admin_toko')
@@ -129,7 +136,7 @@ def pos_checkout_api(request):
             }
         )
     except Exception as exc:
-        return JsonResponse({'success': False, 'message': str(exc)}, status=400)
+        return JsonResponse({'success': False, 'message': _exc_message(exc)}, status=400)
 
 
 @role_required('kasir', 'admin_toko')

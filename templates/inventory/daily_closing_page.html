@@ -6,11 +6,28 @@
         <h1 class="text-xl font-semibold">Tutup Transaksi Harian</h1>
         <a href="{% url 'daily_closing_report' %}" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50">Report Validasi</a>
     </div>
+    <div class="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+        <p><span class="text-slate-500">Closing terakhir:</span> {% if latest_closing %}{{ latest_closing.close_date }}{% else %}-{% endif %}</p>
+        <p><span class="text-slate-500">Tanggal closing berikutnya:</span> {{ next_closing_date }}</p>
+    </div>
     <form method="post" class="grid gap-3">
         {% csrf_token %}
-        <input type="date" name="close_date" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+        <input type="hidden" name="action" value="close">
+        <input type="date" name="close_date" value="{{ next_closing_date|date:'Y-m-d' }}" max="{% now 'Y-m-d' %}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
         <textarea name="note" placeholder="Catatan closing" class="rounded-md border border-slate-300 px-3 py-2 text-sm"></textarea>
         <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Proses Tutup Harian</button>
     </form>
+    {% if latest_closing %}
+    <form method="post" class="mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="reopen">
+        <button
+            type="submit"
+            @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Buka Closing Terakhir', message: 'Tanggal closing {{ latest_closing.close_date }} akan dibuka kembali. Snapshot harian tanggal ini akan dihapus dan transaksi hari tersebut bisa diproses ulang. Lanjutkan?' })"
+            class="rounded-md border border-rose-300 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50">
+            Buka Closing Terakhir
+        </button>
+    </form>
+    {% endif %}
 </div>
 {% endblock %}

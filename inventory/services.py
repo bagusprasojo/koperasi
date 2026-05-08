@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -26,11 +26,12 @@ def _tx_number(prefix: str) -> str:
 
 def _ensure_not_closed(tx_date: date):
     if DailyClosing.objects.filter(close_date=tx_date, is_locked=True).exists():
-        raise ValidationError('Transaksi tidak bisa diubah karena tanggal tersebut sudah tutup harian.')
+        raise ValidationError('Transaksi tidak bisa diproses karena tanggal tersebut sudah tutup harian.')
 
 
 @transaction.atomic
 def post_purchase(product: Product, qty: int, unit_cost: Decimal, user, note=''):
+    _ensure_not_closed(date.today())
     if qty <= 0:
         raise ValidationError('Qty pembelian harus > 0.')
     if unit_cost <= 0:
@@ -198,6 +199,7 @@ def delete_purchase_transaction(tx: InventoryTransaction):
 
 @transaction.atomic
 def post_internal_used(product: Product, qty: int, user, note=''):
+    _ensure_not_closed(date.today())
     if qty <= 0:
         raise ValidationError('Qty internal used harus > 0.')
     if product.stock < qty:
@@ -240,6 +242,7 @@ def post_internal_used(product: Product, qty: int, user, note=''):
 
 @transaction.atomic
 def post_pos_sale(product: Product, qty: int, user, reference='', note=''):
+    _ensure_not_closed(date.today())
     if qty <= 0:
         raise ValidationError('Qty penjualan harus > 0.')
     if product.stock < qty:
@@ -283,6 +286,7 @@ def post_pos_sale(product: Product, qty: int, user, reference='', note=''):
 
 @transaction.atomic
 def post_stock_opname(product: Product, actual_stock: int, user, note=''):
+    _ensure_not_closed(date.today())
     if actual_stock < 0:
         raise ValidationError('Stok aktual tidak boleh negatif.')
     diff = actual_stock - product.stock
@@ -324,9 +328,19 @@ def post_stock_opname(product: Product, actual_stock: int, user, note=''):
 
 @transaction.atomic
 def close_daily(closing_date: date, user, note=''):
+    today = date.today()
+    if closing_date > today:
+        raise ValidationError('Tanggal tutup harian tidak boleh melewati hari ini.')
     if DailyClosing.objects.filter(close_date=closing_date).exists():
         raise ValidationError('Tanggal ini sudah ditutup.')
-    prev = DailyClosing.objects.filter(close_date__lt=closing_date).order_by('-close_date').first()
+    latest = DailyClosing.objects.order_by('-close_date').first()
+    if latest:
+        expected_next_date = latest.close_date + timedelta(days=1)
+        if closing_date != expected_next_date:
+            raise ValidationError(
+                f'Closing harus berurutan. Tanggal berikutnya yang valid adalah {expected_next_date}.'
+            )
+    prev = latest
     closing = DailyClosing.objects.create(
         close_date=closing_date,
         prev_close_date=prev.close_date if prev else None,
@@ -370,6 +384,20 @@ def close_daily(closing_date: date, user, note=''):
             wallet.balance = opening + mut_in - mut_out
             wallet.save(update_fields=['balance', 'updated_at'])
     return closing
+
+
+@transaction.atomic
+def reopen_last_closing(user):
+    latest = DailyClosing.objects.order_by('-close_date').first()
+    if not latest:
+        raise ValidationError('Belum ada closing yang bisa dibuka.')
+    if not latest.is_locked:
+        raise ValidationError('Closing terakhir sudah dalam status terbuka.')
+
+    latest.product_snapshots.all().delete()
+    latest.member_snapshots.all().delete()
+    latest.delete()
+    return True
 
 
 def low_stock_products():

@@ -5,6 +5,8 @@ from django.db import transaction
 from django.utils import timezone
 from uuid import uuid4
 
+from inventory.models import DailyClosing
+
 from .models import Member, MemberCard, MemberLedger, MemberTopUp, MemberWallet
 
 
@@ -15,6 +17,12 @@ def get_or_create_wallet(member: Member) -> MemberWallet:
 
 def _generate_topup_number(prefix='TPU'):
     return f'{prefix}-{timezone.now().strftime("%Y%m%d")}-{uuid4().hex[:8].upper()}'
+
+
+def _ensure_not_closed_today():
+    today = timezone.localdate()
+    if DailyClosing.objects.filter(close_date=today, is_locked=True).exists():
+        raise ValidationError('Transaksi saldo tidak bisa diproses karena hari ini sudah tutup harian.')
 
 
 def request_member_topup(member: Member, amount: Decimal, requested_by=None, note: str = '', proof_file=None) -> MemberTopUp:
@@ -34,6 +42,7 @@ def request_member_topup(member: Member, amount: Decimal, requested_by=None, not
 
 
 def _apply_credit(member: Member, amount: Decimal, topup: MemberTopUp, description: str):
+    _ensure_not_closed_today()
     wallet = get_or_create_wallet(member)
     before = wallet.balance
     after = before + amount
@@ -123,6 +132,7 @@ def bulk_admin_topup(items, created_by):
 
 @transaction.atomic
 def reverse_topup(topup: MemberTopUp, admin_user, note: str = '') -> MemberTopUp:
+    _ensure_not_closed_today()
     if topup.status != MemberTopUp.STATUS_APPROVED:
         raise ValidationError('Hanya topup approved yang bisa direversal.')
     if topup.kind == MemberTopUp.KIND_REVERSAL:
@@ -174,6 +184,7 @@ def reverse_topup(topup: MemberTopUp, admin_user, note: str = '') -> MemberTopUp
 
 @transaction.atomic
 def charge_member_by_card(card_number: str, amount: Decimal, reference_code: str = '', description: str = '') -> MemberLedger:
+    _ensure_not_closed_today()
     if amount <= 0:
         raise ValidationError('Nominal pembayaran harus lebih besar dari 0.')
 

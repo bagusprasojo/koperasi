@@ -8,7 +8,7 @@ from django.db.models.deletion import ProtectedError
 from django.core.exceptions import ValidationError
 from decimal import Decimal, InvalidOperation
 import json
-from datetime import date
+from datetime import date, timedelta
 
 from core.decorators import role_required
 from .models import Category, DailyClosing, InventoryTransaction, Product, ProductPriceTier, Supplier, Unit
@@ -20,6 +20,7 @@ from .services import (
     post_internal_used,
     post_purchase,
     post_stock_opname,
+    reopen_last_closing,
     low_stock_products,
 )
 
@@ -28,6 +29,12 @@ TWOPLACES = Decimal('0.01')
 
 def _to_json_payload(value):
     return json.dumps(value, default=str)
+
+
+def _exc_message(exc):
+    if isinstance(exc, ValidationError):
+        return exc.messages[0] if exc.messages else str(exc)
+    return str(exc)
 
 
 def _get_safe_next_url(request):
@@ -498,7 +505,7 @@ def purchase_create(request):
             messages.success(request, 'Transaksi pembelian berhasil disimpan.')
             return redirect('purchase_page')
         except Exception as exc:
-            messages.error(request, str(exc))
+            messages.error(request, _exc_message(exc))
     suppliers_data = [
         {
             'id': str(s.id),
@@ -575,7 +582,7 @@ def purchase_edit(request, uuid):
             messages.success(request, 'Transaksi pembelian berhasil diperbarui.')
             return redirect('purchase_page')
         except Exception as exc:
-            messages.error(request, str(exc))
+            messages.error(request, _exc_message(exc))
     return render(
         request,
         'inventory/purchase_edit.html',
@@ -640,7 +647,7 @@ def purchase_delete(request, uuid):
             delete_purchase_transaction(tx)
             messages.warning(request, 'Transaksi pembelian berhasil dihapus.')
         except Exception as exc:
-            messages.error(request, str(exc))
+            messages.error(request, _exc_message(exc))
     return redirect('purchase_page')
 
 
@@ -656,7 +663,7 @@ def internal_used_page(request):
             messages.success(request, 'Transaksi internal used berhasil diposting.')
             return redirect('internal_used_page')
         except Exception as exc:
-            messages.error(request, str(exc))
+            messages.error(request, _exc_message(exc))
     return render(request, 'inventory/internal_used_page.html', {'products': products})
 
 
@@ -672,7 +679,7 @@ def stock_opname_page(request):
             messages.success(request, 'Transaksi stock opname berhasil diposting.')
             return redirect('stock_opname_page')
         except Exception as exc:
-            messages.error(request, str(exc))
+            messages.error(request, _exc_message(exc))
     return render(request, 'inventory/stock_opname_page.html', {'products': products})
 
 
@@ -680,6 +687,12 @@ def stock_opname_page(request):
 def daily_closing_page(request):
     if request.method == 'POST':
         try:
+            action = request.POST.get('action', 'close')
+            if action == 'reopen':
+                reopen_last_closing(user=request.user)
+                messages.warning(request, 'Closing tanggal terakhir berhasil dibuka kembali.')
+                return redirect('daily_closing_page')
+
             close_date_raw = request.POST.get('close_date', '')
             close_date = date.fromisoformat(close_date_raw) if close_date_raw else date.today()
             note = request.POST.get('note', '').strip()
@@ -687,8 +700,16 @@ def daily_closing_page(request):
             messages.success(request, f'Tutup harian {close_date} berhasil.')
             return redirect('daily_closing_page')
         except Exception as exc:
-            messages.error(request, str(exc))
-    return render(request, 'inventory/daily_closing_page.html')
+            messages.error(request, _exc_message(exc))
+    latest_closing = DailyClosing.objects.order_by('-close_date').first()
+    next_closing_date = date.today()
+    if latest_closing:
+        next_closing_date = latest_closing.close_date + timedelta(days=1)
+    return render(
+        request,
+        'inventory/daily_closing_page.html',
+        {'latest_closing': latest_closing, 'next_closing_date': next_closing_date},
+    )
 
 
 @role_required('admin_toko')
