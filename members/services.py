@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from inventory.models import DailyClosing
 
-from .models import Member, MemberCard, MemberLedger, MemberTopUp, MemberWallet
+from .models import Member, MemberCard, MemberLedger, MemberTopUp, MemberWallet, MemberWithdrawal
 
 
 def get_or_create_wallet(member: Member) -> MemberWallet:
@@ -16,6 +16,10 @@ def get_or_create_wallet(member: Member) -> MemberWallet:
 
 
 def _generate_topup_number(prefix='TPU'):
+    return f'{prefix}-{timezone.now().strftime("%Y%m%d")}-{uuid4().hex[:8].upper()}'
+
+
+def _generate_withdrawal_number(prefix='WDR'):
     return f'{prefix}-{timezone.now().strftime("%Y%m%d")}-{uuid4().hex[:8].upper()}'
 
 
@@ -214,3 +218,89 @@ def charge_member_by_card(card_number: str, amount: Decimal, reference_code: str
         reference_code=reference_code,
         description=description or 'Pembayaran belanja member',
     )
+
+
+@transaction.atomic
+def create_admin_withdrawal(member: Member, amount: Decimal, member_password: str, created_by, note: str = '') -> MemberWithdrawal:
+    _ensure_not_closed_today()
+    if amount <= 0:
+        raise ValidationError('Nominal tarik deposit harus lebih besar dari 0.')
+    if not member.is_active:
+        raise ValidationError('Member tidak aktif.')
+    if not member.user:
+        raise ValidationError('Member belum memiliki akun user untuk otorisasi.')
+    if not member.user.check_password(member_password or ''):
+        raise ValidationError('Password member tidak sesuai.')
+
+    wallet = get_or_create_wallet(member)
+    before = wallet.balance
+    if before < amount:
+        raise ValidationError('Saldo deposit member tidak mencukupi.')
+    after = before - amount
+    wallet.balance = after
+    wallet.save(update_fields=['balance', 'updated_at'])
+
+    wd = MemberWithdrawal.objects.create(
+        member=member,
+        withdrawal_number=_generate_withdrawal_number('WDA'),
+        amount=amount,
+        note=note,
+        status=MemberWithdrawal.STATUS_APPROVED,
+        created_by=created_by,
+    )
+    card = getattr(member, 'card', None)
+    MemberLedger.objects.create(
+        member=member,
+        card=card,
+        withdrawal=wd,
+        txn_type=MemberLedger.TYPE_WITHDRAWAL,
+        amount=amount,
+        balance_before=before,
+        balance_after=after,
+        reference_code=wd.withdrawal_number,
+        description=note or 'Penarikan deposit oleh admin',
+    )
+    return wd
+
+
+@transaction.atomic
+def reverse_withdrawal(withdrawal: MemberWithdrawal, admin_user, note: str = '') -> MemberWithdrawal:
+    _ensure_not_closed_today()
+    if withdrawal.status != MemberWithdrawal.STATUS_APPROVED:
+        raise ValidationError('Hanya withdrawal approved yang bisa direversal.')
+    if withdrawal.reversal_entries.exists():
+        raise ValidationError('Withdrawal ini sudah pernah direversal.')
+
+    wallet = get_or_create_wallet(withdrawal.member)
+    before = wallet.balance
+    after = before + withdrawal.amount
+    wallet.balance = after
+    wallet.save(update_fields=['balance', 'updated_at'])
+
+    reversal = MemberWithdrawal.objects.create(
+        member=withdrawal.member,
+        withdrawal_number=_generate_withdrawal_number('WDR'),
+        amount=withdrawal.amount,
+        note=note,
+        status=MemberWithdrawal.STATUS_APPROVED,
+        created_by=admin_user,
+        reversal_of=withdrawal,
+    )
+    card = getattr(withdrawal.member, 'card', None)
+    MemberLedger.objects.create(
+        member=withdrawal.member,
+        card=card,
+        withdrawal=reversal,
+        txn_type=MemberLedger.TYPE_REVERSAL_WITHDRAWAL,
+        amount=withdrawal.amount,
+        balance_before=before,
+        balance_after=after,
+        reference_code=reversal.withdrawal_number,
+        description=note or f'Reversal withdrawal {withdrawal.withdrawal_number}',
+    )
+
+    withdrawal.status = MemberWithdrawal.STATUS_REVERSED
+    withdrawal.reversed_by = admin_user
+    withdrawal.reversed_at = timezone.now()
+    withdrawal.save(update_fields=['status', 'reversed_by', 'reversed_at', 'updated_at'])
+    return reversal

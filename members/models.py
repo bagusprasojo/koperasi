@@ -139,12 +139,16 @@ class MemberLedger(BaseModel):
     TYPE_ADJUSTMENT = 'adjustment'
     TYPE_REFUND = 'refund'
     TYPE_REVERSAL_TOPUP = 'reversal_topup'
+    TYPE_WITHDRAWAL = 'withdrawal'
+    TYPE_REVERSAL_WITHDRAWAL = 'reversal_withdrawal'
     TXN_TYPE_CHOICES = (
         (TYPE_TOPUP, 'Topup'),
         (TYPE_PURCHASE, 'Purchase'),
         (TYPE_ADJUSTMENT, 'Adjustment'),
         (TYPE_REFUND, 'Refund'),
         (TYPE_REVERSAL_TOPUP, 'Reversal Topup'),
+        (TYPE_WITHDRAWAL, 'Withdrawal'),
+        (TYPE_REVERSAL_WITHDRAWAL, 'Reversal Withdrawal'),
     )
 
     member = models.ForeignKey(Member, on_delete=models.PROTECT, related_name='ledger_entries')
@@ -162,6 +166,13 @@ class MemberLedger(BaseModel):
         blank=True,
         related_name='ledger_entries',
     )
+    withdrawal = models.ForeignKey(
+        'MemberWithdrawal',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ledger_entries',
+    )
     txn_type = models.CharField(max_length=20, choices=TXN_TYPE_CHOICES)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     balance_before = models.DecimalField(max_digits=14, decimal_places=2)
@@ -174,3 +185,43 @@ class MemberLedger(BaseModel):
 
     def __str__(self):
         return f'{self.member.full_name} {self.txn_type} {self.amount}'
+
+
+class MemberWithdrawal(BaseModel):
+    STATUS_APPROVED = 'approved'
+    STATUS_REVERSED = 'reversed'
+    STATUS_CHOICES = (
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_REVERSED, 'Reversed'),
+    )
+
+    member = models.ForeignKey(Member, on_delete=models.PROTECT, related_name='withdrawals')
+    withdrawal_number = models.CharField(max_length=40, unique=True, db_index=True, blank=True, default='')
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    note = models.CharField(max_length=255, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_APPROVED)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='member_withdrawals',
+    )
+    reversed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='member_withdrawals_reversed',
+    )
+    reversed_at = models.DateTimeField(null=True, blank=True)
+    reversal_of = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reversal_entries',
+    )
+
+    def __str__(self):
+        return f'Withdrawal {self.member.full_name} {self.amount}'

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Member, MemberCard, MemberWallet, MemberTopUp, MemberLedger
+from .models import Member, MemberCard, MemberWallet, MemberTopUp, MemberLedger, MemberWithdrawal
 
 
 @admin.register(Member)
@@ -33,3 +33,10 @@ class MemberLedgerAdmin(admin.ModelAdmin):
     list_display = ['member', 'txn_type', 'amount', 'balance_before', 'balance_after', 'created_at']
     search_fields = ['member__full_name', 'reference_code', 'description']
     list_filter = ['txn_type']
+
+
+@admin.register(MemberWithdrawal)
+class MemberWithdrawalAdmin(admin.ModelAdmin):
+    list_display = ['withdrawal_number', 'member', 'amount', 'status', 'created_by', 'created_at']
+    search_fields = ['withdrawal_number', 'member__full_name', 'member__code', 'note']
+    list_filter = ['status']

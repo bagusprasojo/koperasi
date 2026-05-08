@@ -17,13 +17,15 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from core.decorators import role_required
-from .models import Member, MemberCard, MemberLedger, MemberTopUp
+from .models import Member, MemberCard, MemberLedger, MemberTopUp, MemberWithdrawal
 from .services import (
     approve_topup,
     create_admin_topup,
+    create_admin_withdrawal,
     get_or_create_wallet,
     reject_topup,
     request_member_topup,
+    reverse_withdrawal,
     reverse_topup,
 )
 
@@ -558,3 +560,118 @@ def ledger_list(request):
         'members/ledger_list.html',
         {'page_obj': page_obj, 'query': query, 'date_from': date_from, 'date_to': date_to},
     )
+
+
+@role_required('admin_toko')
+def withdrawal_page(request):
+    query = request.GET.get('q', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+    txs = MemberWithdrawal.objects.select_related('member', 'created_by').order_by('-created_at')
+    if query:
+        txs = txs.filter(
+            Q(withdrawal_number__icontains=query) |
+            Q(member__code__icontains=query) |
+            Q(member__full_name__icontains=query) |
+            Q(member__phone__icontains=query)
+        )
+    if date_from:
+        txs = txs.filter(created_at__date__gte=date_from)
+    if date_to:
+        txs = txs.filter(created_at__date__lte=date_to)
+    page_obj = Paginator(txs, 10).get_page(request.GET.get('page'))
+
+    confirm_data = None
+    if request.method == 'POST':
+        action = request.POST.get('action', 'preview')
+        if action == 'preview':
+            member_code = request.POST.get('member_code', '').strip().upper()
+            amount_raw = request.POST.get('amount', '').strip()
+            note = request.POST.get('note', '').strip()
+            member_password = request.POST.get('member_password', '')
+            try:
+                if not member_code:
+                    raise ValueError('Kode member wajib diisi.')
+                member = Member.objects.filter(code__iexact=member_code, is_active=True).first()
+                if not member:
+                    raise ValueError('Member tidak ditemukan atau nonaktif.')
+                amount = Decimal(amount_raw)
+                if amount <= 0:
+                    raise ValueError('Nominal tarik deposit harus lebih besar dari 0.')
+                wallet = get_or_create_wallet(member)
+                if wallet.balance < amount:
+                    raise ValueError('Saldo deposit member tidak mencukupi.')
+                if not member.user:
+                    raise ValueError('Member belum memiliki user login untuk otorisasi.')
+                if not member.user.check_password(member_password):
+                    raise ValueError('Password member tidak sesuai.')
+                confirm_data = {
+                    'member_id': member.id,
+                    'member_code': member.code,
+                    'member_name': member.full_name,
+                    'member_phone': member.phone,
+                    'member_balance': str(wallet.balance),
+                    'amount': str(amount),
+                    'note': note,
+                }
+                request.session['withdrawal_confirm'] = confirm_data
+            except Exception as exc:
+                messages.error(request, _exc_message(exc))
+                request.session.pop('withdrawal_confirm', None)
+        elif action == 'confirm':
+            token_data = request.session.get('withdrawal_confirm')
+            request.session.pop('withdrawal_confirm', None)
+            try:
+                if not token_data:
+                    raise ValueError('Data konfirmasi tidak ditemukan. Ulangi proses.')
+                member = Member.objects.filter(id=token_data['member_id'], is_active=True).first()
+                if not member:
+                    raise ValueError('Member tidak ditemukan atau nonaktif.')
+                amount = Decimal(str(token_data['amount']))
+                note = token_data.get('note', '')
+                # password sudah diverifikasi pada step preview
+                # guard saldo + lock harian tetap dicek di service
+                wd = create_admin_withdrawal(
+                    member=member,
+                    amount=amount,
+                    member_password=request.POST.get('member_password_confirm', ''),
+                    created_by=request.user,
+                    note=note,
+                )
+                messages.success(request, f'Tarik deposit berhasil diproses. No transaksi: {wd.withdrawal_number}.')
+                return redirect('member_withdrawal')
+            except Exception as exc:
+                messages.error(request, _exc_message(exc))
+
+    if not confirm_data:
+        confirm_data = request.session.get('withdrawal_confirm')
+    return render(
+        request,
+        'members/withdrawal_page.html',
+        {
+            'page_obj': page_obj,
+            'query': query,
+            'date_from': date_from,
+            'date_to': date_to,
+            'confirm_data': confirm_data,
+        },
+    )
+
+
+@role_required('admin_toko')
+def withdrawal_detail(request, uuid):
+    wd = get_object_or_404(MemberWithdrawal.objects.select_related('member', 'created_by', 'reversed_by'), uuid=uuid)
+    return render(request, 'members/withdrawal_detail.html', {'wd': wd})
+
+
+@role_required('admin_toko')
+def withdrawal_reverse_action(request, uuid):
+    wd = get_object_or_404(MemberWithdrawal, uuid=uuid)
+    if request.method == 'POST':
+        note = request.POST.get('note', '').strip()
+        try:
+            reverse_withdrawal(withdrawal=wd, admin_user=request.user, note=note)
+            messages.warning(request, 'Withdrawal berhasil direversal.')
+        except Exception as exc:
+            messages.error(request, _exc_message(exc))
+    return redirect('member_withdrawal_detail', uuid=wd.uuid)

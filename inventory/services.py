@@ -363,8 +363,8 @@ def close_daily(closing_date: date, user, note=''):
             closing_stock=opening + mut_in - mut_out,
         )
     members = Member.objects.all()
-    in_types = [MemberLedger.TYPE_TOPUP, MemberLedger.TYPE_REFUND]
-    out_types = [MemberLedger.TYPE_PURCHASE, MemberLedger.TYPE_REVERSAL_TOPUP]
+    in_types = [MemberLedger.TYPE_TOPUP, MemberLedger.TYPE_REFUND, MemberLedger.TYPE_REVERSAL_WITHDRAWAL]
+    out_types = [MemberLedger.TYPE_PURCHASE, MemberLedger.TYPE_REVERSAL_TOPUP, MemberLedger.TYPE_WITHDRAWAL]
     for m in members:
         prev_snap = MemberDailySnapshot.objects.filter(closing=prev, member=m).first() if prev else None
         opening = prev_snap.closing_balance if prev_snap else Decimal('0.00')
