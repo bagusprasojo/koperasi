@@ -204,7 +204,9 @@ def post_internal_used(product: Product, qty: int, user, note=''):
         raise ValidationError('Qty internal used harus > 0.')
     if product.stock < qty:
         raise ValidationError('Stok tidak mencukupi.')
-    unit_cost = product.last_purchase_price
+    unit_cost = product.cost_of_goods_sold
+    if unit_cost <= 0:
+        raise ValidationError('HPP produk harus lebih besar dari 0 untuk transaksi internal used.')
     tx = InventoryTransaction.objects.create(
         tx_number=_tx_number('IUS'),
         tx_type=InventoryTransaction.TYPE_INTERNAL_USED,
@@ -247,7 +249,9 @@ def post_pos_sale(product: Product, qty: int, user, reference='', note=''):
         raise ValidationError('Qty penjualan harus > 0.')
     if product.stock < qty:
         raise ValidationError('Stok tidak mencukupi.')
-    unit_cost = product.last_purchase_price
+    unit_cost = product.cost_of_goods_sold
+    if unit_cost <= 0:
+        raise ValidationError('HPP produk harus lebih besar dari 0 untuk transaksi penjualan POS.')
     tx = InventoryTransaction.objects.create(
         tx_number=_tx_number('SAL'),
         tx_type=InventoryTransaction.TYPE_POS_SALE,
@@ -297,7 +301,9 @@ def post_stock_opname(product: Product, actual_stock: int, user, note=''):
         note=note,
         created_by=user,
     )
-    unit_cost = product.last_purchase_price
+    unit_cost = product.cost_of_goods_sold
+    if unit_cost <= 0 and diff != 0:
+        raise ValidationError('HPP produk harus lebih besar dari 0 untuk transaksi stock opname.')
     total = (unit_cost * Decimal(abs(diff))).quantize(Decimal('0.01'))
     InventoryTransactionItem.objects.create(
         transaction=tx,
