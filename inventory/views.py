@@ -11,7 +11,7 @@ import json
 from datetime import date, timedelta
 
 from core.decorators import role_required
-from .models import Category, DailyClosing, InventoryTransaction, Product, ProductPriceTier, Supplier, Unit
+from .models import Category, DailyClosing, InventoryTransaction, InventoryTransactionItem, Product, ProductPriceTier, Supplier, Unit
 from .services import (
     close_daily,
     create_purchase_transaction,
@@ -178,6 +178,34 @@ def _create_price_tiers(product, tier_rows):
         )
 
 
+def _parse_money(raw_value, field_label):
+    value_raw = (raw_value or '').strip()
+    if value_raw == '':
+        return Decimal('0.00')
+    try:
+        value = Decimal(value_raw).quantize(TWOPLACES)
+    except (InvalidOperation, ValueError):
+        raise ValidationError(f'{field_label} tidak valid.')
+    if value < 0:
+        raise ValidationError(f'{field_label} tidak boleh negatif.')
+    return value
+
+
+def _latest_supplier_for_product(product):
+    item = (
+        InventoryTransactionItem.objects
+        .select_related('transaction__supplier')
+        .filter(
+            product=product,
+            transaction__tx_type=InventoryTransaction.TYPE_PURCHASE,
+            transaction__supplier__isnull=False,
+        )
+        .order_by('-transaction__tx_date', '-transaction__created_at')
+        .first()
+    )
+    return item.transaction.supplier if item else None
+
+
 def _default_tier_rows():
     return [
         {
@@ -245,6 +273,8 @@ def product_create(request):
         barcode = request.POST.get('barcode', '').strip()
         category_id = request.POST.get('category_id', '').strip()
         unit_id = request.POST.get('unit_id', '').strip()
+        last_purchase_price = request.POST.get('last_purchase_price', '').strip()
+        cost_of_goods_sold = request.POST.get('cost_of_goods_sold', '').strip()
         tier_rows = _extract_tier_rows(request)
 
         if not all([name, sku, category_id, unit_id]):
@@ -254,6 +284,8 @@ def product_create(request):
             try:
                 category = Category.objects.get(id=category_id)
                 unit = Unit.objects.get(id=unit_id, is_active=True)
+                buy_price = _parse_money(last_purchase_price, 'Harga beli')
+                hpp = _parse_money(cost_of_goods_sold, 'Harga pokok penjualan')
                 if barcode and Product.objects.filter(barcode=barcode).exists():
                     error_message = 'Barcode sudah dipakai.'
                     messages.error(request, error_message)
@@ -274,6 +306,8 @@ def product_create(request):
                         sku=sku,
                         barcode=barcode or None,
                         stock=0,
+                        last_purchase_price=buy_price,
+                        cost_of_goods_sold=hpp,
                         category=category,
                         unit=unit,
                     )
@@ -303,6 +337,7 @@ def product_create(request):
             'error_message': error_message,
             'categories': categories,
             'units': units,
+            'latest_supplier': None,
             'tier_rows': tier_rows,
             'tier_rows_json': _to_json_payload(tier_rows),
         },
@@ -327,6 +362,7 @@ def product_edit(request, uuid):
     next_url = _get_safe_next_url(request)
     back_url = next_url or f"/inventory/products/{product.uuid}/"
     tier_rows = _serialize_tiers(product) or _default_tier_rows()
+    latest_supplier = _latest_supplier_for_product(product)
 
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
@@ -334,6 +370,8 @@ def product_edit(request, uuid):
         barcode = request.POST.get('barcode', '').strip()
         category_id = request.POST.get('category_id', '').strip()
         unit_id = request.POST.get('unit_id', '').strip()
+        last_purchase_price = request.POST.get('last_purchase_price', '').strip()
+        cost_of_goods_sold = request.POST.get('cost_of_goods_sold', '').strip()
         tier_rows = _extract_tier_rows(request)
 
         if not all([name, sku, category_id, unit_id]):
@@ -343,6 +381,8 @@ def product_edit(request, uuid):
             try:
                 category = Category.objects.get(id=category_id)
                 unit = Unit.objects.get(id=unit_id, is_active=True)
+                buy_price = _parse_money(last_purchase_price, 'Harga beli')
+                hpp = _parse_money(cost_of_goods_sold, 'Harga pokok penjualan')
                 if Product.objects.exclude(id=product.id).filter(sku=sku).exists():
                     error_message = 'SKU sudah dipakai.'
                     messages.error(request, error_message)
@@ -356,6 +396,7 @@ def product_edit(request, uuid):
                             'error_message': error_message,
                             'back_url': back_url,
                             'next_url': next_url,
+                            'latest_supplier': latest_supplier,
                             'tier_rows': tier_rows,
                             'tier_rows_json': _to_json_payload(tier_rows),
                         },
@@ -373,6 +414,7 @@ def product_edit(request, uuid):
                             'error_message': error_message,
                             'back_url': back_url,
                             'next_url': next_url,
+                            'latest_supplier': latest_supplier,
                             'tier_rows': tier_rows,
                             'tier_rows_json': _to_json_payload(tier_rows),
                         },
@@ -383,6 +425,8 @@ def product_edit(request, uuid):
                     product.barcode = barcode or None
                     product.category = category
                     product.unit = unit
+                    product.last_purchase_price = buy_price
+                    product.cost_of_goods_sold = hpp
                     product.save()
                     product.price_tiers.all().delete()
                     _create_price_tiers(product, tier_rows)
@@ -414,6 +458,7 @@ def product_edit(request, uuid):
             'error_message': error_message,
             'back_url': back_url,
             'next_url': next_url,
+            'latest_supplier': latest_supplier,
             'tier_rows': tier_rows,
             'tier_rows_json': _to_json_payload(tier_rows),
         },

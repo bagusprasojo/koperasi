@@ -72,6 +72,7 @@ class Product(BaseModel):
     barcode = models.CharField(max_length=80, unique=True, null=True, blank=True)
     stock = models.IntegerField(default=0)
     last_purchase_price = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    cost_of_goods_sold = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     reorder_point = models.PositiveIntegerField(default=0)
 
     def __str__(self):
