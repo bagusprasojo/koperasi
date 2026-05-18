@@ -114,56 +114,74 @@ def _validate_contiguous_ranges(rows):
 
 
 def _compute_level_prices(rows):
-    for row in rows:
+    # Level aktif ditentukan dari pengisian salah satu field inti.
+    active_flags = [
+        bool(rows[i]['min_qty'] or rows[i]['max_qty'] or rows[i]['input_value'])
+        for i in range(3)
+    ]
+
+    if not active_flags[0]:
+        raise ValidationError('Minimal level 1 wajib diisi.')
+
+    # Tidak boleh lompat level: contoh level 1 + 3 tanpa level 2.
+    found_inactive = False
+    for i, is_active in enumerate(active_flags):
+        if not is_active:
+            found_inactive = True
+            continue
+        if found_inactive:
+            raise ValidationError(f'Level {i + 1} tidak boleh diisi jika level sebelumnya kosong.')
+
+    active_rows = rows[:sum(1 for flag in active_flags if flag)]
+    for idx, row in enumerate(active_rows):
         if not all([row['min_qty'], row['max_qty'], row['input_value']]):
-            raise ValidationError('Semua field range dan nilai harga level 1-3 wajib diisi.')
+            raise ValidationError(f'Semua field range dan nilai harga pada level {idx + 1} wajib diisi.')
 
-    _validate_contiguous_ranges(rows)
+    _validate_contiguous_ranges(active_rows)
 
-    base_price = Decimal(rows[0]['input_value']).quantize(TWOPLACES)
+    base_price = Decimal(active_rows[0]['input_value']).quantize(TWOPLACES)
     if base_price <= 0:
         raise ValidationError('Level 1 wajib memiliki harga lebih besar dari 0.')
-    rows[0]['price'] = base_price
-    rows[0]['source_mode'] = 'final'
-    rows[0]['discount_type'] = ''
-    rows[0]['discount_value'] = None
+    active_rows[0]['price'] = base_price
+    active_rows[0]['source_mode'] = 'final'
+    active_rows[0]['discount_type'] = ''
+    active_rows[0]['discount_value'] = None
 
-    for i in [1, 2]:
-        mode = rows[i]['mode']
-        value = Decimal(rows[i]['input_value']).quantize(TWOPLACES)
+    for i in range(1, len(active_rows)):
+        mode = active_rows[i]['mode']
+        value = Decimal(active_rows[i]['input_value']).quantize(TWOPLACES)
         if mode == 'final':
             price = value
-            rows[i]['source_mode'] = 'final'
-            rows[i]['discount_type'] = ''
-            rows[i]['discount_value'] = None
+            active_rows[i]['source_mode'] = 'final'
+            active_rows[i]['discount_type'] = ''
+            active_rows[i]['discount_value'] = None
         else:
-            if rows[i]['discount_type'] == 'percent':
+            if active_rows[i]['discount_type'] == 'percent':
                 if value < 0 or value > 100:
                     raise ValidationError(f'Level {i + 1}: diskon persen harus 0 sampai 100.')
                 price = (base_price - ((value / Decimal('100')) * base_price)).quantize(TWOPLACES)
-                rows[i]['source_mode'] = 'discount'
-                rows[i]['discount_type'] = 'percent'
-                rows[i]['discount_value'] = value
+                active_rows[i]['source_mode'] = 'discount'
+                active_rows[i]['discount_type'] = 'percent'
+                active_rows[i]['discount_value'] = value
             else:
                 if value < 0:
                     raise ValidationError(f'Level {i + 1}: diskon nominal tidak boleh negatif.')
                 price = (base_price - value).quantize(TWOPLACES)
-                rows[i]['source_mode'] = 'discount'
-                rows[i]['discount_type'] = 'nominal'
-                rows[i]['discount_value'] = value
+                active_rows[i]['source_mode'] = 'discount'
+                active_rows[i]['discount_type'] = 'nominal'
+                active_rows[i]['discount_value'] = value
         if price <= 0:
             raise ValidationError(f'Level {i + 1}: harga akhir harus lebih besar dari 0.')
-        rows[i]['price'] = price.quantize(TWOPLACES)
+        active_rows[i]['price'] = price.quantize(TWOPLACES)
 
-    if not (rows[0]['price'] >= rows[1]['price'] >= rows[2]['price']):
-        raise ValidationError('Harga level harus menurun atau sama: Level 1 >= Level 2 >= Level 3.')
+    for i in range(1, len(active_rows)):
+        if active_rows[i - 1]['price'] < active_rows[i]['price']:
+            raise ValidationError('Harga level harus menurun atau sama: Level 1 >= Level 2 >= Level 3.')
 
-    return rows
+    return active_rows
 
 
 def _create_price_tiers(product, tier_rows):
-    if len(tier_rows) != 3:
-        raise ValidationError('Level harga harus tepat 3 level.')
     computed_rows = _compute_level_prices(tier_rows)
     for row in computed_rows:
         ProductPriceTier.objects.create(
