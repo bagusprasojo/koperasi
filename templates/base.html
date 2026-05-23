@@ -74,6 +74,8 @@
                             <div class="relative" x-data="{ rOpen: false }">
                                 <button @click="rOpen=!rOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Laporan</button>
                                 <div x-show="rOpen" x-cloak @click.outside="rOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
+                                    <a href="{% url 'sales_daily_summary' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Rekap Penjualan Harian</a>
+                                    <a href="{% url 'sales_product_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Produk Terjual</a>
                                     <a href="{% url 'stock_card_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Stok</a>
                                     <a href="{% url 'reorder_alert_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Reorder Alert</a>
                                     <a href="{% url 'member_ledger' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Ledger Member</a>
@@ -121,6 +123,8 @@
                                 <a href="{% url 'daily_closing_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Tutup Harian</a>
                             {% endif %}
                             <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Laporan</p>
+                            <a href="{% url 'sales_daily_summary' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Rekap Penjualan Harian</a>
+                            <a href="{% url 'sales_product_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Produk Terjual</a>
                             <a href="{% url 'stock_card_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Stok</a>
                             <a href="{% url 'reorder_alert_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Reorder Alert</a>
                             <a href="{% url 'member_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Ledger Member</a>

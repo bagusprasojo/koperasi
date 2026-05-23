@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Laporan Produk Terjual{% endblock %}
+{% block content %}
+<div class="space-y-4">
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <h1 class="mb-4 text-xl font-semibold">Laporan Produk Terjual</h1>
+        <form method="get" class="grid gap-2 md:grid-cols-6">
+            <input type="date" name="date_from" value="{{ date_from }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <input type="date" name="date_to" value="{{ date_to }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <select name="category_id" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <option value="">Semua Kategori</option>
+                {% for c in categories %}
+                <option value="{{ c.category_id }}" {% if category_id == c.category_id|stringformat:'s' %}selected{% endif %}>{{ c.category__name }}</option>
+                {% endfor %}
+            </select>
+            <select name="sort_mode" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <option value="top" {% if sort_mode == 'top' %}selected{% endif %}>Top</option>
+                <option value="bottom" {% if sort_mode == 'bottom' %}selected{% endif %}>Bottom</option>
+            </select>
+            <select name="sort_by" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <option value="qty" {% if sort_by == 'qty' %}selected{% endif %}>Urut Qty</option>
+                <option value="omzet" {% if sort_by == 'omzet' %}selected{% endif %}>Urut Omzet</option>
+                <option value="kontribusi" {% if sort_by == 'kontribusi' %}selected{% endif %}>Urut Kontribusi</option>
+            </select>
+            <input type="number" name="limit" min="1" step="1" value="{{ limit|default:25 }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="Limit">
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white md:col-span-2">Filter</button>
+            <a href="{% url 'sales_product_report_export_csv' %}?date_from={{ date_from }}&date_to={{ date_to }}&category_id={{ category_id }}&sort_mode={{ sort_mode }}&sort_by={{ sort_by }}&limit={{ limit }}" class="rounded-md border px-3 py-2 text-center text-sm md:col-span-2">Export CSV</a>
+        </form>
+        {% if error_message %}
+        <p class="mt-3 text-sm text-red-600">{{ error_message }}</p>
+        {% endif %}
+    </div>
+
+    {% if kpi %}
+    <div class="grid gap-3 md:grid-cols-4">
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Produk Ditampilkan</p><p class="text-lg font-semibold">{{ kpi.distinct_products|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Qty</p><p class="text-lg font-semibold">{{ kpi.total_qty|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Omzet</p><p class="text-lg font-semibold">{{ kpi.total_omzet|floatformat:2|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Rata-rata Omzet/Produk</p><p class="text-lg font-semibold">{{ kpi.avg_omzet_per_product|floatformat:2|intcomma }}</p></div>
+    </div>
+    {% endif %}
+
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50">
+                    <tr>
+                        <th class="px-3 py-2">Produk</th>
+                        <th class="px-3 py-2">SKU</th>
+                        <th class="px-3 py-2">Kategori</th>
+                        <th class="px-3 py-2">Qty</th>
+                        <th class="px-3 py-2">Omzet</th>
+                        <th class="px-3 py-2">Kontribusi %</th>
+                        <th class="px-3 py-2">Avg Harga</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ r.product__name }}</td>
+                        <td class="px-3 py-2">{{ r.product__sku|default:'-' }}</td>
+                        <td class="px-3 py-2">{{ r.product__category__name|default:'-' }}</td>
+                        <td class="px-3 py-2">{{ r.qty|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.omzet|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.kontribusi_pct|floatformat:2|intcomma }}%</td>
+                        <td class="px-3 py-2">{{ r.avg_price|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="px-3 py-4 text-slate-500">Tidak ada data produk terjual pada periode ini.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

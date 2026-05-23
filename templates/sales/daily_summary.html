@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Rekap Penjualan Harian{% endblock %}
+{% block content %}
+<div class="space-y-4">
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <h1 class="mb-4 text-xl font-semibold">Sampul Rekap Penjualan Harian</h1>
+        <form method="get" class="grid gap-2 md:grid-cols-4">
+            <input type="date" name="date_from" value="{{ date_from }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <input type="date" name="date_to" value="{{ date_to }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Filter</button>
+            <a href="{% url 'sales_daily_summary_export_csv' %}?date_from={{ date_from }}&date_to={{ date_to }}" class="rounded-md border px-3 py-2 text-center text-sm">Export CSV</a>
+        </form>
+        {% if error_message %}
+        <p class="mt-3 text-sm text-red-600">{{ error_message }}</p>
+        {% endif %}
+    </div>
+
+    {% if kpi %}
+    <div class="grid gap-3 md:grid-cols-4">
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Hari</p><p class="text-lg font-semibold">{{ kpi.total_days|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Transaksi</p><p class="text-lg font-semibold">{{ kpi.total_transactions|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Omzet</p><p class="text-lg font-semibold">{{ kpi.total_omzet|floatformat:2|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Rata-rata / Transaksi</p><p class="text-lg font-semibold">{{ kpi.avg_transaction_value|floatformat:2|intcomma }}</p></div>
+    </div>
+    <div class="grid gap-3 md:grid-cols-3">
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Tunai</p><p class="text-lg font-semibold">{{ kpi.total_cash|floatformat:2|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Deposit</p><p class="text-lg font-semibold">{{ kpi.total_deposit|floatformat:2|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Rata-rata Omzet / Hari</p><p class="text-lg font-semibold">{{ kpi.avg_omzet_per_day|floatformat:2|intcomma }}</p></div>
+    </div>
+    {% endif %}
+
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50">
+                    <tr>
+                        <th class="px-3 py-2">Tanggal</th>
+                        <th class="px-3 py-2">Jml Transaksi</th>
+                        <th class="px-3 py-2">Qty Item</th>
+                        <th class="px-3 py-2">Omzet</th>
+                        <th class="px-3 py-2">Tunai</th>
+                        <th class="px-3 py-2">Deposit</th>
+                        <th class="px-3 py-2">Split Trx</th>
+                        <th class="px-3 py-2">Member/Non</th>
+                        <th class="px-3 py-2 text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ r.tx_date }}</td>
+                        <td class="px-3 py-2">{{ r.total_transactions|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.item_qty|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.omzet|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.cash_amount|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.deposit_amount|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.split_count|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.member_transactions|intcomma }}/{{ r.non_member_transactions|intcomma }}</td>
+                        <td class="px-3 py-2">
+                            <div class="flex justify-end">
+                                <a href="{% url 'sales_daily_summary_detail' r.tx_date|date:'Y-m-d' %}" class="rounded-md border px-3 py-1">Detail</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="px-3 py-4 text-slate-500">Belum ada data penjualan pada periode ini.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
