@@ -16,6 +16,7 @@
             <div><p class="text-slate-500">Harga Beli</p><p class="font-medium">{{ product.last_purchase_price|floatformat:2|intcomma }}</p></div>
             <div><p class="text-slate-500">HPP</p><p class="font-medium">{{ product.cost_of_goods_sold|floatformat:2|intcomma }}</p></div>
             <div><p class="text-slate-500">Stok</p><p class="font-medium">{{ product.stock|intcomma }}</p></div>
+            <div><p class="text-slate-500">Reorder Point</p><p class="font-medium">{{ product.reorder_point|intcomma }}</p></div>
             <div><p class="text-slate-500">Dibuat</p><p class="font-medium">{{ product.created_at }}</p></div>
             <div><p class="text-slate-500">Diubah</p><p class="font-medium">{{ product.updated_at }}</p></div>
         </div>

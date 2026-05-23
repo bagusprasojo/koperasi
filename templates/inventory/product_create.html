@@ -44,6 +44,10 @@
                         </select>
                     </div>
                 </div>
+                <div>
+                    <label class="mb-1 block text-sm font-medium">Reorder Point</label>
+                    <input type="number" name="reorder_point" step="1" min="0" value="{{ request.POST.reorder_point }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                </div>
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
                     <h3 class="mb-2 text-sm font-semibold">Supplier Terakhir</h3>
                     <div class="grid gap-1 md:grid-cols-2">

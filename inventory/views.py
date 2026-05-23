@@ -209,6 +209,19 @@ def _parse_money(raw_value, field_label):
     return value
 
 
+def _parse_non_negative_int(raw_value, field_label):
+    raw = (raw_value or '').strip()
+    if raw == '':
+        return 0
+    try:
+        value = int(raw)
+    except (ValueError, TypeError):
+        raise ValidationError(f'{field_label} harus berupa bilangan bulat.')
+    if value < 0:
+        raise ValidationError(f'{field_label} tidak boleh negatif.')
+    return value
+
+
 def _latest_supplier_for_product(product):
     item = (
         InventoryTransactionItem.objects
@@ -293,6 +306,7 @@ def product_create(request):
         unit_id = request.POST.get('unit_id', '').strip()
         last_purchase_price = request.POST.get('last_purchase_price', '').strip()
         cost_of_goods_sold = request.POST.get('cost_of_goods_sold', '').strip()
+        reorder_point_raw = request.POST.get('reorder_point', '').strip()
         tier_rows = _extract_tier_rows(request)
 
         if not all([name, sku, category_id, unit_id]):
@@ -304,6 +318,7 @@ def product_create(request):
                 unit = Unit.objects.get(id=unit_id, is_active=True)
                 buy_price = _parse_money(last_purchase_price, 'Harga beli')
                 hpp = _parse_money(cost_of_goods_sold, 'Harga pokok penjualan')
+                reorder_point = _parse_non_negative_int(reorder_point_raw, 'Reorder point')
                 if barcode and Product.objects.filter(barcode=barcode).exists():
                     error_message = 'Barcode sudah dipakai.'
                     messages.error(request, error_message)
@@ -326,6 +341,7 @@ def product_create(request):
                         stock=0,
                         last_purchase_price=buy_price,
                         cost_of_goods_sold=hpp,
+                        reorder_point=reorder_point,
                         category=category,
                         unit=unit,
                     )
@@ -390,6 +406,7 @@ def product_edit(request, uuid):
         unit_id = request.POST.get('unit_id', '').strip()
         last_purchase_price = request.POST.get('last_purchase_price', '').strip()
         cost_of_goods_sold = request.POST.get('cost_of_goods_sold', '').strip()
+        reorder_point_raw = request.POST.get('reorder_point', '').strip()
         tier_rows = _extract_tier_rows(request)
 
         if not all([name, sku, category_id, unit_id]):
@@ -401,6 +418,7 @@ def product_edit(request, uuid):
                 unit = Unit.objects.get(id=unit_id, is_active=True)
                 buy_price = _parse_money(last_purchase_price, 'Harga beli')
                 hpp = _parse_money(cost_of_goods_sold, 'Harga pokok penjualan')
+                reorder_point = _parse_non_negative_int(reorder_point_raw, 'Reorder point')
                 if Product.objects.exclude(id=product.id).filter(sku=sku).exists():
                     error_message = 'SKU sudah dipakai.'
                     messages.error(request, error_message)
@@ -445,6 +463,7 @@ def product_edit(request, uuid):
                     product.unit = unit
                     product.last_purchase_price = buy_price
                     product.cost_of_goods_sold = hpp
+                    product.reorder_point = reorder_point
                     product.save()
                     product.price_tiers.all().delete()
                     _create_price_tiers(product, tier_rows)
