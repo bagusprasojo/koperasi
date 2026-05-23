@@ -44,6 +44,7 @@
                             <a href="{% url 'member_topup_request' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Topup Saya</a>
                             <a href="{% url 'member_my_balance' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Cek Saldo</a>
                             <a href="{% url 'member_my_ledger' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Mutasi Saya</a>
+                            <a href="{% url 'member_my_purchases' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Riwayat Belanja</a>
                         {% endif %}
                         {% if is_admin_toko_role or is_kasir_role or is_pembelian_role %}
                             <div class="relative" x-data="{ mOpen: false }">
@@ -81,7 +82,7 @@
                                         </button>
                                         <div x-show="sOpen" x-cloak @click.outside="sOpen=false" class="ml-2 mt-1 rounded-md border bg-white p-1">
                                             <a href="{% url 'sales_daily_summary' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Rekap Penjualan Harian</a>
-                                            <a href="{% url 'sales_product_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Produk Terjual</a>
+                                            <a href="{% url 'sales_product_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Top/Bottom Produk Terjual</a>
                                         </div>
                                     </div>
                                     <a href="{% url 'stock_card_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Stok</a>
@@ -111,6 +112,7 @@
                             <a href="{% url 'member_topup_request' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Topup Saya</a>
                             <a href="{% url 'member_my_balance' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Cek Saldo</a>
                             <a href="{% url 'member_my_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Mutasi Saya</a>
+                            <a href="{% url 'member_my_purchases' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Riwayat Belanja</a>
                         {% endif %}
                         {% if is_admin_toko_role or is_kasir_role or is_pembelian_role %}
                             <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Master</p>
@@ -133,7 +135,7 @@
                             <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Laporan</p>
                             <p class="px-2 text-xs font-semibold text-slate-500">Penjualan</p>
                             <a href="{% url 'sales_daily_summary' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Rekap Penjualan Harian</a>
-                            <a href="{% url 'sales_product_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Produk Terjual</a>
+                            <a href="{% url 'sales_product_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Top/Bottom Produk Terjual</a>
                             <a href="{% url 'stock_card_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Stok</a>
                             <a href="{% url 'reorder_alert_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Reorder Alert</a>
                             <a href="{% url 'member_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Ledger Member</a>

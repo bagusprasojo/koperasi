@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% load humanize %}
-{% block title %}Laporan Produk Terjual{% endblock %}
+{% block title %}Top/Bottom Produk Terjual{% endblock %}
 {% block content %}
 <div class="space-y-4">
     <div class="rounded-xl bg-white p-6 shadow-sm">
-        <h1 class="mb-4 text-xl font-semibold">Laporan Produk Terjual</h1>
+        <h1 class="mb-4 text-xl font-semibold">Top/Bottom Produk Terjual</h1>
         <form method="get" class="grid gap-2 md:grid-cols-6">
             <input type="date" name="date_from" value="{{ date_from }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
             <input type="date" name="date_to" value="{{ date_to }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">

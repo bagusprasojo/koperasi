@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Riwayat Belanja Saya{% endblock %}
+{% block content %}
+<div class="space-y-4">
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <h1 class="mb-4 text-xl font-semibold">Riwayat Belanja Saya</h1>
+        <form method="get" class="grid gap-2 md:grid-cols-4">
+            <input type="date" name="date_from" value="{{ date_from }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <input type="date" name="date_to" value="{{ date_to }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <input name="q" value="{{ query }}" placeholder="Cari produk/SKU/no transaksi..." class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Filter</button>
+        </form>
+    </div>
+
+    <div class="grid gap-3 md:grid-cols-4">
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Transaksi</p><p class="text-lg font-semibold">{{ summary.total_transactions|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Item</p><p class="text-lg font-semibold">{{ summary.total_items|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Belanja</p><p class="text-lg font-semibold">{{ summary.total_spent|floatformat:2|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Kategori Favorit</p><p class="text-lg font-semibold">{{ summary.favorite_category }}</p></div>
+    </div>
+
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <h2 class="mb-2 text-sm font-semibold">Top 5 Produk Favorit</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50">
+                    <tr>
+                        <th class="px-3 py-2">Produk</th>
+                        <th class="px-3 py-2">Qty</th>
+                        <th class="px-3 py-2">Omzet</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in top_products %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ p.product__name }}</td>
+                        <td class="px-3 py-2">{{ p.total_qty|intcomma }}</td>
+                        <td class="px-3 py-2">{{ p.total_omzet|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="px-3 py-4 text-slate-500">Belum ada data favorit.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <h2 class="mb-2 text-sm font-semibold">Daftar Barang yang Pernah Dibeli</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50">
+                    <tr>
+                        <th class="px-3 py-2">Tanggal</th>
+                        <th class="px-3 py-2">No Transaksi</th>
+                        <th class="px-3 py-2">Produk</th>
+                        <th class="px-3 py-2">Qty</th>
+                        <th class="px-3 py-2">Harga</th>
+                        <th class="px-3 py-2">Subtotal</th>
+                        <th class="px-3 py-2 text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for it in page_obj %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ it.sale.created_at }}</td>
+                        <td class="px-3 py-2">{{ it.sale.sale_number }}</td>
+                        <td class="px-3 py-2">{{ it.product.name }}</td>
+                        <td class="px-3 py-2">{{ it.qty|intcomma }}</td>
+                        <td class="px-3 py-2">{{ it.unit_price|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ it.line_total|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">
+                            <div class="flex justify-end">
+                                <a href="{% url 'sales_transaction_detail' it.sale.sale_number %}" class="rounded-md border px-3 py-1">Detail</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="px-3 py-4 text-slate-500">Belum ada data pembelian.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-4 flex items-center justify-between text-sm">
+            <p>Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}</p>
+            <div class="flex gap-2">
+                {% if page_obj.has_previous %}<a href="?date_from={{ date_from }}&date_to={{ date_to }}&q={{ query }}&page={{ page_obj.previous_page_number }}" class="rounded-md border px-3 py-1">Sebelumnya</a>{% endif %}
+                {% if page_obj.has_next %}<a href="?date_from={{ date_from }}&date_to={{ date_to }}&q={{ query }}&page={{ page_obj.next_page_number }}" class="rounded-md border px-3 py-1">Berikutnya</a>{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

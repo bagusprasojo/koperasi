@@ -2,6 +2,7 @@ from decimal import Decimal, InvalidOperation
 import csv
 import io
 import json
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -12,12 +13,15 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Q
+from django.db.models import Count, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils import timezone
 
 from core.decorators import role_required
 from .models import Member, MemberCard, MemberLedger, MemberTopUp, MemberWithdrawal
+from sales.models import Sale, SaleItem
 from .services import (
     approve_topup,
     create_admin_topup,
@@ -359,6 +363,78 @@ def member_my_ledger(request):
         request,
         'members/member_my_ledger.html',
         {'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'member': member},
+    )
+
+
+@role_required('member')
+def member_my_purchases(request):
+    member = getattr(request.user, 'member_profile', None)
+    if not member:
+        messages.error(request, 'Akun ini tidak terhubung ke data member.')
+        return redirect('dashboard')
+
+    today = timezone.localdate()
+    default_from = today - timedelta(days=29)
+    date_from_raw = request.GET.get('date_from', '').strip()
+    date_to_raw = request.GET.get('date_to', '').strip()
+    query = request.GET.get('q', '').strip()
+    date_from = date_from_raw or default_from.isoformat()
+    date_to = date_to_raw or today.isoformat()
+
+    sale_items = SaleItem.objects.select_related('sale', 'product').filter(
+        sale__member=member,
+        sale__created_at__date__gte=date_from,
+        sale__created_at__date__lte=date_to,
+    ).order_by('-sale__created_at')
+    if query:
+        sale_items = sale_items.filter(
+            Q(product__name__icontains=query) |
+            Q(product__sku__icontains=query) |
+            Q(sale__sale_number__icontains=query)
+        )
+    page_obj = Paginator(sale_items, 15).get_page(request.GET.get('page'))
+
+    sales = Sale.objects.filter(
+        member=member,
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to,
+    )
+    total_transactions = sales.count()
+    total_spent = sales.aggregate(v=Sum('total'))['v'] or Decimal('0.00')
+    total_items = SaleItem.objects.filter(sale__in=sales).aggregate(v=Sum('qty'))['v'] or 0
+
+    top_products = list(
+        SaleItem.objects.filter(sale__in=sales)
+        .values('product__name')
+        .annotate(total_qty=Sum('qty'), total_omzet=Sum('line_total'))
+        .order_by('-total_qty', '-total_omzet')[:5]
+    )
+
+    top_categories = list(
+        SaleItem.objects.filter(sale__in=sales)
+        .values('product__category__name')
+        .annotate(total_qty=Sum('qty'))
+        .order_by('-total_qty')[:1]
+    )
+    favorite_category = top_categories[0]['product__category__name'] if top_categories else '-'
+
+    return render(
+        request,
+        'members/member_my_purchases.html',
+        {
+            'member': member,
+            'page_obj': page_obj,
+            'date_from': date_from,
+            'date_to': date_to,
+            'query': query,
+            'summary': {
+                'total_transactions': total_transactions,
+                'total_spent': total_spent,
+                'total_items': total_items,
+                'favorite_category': favorite_category,
+            },
+            'top_products': top_products,
+        },
     )
 
 
