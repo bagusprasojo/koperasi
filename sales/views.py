@@ -17,6 +17,7 @@ from core.decorators import role_required
 
 from .services import build_price_preview, checkout_pos, get_default_member, search_members
 from .services import (
+    build_escpos_payload,
     dispatch_receipt_print_job,
     enqueue_receipt_print_job,
     get_receipt_detail,
@@ -135,12 +136,7 @@ def pos_checkout_api(request):
             card_auth=(payload.get('card_auth') or '').strip(),
             cash_received_raw=payload.get('cash_received', '0'),
         )
-        print_status = {'queued': False, 'sent': False, 'message': ''}
-        if created:
-            job = enqueue_receipt_print_job(sale=sale, copies=1)
-            sent, err = dispatch_receipt_print_job(job)
-            print_status = {'queued': True, 'sent': sent, 'message': err}
-        last_job = sale.print_jobs.order_by('-created_at').first()
+        receipt_payload = build_escpos_payload(sale=sale, copies=1)
         return JsonResponse(
             {
                 'success': True,
@@ -148,13 +144,7 @@ def pos_checkout_api(request):
                     'sale_number': sale.sale_number,
                     'sale_uuid': str(sale.uuid),
                     'idempotent_replay': not created,
-                    'print_status': print_status,
-                    'last_print_job': {
-                        'job_id': last_job.job_id if last_job else '',
-                        'status': last_job.status if last_job else '',
-                        'attempts': last_job.attempts if last_job else 0,
-                        'last_error': last_job.last_error if last_job else '',
-                    },
+                    'receipt_payload': receipt_payload,
                 },
             }
         )
@@ -178,20 +168,14 @@ def pos_reprint_api(request, sale_number):
     sale = Sale.objects.filter(sale_number=sale_number).first()
     if not sale:
         return JsonResponse({'success': False, 'message': 'Transaksi tidak ditemukan.'}, status=404)
-    job = enqueue_receipt_print_job(sale=sale, copies=1)
-    sent, err = dispatch_receipt_print_job(job)
     return JsonResponse(
         {
-            'success': sent,
-            'message': '' if sent else err,
+            'success': True,
             'data': {
-                'job_id': job.job_id,
-                'status': job.status,
-                'attempts': job.attempts,
-                'last_error': job.last_error,
+                'receipt_payload': build_escpos_payload(sale=sale, copies=1),
             },
         },
-        status=200 if sent else 400,
+        status=200,
     )
 
 

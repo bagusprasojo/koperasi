@@ -67,13 +67,35 @@ def simulate_print(raw_bytes, doc_name='POS Receipt'):
 class PrintHandler(BaseHTTPRequestHandler):
     server_version = 'KoperasiPrintBridge/1.0'
 
+    def _cors_origin(self):
+        allowed = os.getenv('PRINT_BRIDGE_ALLOWED_ORIGINS', '*').strip()
+        req_origin = self.headers.get('Origin', '')
+        if allowed == '*':
+            return '*'
+        allowed_list = [x.strip() for x in allowed.split(',') if x.strip()]
+        if req_origin and req_origin in allowed_list:
+            return req_origin
+        return allowed_list[0] if allowed_list else '*'
+
+    def _set_cors_headers(self):
+        self.send_header('Access-Control-Allow-Origin', self._cors_origin())
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Access-Control-Max-Age', '86400')
+
     def _json(self, code, payload):
         out = json.dumps(payload).encode('utf-8')
         self.send_response(code)
+        self._set_cors_headers()
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(out)))
         self.end_headers()
         self.wfile.write(out)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._set_cors_headers()
+        self.end_headers()
 
     def do_GET(self):
         if self.path == '/health':

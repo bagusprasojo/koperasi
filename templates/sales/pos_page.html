@@ -190,7 +190,6 @@
                 <span x-show="lastPrintJob.last_error"> - <span x-text="lastPrintJob.last_error"></span></span>
             </p>
             <div class="mt-4 flex justify-end gap-2">
-                <button type="button" @click="retryPendingPrintJobs()" class="rounded-md border px-3 py-2 text-sm">Retry Pending</button>
                 <button type="button" @click="reprintReceipt(receipt.sale_number)" class="rounded-md border px-3 py-2 text-sm">Print Ulang</button>
                 <button type="button" @click="receiptOpen=false" class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Tutup</button>
             </div>
@@ -224,8 +223,10 @@ function posApp() {
         successMessage: '',
         receiptOpen: false,
         receipt: { sale_number: '', member_name: '', total: '0.00', items: [] },
+        receiptPayload: null,
         lastPrintJob: { status: '', last_error: '' },
         pendingTxns: [],
+        printBridgeUrl: 'http://127.0.0.1:17971/print',
         init() {
             const rawProducts = JSON.parse(document.getElementById('pos-products-json').textContent || '[]');
             this.products = Array.isArray(rawProducts) ? rawProducts : JSON.parse(rawProducts || '[]');
@@ -527,7 +528,9 @@ function posApp() {
                 this.checkoutError = data.message || 'Checkout gagal.';
                 return;
             }
-            await this.openReceiptModal(data.data.sale_number, data.data.last_print_job || {});
+            this.receiptPayload = data.data.receipt_payload || null;
+            await this.openReceiptModal(data.data.sale_number);
+            if (this.receiptPayload) await this.sendToPrintBridge(this.receiptPayload);
             this.checkoutOpen = false;
             this.clearCart();
             this.resetMemberToDefault();
@@ -535,13 +538,38 @@ function posApp() {
             setTimeout(() => { this.successMessage = ''; }, 3000);
             this.$nextTick(() => this.$refs.scanInput.focus());
         },
-        async openReceiptModal(saleNumber, lastPrintJob = {}) {
+        async openReceiptModal(saleNumber) {
             const res = await fetch(`/sales/pos/api/receipt/${encodeURIComponent(saleNumber)}`);
             const data = await res.json();
             if (!data.success) return;
             this.receipt = data.data;
-            this.lastPrintJob = lastPrintJob || { status: '', last_error: '' };
+            this.lastPrintJob = { status: '', last_error: '' };
             this.receiptOpen = true;
+        },
+        async sendToPrintBridge(payload) {
+            try {
+                const res = await fetch(this.printBridgeUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    this.lastPrintJob = {
+                        status: 'failed',
+                        last_error: data.message || 'Gagal mengirim ke print bridge.',
+                    };
+                    return false;
+                }
+                this.lastPrintJob = { status: 'sent', last_error: '' };
+                return true;
+            } catch (err) {
+                this.lastPrintJob = {
+                    status: 'failed',
+                    last_error: err?.message || 'Print bridge tidak dapat diakses.',
+                };
+                return false;
+            }
         },
         async reprintReceipt(saleNumber) {
             const res = await fetch(`/sales/pos/api/reprint/${encodeURIComponent(saleNumber)}`, {
@@ -550,16 +578,15 @@ function posApp() {
             });
             const data = await res.json();
             if (!data.success) {
-                this.lastPrintJob = data.data || { status: 'failed', last_error: data.message || 'Reprint gagal' };
+                this.lastPrintJob = { status: 'failed', last_error: data.message || 'Reprint gagal' };
                 return;
             }
-            this.lastPrintJob = data.data;
-        },
-        async retryPendingPrintJobs() {
-            await fetch('/sales/pos/api/print/dispatch-pending', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': this.getCsrfToken() },
-            });
+            const payload = data.data?.receipt_payload;
+            if (!payload) {
+                this.lastPrintJob = { status: 'failed', last_error: 'Payload struk tidak tersedia.' };
+                return;
+            }
+            await this.sendToPrintBridge(payload);
         }
     }
 }

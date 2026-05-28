@@ -309,6 +309,10 @@ def _build_escpos_payload(sale: Sale, copies: int = 1):
     }
 
 
+def build_escpos_payload(sale: Sale, copies: int = 1):
+    return _build_escpos_payload(sale=sale, copies=copies)
+
+
 def enqueue_receipt_print_job(sale: Sale, copies: int = 1, bridge_url: str = 'http://127.0.0.1:17971/print'):
     payload = _build_escpos_payload(sale=sale, copies=copies)
     return ReceiptPrintJob.objects.create(
