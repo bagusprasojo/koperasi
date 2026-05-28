@@ -3,6 +3,136 @@
 {% block title %}Dashboard | POS Koperasi{% endblock %}
 
 {% block content %}
+{% if member_dashboard %}
+<div class="mb-6 rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="text-2xl font-semibold">Dashboard Member</h1>
+    <p class="mt-2 text-slate-600">Ringkasan akun dan transaksi Anda.</p>
+</div>
+
+<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-xl bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Kode Member</p>
+        <p class="mt-1 text-lg font-semibold">{{ member_dashboard.member.code }}</p>
+        <p class="mt-2 text-sm text-slate-600">{{ member_dashboard.member.full_name }}</p>
+    </div>
+    <div class="rounded-xl bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Kontak</p>
+        <p class="mt-1 text-sm font-semibold">{{ member_dashboard.member.phone }}</p>
+        <p class="text-sm text-slate-600">{{ member_dashboard.member.email|default:'-' }}</p>
+    </div>
+    <div class="rounded-xl bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Saldo Deposit</p>
+        <p class="mt-1 text-2xl font-bold">{{ member_dashboard.wallet.balance|floatformat:0 }}</p>
+    </div>
+    <div class="rounded-xl bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Topup Pending</p>
+        <p class="mt-1 text-2xl font-bold">{{ member_dashboard.pending_topups|length }}</p>
+        {% if member_dashboard.pending_topups %}
+        <a href="{% url 'member_topup_request' %}" class="mt-2 inline-block text-sm text-blue-700">Lihat request</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-xl bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Periode</p>
+        <p class="mt-1 text-sm font-semibold">{{ member_dashboard.period.date_from }} s/d {{ member_dashboard.period.date_to }}</p>
+    </div>
+    <div class="rounded-xl bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Transaksi Belanja</p>
+        <p class="mt-1 text-2xl font-bold">{{ member_dashboard.summary.transaction_count }}</p>
+    </div>
+    <div class="rounded-xl bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Total Belanja</p>
+        <p class="mt-1 text-2xl font-bold">{{ member_dashboard.summary.total_spent|floatformat:0 }}</p>
+    </div>
+    <div class="rounded-xl bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Topup Approved</p>
+        <p class="mt-1 text-lg font-semibold">{{ member_dashboard.summary.topup_count }} trx</p>
+        <p class="text-sm text-slate-600">Nominal: {{ member_dashboard.summary.topup_total|floatformat:0 }}</p>
+    </div>
+</div>
+
+<div class="mt-6 grid gap-4 lg:grid-cols-2">
+    <div class="rounded-xl bg-white p-5 shadow-sm">
+        <h2 class="text-lg font-semibold">5 Produk Paling Banyak Dibeli</h2>
+        <div class="mt-3 overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50">
+                    <tr><th class="px-3 py-2">Produk</th><th class="px-3 py-2">Qty</th><th class="px-3 py-2">Nilai</th></tr>
+                </thead>
+                <tbody>
+                    {% for r in member_dashboard.top_products %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ r.product__name }}</td>
+                        <td class="px-3 py-2">{{ r.total_qty }}</td>
+                        <td class="px-3 py-2">{{ r.total_amount|floatformat:0 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="px-3 py-4 text-slate-500">Belum ada data.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="rounded-xl bg-white p-5 shadow-sm">
+        <h2 class="text-lg font-semibold">5 Transaksi Topup Terakhir</h2>
+        <div class="mt-3 overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50">
+                    <tr><th class="px-3 py-2">Waktu</th><th class="px-3 py-2">No Transaksi</th><th class="px-3 py-2">Nominal</th><th class="px-3 py-2">Status</th></tr>
+                </thead>
+                <tbody>
+                    {% for t in member_dashboard.recent_topups %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ t.created_at|date:"Y-m-d H:i" }}</td>
+                        <td class="px-3 py-2">{{ t.topup_number|default:'-' }}</td>
+                        <td class="px-3 py-2">{{ t.amount|floatformat:0 }}</td>
+                        <td class="px-3 py-2">{{ t.get_status_display }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="px-3 py-4 text-slate-500">Belum ada data topup.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% elif admin_dashboard %}
+<div class="mb-6 rounded-xl bg-white p-6 shadow-sm">
+    <h1 class="text-2xl font-semibold">Dashboard Admin</h1>
+    <p class="mt-2 text-slate-600">Monitoring operasional harian toko.</p>
+</div>
+
+<div class="mb-6 rounded-xl bg-white p-6 shadow-sm">
+    <h2 class="text-lg font-semibold">Data Diri User</h2>
+    <div class="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4 text-sm">
+        <div><p class="text-slate-500">Username</p><p class="font-semibold">{{ admin_dashboard.profile.username }}</p></div>
+        <div><p class="text-slate-500">Nama Lengkap</p><p class="font-semibold">{{ admin_dashboard.profile.full_name }}</p></div>
+        <div><p class="text-slate-500">Email</p><p class="font-semibold">{{ admin_dashboard.profile.email }}</p></div>
+        <div><p class="text-slate-500">Last Login</p><p class="font-semibold">{% if admin_dashboard.profile.last_login %}{{ admin_dashboard.profile.last_login|date:"Y-m-d H:i" }}{% else %}-{% endif %}</p></div>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-2">
+        {% for role in admin_dashboard.profile.roles %}
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-sm">{{ role }}</span>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Tanggal Server</p><p class="mt-1 text-lg font-semibold">{{ admin_dashboard.today }}</p></div>
+    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Status Tutup Harian</p><p class="mt-1 text-lg font-semibold">{% if admin_dashboard.kpi.closing_today_done %}Sudah Closing{% else %}Belum Closing{% endif %}</p></div>
+    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Topup Pending</p><p class="mt-1 text-2xl font-bold">{{ admin_dashboard.kpi.pending_topup }}</p></div>
+    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Stok Reorder Alert</p><p class="mt-1 text-2xl font-bold">{{ admin_dashboard.kpi.low_stock_count }}</p></div>
+</div>
+
+<div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Transaksi POS Hari Ini</p><p class="mt-1 text-lg font-semibold">{{ admin_dashboard.kpi.sales_today_count }} trx</p><p class="text-sm text-slate-600">Omzet: {{ admin_dashboard.kpi.sales_today_total|floatformat:0 }}</p></div>
+    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Pembelian Hari Ini</p><p class="mt-1 text-lg font-semibold">{{ admin_dashboard.kpi.purchase_today_count }} trx</p><p class="text-sm text-slate-600">Nilai: {{ admin_dashboard.kpi.purchase_today_total|floatformat:0 }}</p></div>
+    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Topup Hari Ini</p><p class="mt-1 text-lg font-semibold">Approved {{ admin_dashboard.kpi.approved_topup_today }}</p><p class="text-sm text-slate-600">Rejected {{ admin_dashboard.kpi.rejected_topup_today }}</p></div>
+    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Master Data</p><p class="mt-1 text-sm font-semibold">Produk: {{ admin_dashboard.kpi.product_count }}</p><p class="text-sm text-slate-600">Supplier: {{ admin_dashboard.kpi.supplier_count }}</p><p class="text-sm text-slate-600">Member Aktif: {{ admin_dashboard.kpi.member_active_count }} / {{ admin_dashboard.kpi.member_total_count }}</p></div>
+</div>
+{% else %}
 <div class="mb-6 rounded-xl bg-white p-6 shadow-sm">
     <h1 class="text-2xl font-semibold">Dashboard POS</h1>
     <p class="mt-2 text-slate-600">Halo {{ request.user.username }}, role aktif Anda:</p>
@@ -14,29 +144,28 @@
         {% endfor %}
     </div>
 </div>
-
 <div class="grid gap-4 md:grid-cols-3">
-    <a href="{% url 'pos_page' %}" class="rounded-xl bg-white p-5 shadow-sm transition hover:-translate-y-0.5">
+    <div class="rounded-xl bg-white p-5 shadow-sm">
         <p class="text-sm text-slate-500">Kasir</p>
         <h2 class="mt-1 text-lg font-semibold">Transaksi POS</h2>
-    </a>
-    <a href="{% url 'purchase_page' %}" class="rounded-xl bg-white p-5 shadow-sm transition hover:-translate-y-0.5">
+    </div>
+    <div class="rounded-xl bg-white p-5 shadow-sm">
         <p class="text-sm text-slate-500">Pembelian</p>
         <h2 class="mt-1 text-lg font-semibold">Pengadaan Stok</h2>
-    </a>
-    <a href="{% url 'product_list' %}" class="rounded-xl bg-white p-5 shadow-sm transition hover:-translate-y-0.5">
+    </div>
+    <div class="rounded-xl bg-white p-5 shadow-sm">
         <p class="text-sm text-slate-500">Master Data</p>
         <h2 class="mt-1 text-lg font-semibold">Produk & Kategori</h2>
-    </a>
+    </div>
 </div>
 
 {% if topup_stats %}
 <div class="mt-6 grid gap-4 md:grid-cols-3">
-    <a href="{% url 'topup_validation_list' %}?status=pending" class="rounded-xl bg-white p-5 shadow-sm">
+    <div class="rounded-xl bg-white p-5 shadow-sm">
         <p class="text-sm text-slate-500">Topup</p>
         <h2 class="mt-1 text-lg font-semibold">Pending Approval</h2>
         <p class="mt-2 text-2xl font-bold">{{ topup_stats.pending }}</p>
-    </a>
+    </div>
     <div class="rounded-xl bg-white p-5 shadow-sm">
         <p class="text-sm text-slate-500">Topup Hari Ini</p>
         <h2 class="mt-1 text-lg font-semibold">Approved</h2>
@@ -48,5 +177,6 @@
         <p class="mt-2 text-2xl font-bold">{{ topup_stats.rejected_today }}</p>
     </div>
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}

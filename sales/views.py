@@ -396,12 +396,19 @@ def sales_daily_summary_export_csv(request):
     return response
 
 
-@role_required('admin_toko', 'kasir')
+@role_required('admin_toko', 'kasir', 'member')
 def sales_transaction_detail(request, sale_number):
     sale = Sale.objects.select_related('member', 'created_by').prefetch_related('items__product', 'payments').filter(sale_number=sale_number).first()
     if not sale:
         messages.error(request, 'Transaksi tidak ditemukan.')
         return render(request, 'sales/transaction_detail.html', {'sale': None})
+    # Member hanya boleh membuka transaksi miliknya sendiri.
+    user_roles = set(request.user.groups.values_list('name', flat=True))
+    if 'member' in user_roles and 'admin_toko' not in user_roles and 'kasir' not in user_roles:
+        member_profile = getattr(request.user, 'member_profile', None)
+        if not member_profile or sale.member_id != member_profile.id:
+            messages.error(request, 'Anda tidak memiliki akses ke detail transaksi ini.')
+            return render(request, 'sales/transaction_detail.html', {'sale': None})
     return render(request, 'sales/transaction_detail.html', {'sale': sale})
 
 

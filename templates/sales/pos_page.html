@@ -210,6 +210,7 @@ function posApp() {
         productSuggestOpen: false,
         productCursor: -1,
         productWarning: '',
+        defaultMember: { id: {{ default_member.id }}, full_name: '{{ default_member.full_name|escapejs }}', phone: '{{ default_member.phone|escapejs }}', card_number: '' },
         selectedMember: { id: {{ default_member.id }}, full_name: '{{ default_member.full_name|escapejs }}', phone: '{{ default_member.phone|escapejs }}', card_number: '' },
         defaultMemberId: {{ default_member.id }},
         lines: [],
@@ -426,6 +427,17 @@ function posApp() {
             this.removeLine(id);
             this.selectedLineIndex = -1;
         },
+        resetMemberToDefault() {
+            this.selectedMember = {
+                id: this.defaultMember.id,
+                full_name: this.defaultMember.full_name,
+                phone: this.defaultMember.phone,
+                card_number: this.defaultMember.card_number || '',
+            };
+            this.memberQuery = '';
+            this.memberResults = [];
+            this.memberOpen = false;
+        },
         clearCart() {
             this.lines = [];
             this.subtotal = '0.00';
@@ -518,6 +530,7 @@ function posApp() {
             await this.openReceiptModal(data.data.sale_number, data.data.last_print_job || {});
             this.checkoutOpen = false;
             this.clearCart();
+            this.resetMemberToDefault();
             this.successMessage = `Transaksi ${data.data.sale_number} berhasil.`;
             setTimeout(() => { this.successMessage = ''; }, 3000);
             this.$nextTick(() => this.$refs.scanInput.focus());

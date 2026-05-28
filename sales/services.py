@@ -246,24 +246,60 @@ def get_receipt_detail(sale: Sale):
 
 
 def _build_escpos_payload(sale: Sale, copies: int = 1):
+    line_width = 32
+
+    def _fmt_amount(value) -> str:
+        amount = Decimal(str(value))
+        amount_int = int(amount.quantize(Decimal('1')))
+        return f"{amount_int:,}".replace(',', '.')
+
+    def _right(text: str) -> str:
+        return str(text).rjust(line_width)
+
+    def _center(text: str) -> str:
+        return str(text).center(line_width)
+
+    def _label_value(label: str, value: str) -> str:
+        left = str(label).title()
+        right = str(value)
+        space = line_width - len(left) - len(right)
+        if space < 1:
+            return f"{left} {right}"
+        return f"{left}{' ' * space}{right}"
+
     rc = get_receipt_detail(sale)
+    cashier_name = (
+        sale.created_by.get_full_name().strip()
+        if sale.created_by and sale.created_by.get_full_name().strip()
+        else (sale.created_by.username if sale.created_by else '-')
+    )
     lines = [
         'POS KOPERASI',
         f"No: {rc['sale_number']}",
         f"Tgl: {rc['sale_date']}",
         f"Member: {rc['member_name']}",
+        f"Kasir: {cashier_name}",
         '-------------------------------',
     ]
     for it in rc['items']:
         lines.append(f"{it['product_name']}")
-        lines.append(f"{it['qty']} x {it['unit_price']} = {it['line_total']}")
+        left_text = f"{it['qty']} x {_fmt_amount(it['unit_price'])}"
+        right_text = _fmt_amount(it['line_total'])
+        space = line_width - len(left_text) - len(right_text)
+        if space < 1:
+            lines.append(left_text)
+            lines.append(_right(right_text))
+        else:
+            lines.append(f"{left_text}{' ' * space}{right_text}")
     lines.append('-------------------------------')
-    lines.append(f"TOTAL: {rc['total']}")
-    lines.append(f"TUNAI DITERIMA: {rc['cash_received']}")
-    lines.append(f"KEMBALIAN: {rc['change_amount']}")
+    lines.append(_label_value('total', _fmt_amount(rc['total'])))
+    lines.append(_label_value('tunai diterima', _fmt_amount(rc['cash_received'])))
+    lines.append(_label_value('kembalian', _fmt_amount(rc['change_amount'])))
     for p in rc['payments']:
-        lines.append(f"BYR {p['method']}: {p['amount']}")
-    lines.append('Terima kasih')
+        method_label = str(p['method']).title()
+        pay_label = f"Bayar {method_label}"
+        lines.append(_label_value(pay_label, _fmt_amount(p['amount'])))
+    lines.append(_center('Jazakumullahu Khairan'))
     return {
         'job_id': f'PRN-{uuid4().hex[:10].upper()}',
         'sale_number': sale.sale_number,
