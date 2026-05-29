@@ -81,6 +81,7 @@ class PrintHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', self._cors_origin())
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Access-Control-Allow-Private-Network', 'true')
         self.send_header('Access-Control-Max-Age', '86400')
 
     def _json(self, code, payload):
