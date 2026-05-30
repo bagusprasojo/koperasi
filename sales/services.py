@@ -275,6 +275,7 @@ def _build_escpos_payload(sale: Sale, copies: int = 1):
     )
     lines = [
         'POS KOPERASI',
+        '',
         f"No: {rc['sale_number']}",
         f"Tgl: {rc['sale_date']}",
         f"Member: {rc['member_name']}",
@@ -299,6 +300,7 @@ def _build_escpos_payload(sale: Sale, copies: int = 1):
         method_label = str(p['method']).title()
         pay_label = f"Bayar {method_label}"
         lines.append(_label_value(pay_label, _fmt_amount(p['amount'])))
+    lines.append('')
     lines.append(_center('Jazakumullahu Khairan'))
     return {
         'job_id': f'PRN-{uuid4().hex[:10].upper()}',
