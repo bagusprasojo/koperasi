@@ -530,7 +530,10 @@ function posApp() {
             }
             this.receiptPayload = data.data.receipt_payload || null;
             await this.openReceiptModal(data.data.sale_number);
-            if (this.receiptPayload) await this.sendToPrintBridge(this.receiptPayload);
+            if (this.receiptPayload) {
+                const printOk = await this.sendToPrintBridge(this.receiptPayload);
+                if (printOk) this.receiptOpen = false;
+            }
             this.checkoutOpen = false;
             this.clearCart();
             this.resetMemberToDefault();
