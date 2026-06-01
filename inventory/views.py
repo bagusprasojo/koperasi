@@ -566,13 +566,38 @@ def _extract_purchase_items(request):
     return items
 
 
+def _build_purchase_initial_rows_from_request(request):
+    product_ids = request.POST.getlist('product_id[]')
+    qtys = request.POST.getlist('qty[]')
+    costs = request.POST.getlist('unit_cost[]')
+    rows = []
+    size = max(len(product_ids), len(qtys), len(costs))
+    for i in range(size):
+        pid = product_ids[i].strip() if i < len(product_ids) else ''
+        q = qtys[i].strip() if i < len(qtys) else ''
+        c = costs[i].strip() if i < len(costs) else ''
+        if not any([pid, q, c]):
+            continue
+        rows.append({'product_id': pid, 'qty': q or '1', 'unit_cost': c or ''})
+    return rows
+
+
 @role_required('admin_toko', 'pembelian')
 def purchase_create(request):
     products = Product.objects.select_related('unit').order_by('name')
     suppliers = Supplier.objects.filter(is_active=True).order_by('name')
+    initial_items_json = _to_json_payload([])
+    selected_supplier_id = ''
     if request.method == 'POST':
+        initial_items_json = _to_json_payload(_build_purchase_initial_rows_from_request(request))
+        selected_supplier_id = request.POST.get('supplier_id', '').strip()
         try:
-            supplier = Supplier.objects.get(id=request.POST.get('supplier_id', '').strip())
+            supplier_id = request.POST.get('supplier_id', '').strip()
+            if not supplier_id:
+                raise ValidationError('Supplier wajib dipilih sebelum menyimpan transaksi kulakan.')
+            supplier = Supplier.objects.filter(id=supplier_id, is_active=True).first()
+            if not supplier:
+                raise ValidationError('Supplier tidak ditemukan atau tidak aktif.')
             tx_date_raw = request.POST.get('tx_date', '').strip()
             tx_date = date.fromisoformat(tx_date_raw) if tx_date_raw else date.today()
             note = request.POST.get('note', '').strip()
@@ -605,6 +630,7 @@ def purchase_create(request):
             'id': str(p.id),
             'name': p.name,
             'sku': p.sku,
+            'barcode': p.barcode or '',
             'unit': p.unit.name if p.unit else '-',
         }
         for p in products
@@ -617,6 +643,8 @@ def purchase_create(request):
             'suppliers': suppliers,
             'suppliers_json': _to_json_payload(suppliers_data),
             'products_json': _to_json_payload(products_data),
+            'initial_items_json': initial_items_json,
+            'selected_supplier_id': selected_supplier_id,
         },
     )
 
@@ -646,9 +674,27 @@ def purchase_edit(request, uuid):
     suppliers = Supplier.objects.filter(is_active=True).order_by('name')
     next_url = _get_safe_next_url(request)
     back_url = next_url or f'/inventory/purchases/{tx.uuid}/'
+    selected_supplier_id = str(tx.supplier_id) if tx.supplier_id else ''
+    initial_items_json = _to_json_payload(
+        [
+            {
+                'product_id': str(it.product_id),
+                'qty': it.qty,
+                'unit_cost': str(it.unit_cost),
+            }
+            for it in tx.items.all()
+        ]
+    )
     if request.method == 'POST':
+        selected_supplier_id = request.POST.get('supplier_id', '').strip()
+        initial_items_json = _to_json_payload(_build_purchase_initial_rows_from_request(request))
         try:
-            supplier = Supplier.objects.get(id=request.POST.get('supplier_id', '').strip())
+            supplier_id = request.POST.get('supplier_id', '').strip()
+            if not supplier_id:
+                raise ValidationError('Supplier wajib dipilih sebelum menyimpan transaksi kulakan.')
+            supplier = Supplier.objects.filter(id=supplier_id, is_active=True).first()
+            if not supplier:
+                raise ValidationError('Supplier tidak ditemukan atau tidak aktif.')
             tx_date_raw = request.POST.get('tx_date', '').strip()
             tx_date = date.fromisoformat(tx_date_raw) if tx_date_raw else tx.tx_date
             note = request.POST.get('note', '').strip()
@@ -674,7 +720,7 @@ def purchase_edit(request, uuid):
             'suppliers': suppliers,
             'next_url': next_url,
             'back_url': back_url,
-            'selected_supplier_id': str(tx.supplier_id) if tx.supplier_id else '',
+            'selected_supplier_id': selected_supplier_id,
             'suppliers_json': _to_json_payload(
                 [
                     {
@@ -695,21 +741,13 @@ def purchase_edit(request, uuid):
                         'id': str(p.id),
                         'name': p.name,
                         'sku': p.sku,
+                        'barcode': p.barcode or '',
                         'unit': p.unit.name if p.unit else '-',
                     }
                     for p in products
                 ]
             ),
-            'initial_items_json': _to_json_payload(
-                [
-                    {
-                        'product_id': str(it.product_id),
-                        'qty': it.qty,
-                        'unit_cost': str(it.unit_cost),
-                    }
-                    for it in tx.items.all()
-                ]
-            ),
+            'initial_items_json': initial_items_json,
         },
     )
 

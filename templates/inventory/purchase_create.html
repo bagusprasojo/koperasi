@@ -2,7 +2,7 @@
 {% load humanize %}
 {% block title %}Tambah Kulakan{% endblock %}
 {% block content %}
-<div class="rounded-xl bg-white p-6 shadow-sm" x-data="purchaseCreateForm()">
+<div class="rounded-xl bg-white p-6 shadow-sm" x-data="purchaseCreateForm()" @keydown.window="handleShortcut($event)">
     <h1 class="mb-4 text-xl font-semibold">Form Tambah Kulakan</h1>
     <form method="post" class="grid gap-4">
         {% csrf_token %}
@@ -18,6 +18,7 @@
                             x-model="supplierQuery"
                             @input="filterSuppliers()"
                             @focus="supplierOpen = true"
+                            @keydown.enter.prevent
                             @keydown.escape="supplierOpen = false"
                             placeholder="Ketik kode / nama supplier..."
                             class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
@@ -52,7 +53,7 @@
             <div class="rounded-lg border border-slate-200 p-4 lg:col-span-8">
                 <div class="mb-3 flex items-center justify-between">
                     <h2 class="text-sm font-semibold">Detail Kulakan</h2>
-                    <button type="button" @click="addRow()" class="rounded-md border px-3 py-1 text-sm">Tambah Baris</button>
+                    <button type="button" @click="addRow()" class="rounded-md border px-3 py-1 text-sm">Tambah Baris (F4)</button>
                 </div>
                 <template x-for="(row, i) in rows" :key="i">
                     <div class="mb-2 grid gap-2 md:grid-cols-12">
@@ -63,6 +64,7 @@
                                 x-model="row.product_query"
                                 @input="filterProducts(row)"
                                 @focus="row.open = true"
+                                @keydown.enter.prevent="pickProductByEnter(row)"
                                 @keydown.escape="row.open = false"
                                 placeholder="Ketik nama / SKU produk..."
                                 class="w-full rounded-md border border-slate-300 px-2 py-2 text-sm">
@@ -74,6 +76,7 @@
                                     </button>
                                 </template>
                             </div>
+                            <p x-show="row.warning" x-cloak class="mt-1 text-xs text-amber-700" x-text="row.warning"></p>
                         </div>
                         <input type="text" :value="row.unit || '-'" readonly class="rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-sm md:col-span-2">
                         <input type="number" min="1" name="qty[]" x-model="row.qty" placeholder="Qty" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-2">
@@ -93,8 +96,10 @@
 function purchaseCreateForm() {
     const rawSuppliers = JSON.parse(document.getElementById('suppliers-json').textContent || '[]');
     const rawProducts = JSON.parse(document.getElementById('products-json').textContent || '[]');
+    const rawInitialRows = JSON.parse(document.getElementById('initial-items-json').textContent || '[]');
     const suppliers = Array.isArray(rawSuppliers) ? rawSuppliers : JSON.parse(rawSuppliers || '[]');
     const products = Array.isArray(rawProducts) ? rawProducts : JSON.parse(rawProducts || '[]');
+    const initialRows = Array.isArray(rawInitialRows) ? rawInitialRows : JSON.parse(rawInitialRows || '[]');
     return {
         suppliers,
         products,
@@ -103,7 +108,28 @@ function purchaseCreateForm() {
         selectedSupplier: {},
         supplierOpen: false,
         filteredSuppliers: suppliers,
-        rows: [{ product_id: '', product_query: '', unit: '', qty: 1, unit_cost: '', open: false, filtered: products }],
+        rows: [],
+        init() {
+            const defaultSupplierId = '{{ selected_supplier_id }}';
+            if (defaultSupplierId) {
+                const foundSupplier = this.suppliers.find(s => s.id === defaultSupplierId);
+                if (foundSupplier) this.pickSupplier(foundSupplier);
+            }
+            this.rows = (initialRows || []).map(r => {
+                const found = this.products.find(p => p.id === r.product_id);
+                return {
+                    product_id: r.product_id,
+                    product_query: found ? `${found.name} (${found.sku})` : '',
+                    unit: found ? (found.unit || '-') : '-',
+                    qty: r.qty || 1,
+                    unit_cost: r.unit_cost || '',
+                    open: false,
+                    filtered: this.products,
+                    warning: '',
+                };
+            });
+            if (!this.rows.length) this.addRow();
+        },
         filterSuppliers() {
             const q = (this.supplierQuery || '').toLowerCase();
             this.filteredSuppliers = this.suppliers.filter(s =>
@@ -119,7 +145,7 @@ function purchaseCreateForm() {
             this.supplierOpen = false;
         },
         addRow() {
-            this.rows.push({ product_id: '', product_query: '', unit: '', qty: 1, unit_cost: '', open: false, filtered: this.products });
+            this.rows.push({ product_id: '', product_query: '', unit: '', qty: 1, unit_cost: '', open: false, filtered: this.products, warning: '' });
         },
         removeRow(i) {
             this.rows.splice(i, 1);
@@ -127,9 +153,11 @@ function purchaseCreateForm() {
         },
         filterProducts(row) {
             const q = (row.product_query || '').toLowerCase();
+            row.warning = '';
             row.filtered = this.products.filter(p =>
                 (p.name || '').toLowerCase().includes(q) ||
-                (p.sku || '').toLowerCase().includes(q)
+                (p.sku || '').toLowerCase().includes(q) ||
+                (p.barcode || '').toLowerCase().includes(q)
             );
             row.open = true;
         },
@@ -137,7 +165,34 @@ function purchaseCreateForm() {
             row.product_id = p.id;
             row.product_query = `${p.name} (${p.sku})`;
             row.unit = p.unit || '-';
+            row.warning = '';
             row.open = false;
+        },
+        pickProductByEnter(row) {
+            const q = (row.product_query || '').trim();
+            if (!q) return;
+            const needle = q.toLowerCase();
+            const exact = this.products.find(p => (p.barcode || '').toLowerCase() === needle)
+                || this.products.find(p => (p.sku || '').toLowerCase() === needle)
+                || this.products.find(p => (p.name || '').toLowerCase() === needle);
+            if (exact) {
+                this.pickProduct(row, exact);
+                return;
+            }
+            if (row.filtered && row.filtered.length) {
+                this.pickProduct(row, row.filtered[0]);
+                return;
+            }
+            row.warning = `Produk tidak ditemukan untuk input "${q}".`;
+            row.product_id = '';
+            row.unit = '';
+            row.open = false;
+        },
+        handleShortcut(e) {
+            if (e.key === 'F4') {
+                e.preventDefault();
+                this.addRow();
+            }
         },
         grandTotal() {
             return this.rows.reduce((acc, row) => acc + ((parseFloat(row.qty) || 0) * (parseFloat(row.unit_cost) || 0)), 0);
@@ -150,4 +205,5 @@ function purchaseCreateForm() {
 </script>
 {{ suppliers_json|json_script:"suppliers-json" }}
 {{ products_json|json_script:"products-json" }}
+{{ initial_items_json|json_script:"initial-items-json" }}
 {% endblock %}
