@@ -29,6 +29,44 @@ def _ensure_not_closed(tx_date: date):
         raise ValidationError('Transaksi tidak bisa diproses karena tanggal tersebut sudah tutup harian.')
 
 
+def _rebuild_product_stock_from_ledgers(product: Product):
+    """
+    Rebuild saldo stok produk dari seluruh StockLedger berdasarkan urutan kronologis
+    (tx_date lalu waktu transaksi) untuk mencegah drift saat ada edit/hapus/backdate.
+    """
+    balance = 0
+    ledgers = (
+        StockLedger.objects
+        .select_related('tx')
+        .filter(product=product)
+        .order_by('tx_date', 'tx__created_at', 'created_at', 'id')
+    )
+    for ledger in ledgers:
+        qty_in = int(ledger.qty_in or 0)
+        qty_out = int(ledger.qty_out or 0)
+        before = balance
+        after = before + qty_in - qty_out
+        ledger.balance_before = before
+        ledger.balance_after = after
+        ledger.save(update_fields=['balance_before', 'balance_after', 'updated_at'])
+        balance = after
+
+    latest_purchase_item = (
+        InventoryTransactionItem.objects
+        .select_related('transaction')
+        .filter(
+            product=product,
+            transaction__tx_type=InventoryTransaction.TYPE_PURCHASE,
+        )
+        .order_by('-transaction__tx_date', '-transaction__created_at', '-created_at')
+        .first()
+    )
+    if latest_purchase_item:
+        product.last_purchase_price = latest_purchase_item.unit_cost
+    product.stock = balance
+    product.save(update_fields=['stock', 'last_purchase_price', 'updated_at'])
+
+
 @transaction.atomic
 def post_purchase(product: Product, qty: int, unit_cost: Decimal, user, note=''):
     _ensure_not_closed(date.today())
@@ -66,9 +104,7 @@ def post_purchase(product: Product, qty: int, unit_cost: Decimal, user, note='')
         value_out=0,
         note=note or 'Pembelian',
     )
-    product.stock = after
-    product.last_purchase_price = unit_cost
-    product.save(update_fields=['stock', 'last_purchase_price', 'updated_at'])
+    _rebuild_product_stock_from_ledgers(product)
     return tx
 
 
@@ -86,8 +122,10 @@ def create_purchase_transaction(supplier: Supplier, tx_date: date, items: list, 
         created_by=user,
     )
     grand_total = Decimal('0.00')
+    affected_products = set()
     for item in items:
         product = item['product']
+        affected_products.add(product.id)
         qty = int(item['qty'])
         unit_cost = Decimal(item['unit_cost'])
         if qty <= 0 or unit_cost <= 0:
@@ -115,10 +153,10 @@ def create_purchase_transaction(supplier: Supplier, tx_date: date, items: list, 
             value_out=0,
             note=note or 'Pembelian',
         )
-        product.stock = after
-        product.last_purchase_price = unit_cost
-        product.save(update_fields=['stock', 'last_purchase_price', 'updated_at'])
         grand_total += total
+    for product_id in affected_products:
+        p = Product.objects.get(id=product_id)
+        _rebuild_product_stock_from_ledgers(p)
     tx.total_amount = grand_total
     tx.save(update_fields=['total_amount', 'updated_at'])
     return tx
@@ -130,11 +168,9 @@ def edit_purchase_transaction(tx: InventoryTransaction, supplier: Supplier, tx_d
         raise ValidationError('Hanya transaksi pembelian yang bisa diedit.')
     _ensure_not_closed(tx.tx_date)
     _ensure_not_closed(tx_date)
-    # rollback stock from existing items
-    for old in tx.items.select_related('product').all():
-        product = old.product
-        product.stock = max(0, product.stock - old.qty)
-        product.save(update_fields=['stock', 'updated_at'])
+    old_product_ids = set(tx.items.values_list('product_id', flat=True))
+    new_product_ids = {item['product'].id for item in items}
+    affected_product_ids = old_product_ids.union(new_product_ids)
     tx.stock_ledgers.all().delete()
     tx.items.all().delete()
 
@@ -174,10 +210,10 @@ def edit_purchase_transaction(tx: InventoryTransaction, supplier: Supplier, tx_d
             value_out=0,
             note=note or 'Pembelian',
         )
-        product.stock = after
-        product.last_purchase_price = unit_cost
-        product.save(update_fields=['stock', 'last_purchase_price', 'updated_at'])
         grand_total += total
+    for product_id in affected_product_ids:
+        p = Product.objects.get(id=product_id)
+        _rebuild_product_stock_from_ledgers(p)
     tx.total_amount = grand_total
     tx.save(update_fields=['total_amount', 'updated_at'])
     return tx
@@ -188,13 +224,11 @@ def delete_purchase_transaction(tx: InventoryTransaction):
     if tx.tx_type != InventoryTransaction.TYPE_PURCHASE:
         raise ValidationError('Hanya transaksi pembelian yang bisa dihapus.')
     _ensure_not_closed(tx.tx_date)
-    for item in tx.items.select_related('product').all():
-        product = item.product
-        if product.stock < item.qty:
-            raise ValidationError('Stok saat ini tidak cukup untuk rollback penghapusan pembelian.')
-        product.stock -= item.qty
-        product.save(update_fields=['stock', 'updated_at'])
+    affected_product_ids = set(tx.items.values_list('product_id', flat=True))
     tx.delete()
+    for product_id in affected_product_ids:
+        p = Product.objects.get(id=product_id)
+        _rebuild_product_stock_from_ledgers(p)
 
 
 @transaction.atomic
@@ -237,8 +271,7 @@ def post_internal_used(product: Product, qty: int, user, note=''):
         value_out=total,
         note=note or 'Internal used',
     )
-    product.stock = after
-    product.save(update_fields=['stock', 'updated_at'])
+    _rebuild_product_stock_from_ledgers(product)
     return tx
 
 
@@ -283,8 +316,7 @@ def post_pos_sale(product: Product, qty: int, user, reference='', note=''):
         value_out=total,
         note=note or 'Penjualan POS',
     )
-    product.stock = after
-    product.save(update_fields=['stock', 'updated_at'])
+    _rebuild_product_stock_from_ledgers(product)
     return tx
 
 
@@ -327,8 +359,7 @@ def post_stock_opname(product: Product, actual_stock: int, user, note=''):
         value_out=total if diff < 0 else 0,
         note=note or 'Stock opname',
     )
-    product.stock = after
-    product.save(update_fields=['stock', 'updated_at'])
+    _rebuild_product_stock_from_ledgers(product)
     return tx
 
 
