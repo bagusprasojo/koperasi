@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% load humanize %}
-{% block title %}Detail Pembelian{% endblock %}
+{% block title %}Detail Kulakan{% endblock %}
 {% block content %}
 <div class="rounded-xl bg-white p-6 shadow-sm">
-    <h1 class="mb-4 text-xl font-semibold">Detail Transaksi Pembelian</h1>
+    <h1 class="mb-4 text-xl font-semibold">Detail Transaksi Kulakan</h1>
     <div class="grid gap-3 text-sm">
         <div><p class="text-slate-500">No Transaksi</p><p class="font-medium">{{ tx.tx_number }}</p></div>
         <div><p class="text-slate-500">Tanggal</p><p class="font-medium">{{ tx.tx_date }}</p></div>
         <div><p class="text-slate-500">Supplier</p><p class="font-medium">{% if tx.supplier %}{{ tx.supplier.name }}{% else %}-{% endif %}</p></div>
-        <div><p class="text-slate-500">Total Pembelian</p><p class="font-medium">{{ tx.total_amount|floatformat:2|intcomma }}</p></div>
+        <div><p class="text-slate-500">Total Kulakan</p><p class="font-medium">{{ tx.total_amount|floatformat:2|intcomma }}</p></div>
     </div>
     <div class="mt-6 overflow-x-auto">
         <table class="min-w-full text-left text-sm">
@@ -30,7 +30,7 @@
         {% if can_modify %}
             <a href="{% url 'purchase_edit' tx.uuid %}?next={{ request.path|urlencode }}" class="rounded-md border px-3 py-2 text-sm">Edit</a>
             <form method="post" action="{% url 'purchase_delete' tx.uuid %}">{% csrf_token %}
-                <button type="submit" @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Hapus', message: 'Transaksi pembelian ini akan dihapus.' })" class="rounded-md bg-red-600 px-3 py-2 text-sm text-white">Hapus</button>
+                <button type="submit" @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Hapus', message: 'Transaksi kulakan ini akan dihapus.' })" class="rounded-md bg-red-600 px-3 py-2 text-sm text-white">Hapus</button>
             </form>
         {% else %}
             <span class="rounded-md bg-slate-200 px-3 py-2 text-xs text-slate-700">Transaksi terkunci (sudah tutup harian)</span>

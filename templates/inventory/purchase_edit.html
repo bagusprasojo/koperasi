@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% load humanize %}
-{% block title %}Edit Pembelian{% endblock %}
+{% block title %}Edit Kulakan{% endblock %}
 {% block content %}
 <div class="rounded-xl bg-white p-6 shadow-sm" x-data="purchaseEditForm()">
-    <h1 class="mb-4 text-xl font-semibold">Form Edit Pembelian</h1>
+    <h1 class="mb-4 text-xl font-semibold">Form Edit Kulakan</h1>
     <form method="post" class="grid gap-4">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ next_url }}">
         <div class="grid gap-4 lg:grid-cols-12">
             <div class="rounded-lg border border-slate-200 p-4 lg:col-span-4 lg:h-fit">
-                <h2 class="mb-3 text-sm font-semibold">Header Pembelian</h2>
+                <h2 class="mb-3 text-sm font-semibold">Header Kulakan</h2>
                 <div class="grid gap-4">
                     <div class="relative">
                         <label class="mb-1 block text-sm font-medium">Supplier</label>
@@ -51,7 +51,7 @@
             </div>
             <div class="rounded-lg border border-slate-200 p-4 lg:col-span-8">
                 <div class="mb-3 flex items-center justify-between">
-                    <h2 class="text-sm font-semibold">Detail Pembelian</h2>
+                    <h2 class="text-sm font-semibold">Detail Kulakan</h2>
                     <button type="button" @click="addRow()" class="rounded-md border px-3 py-1 text-sm">Tambah Baris</button>
                 </div>
                 <template x-for="(row, i) in rows" :key="i">
@@ -82,7 +82,7 @@
                     </div>
                 </template>
                 <div class="mt-4 border-t border-slate-200 pt-3 text-right text-sm font-semibold">
-                    Total Pembelian: <span x-text="grandTotalLabel()"></span>
+                    Total Kulakan: <span x-text="grandTotalLabel()"></span>
                 </div>
             </div>
         </div>
