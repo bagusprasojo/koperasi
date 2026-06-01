@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}POS Koperasi{% endblock %}</title>
+    <title>{% block title %}POS Pondok Sayur{% endblock %}</title>
     
     {% load static %}
     <link href="{% static 'css/app.css' %}" rel="stylesheet">
@@ -62,7 +62,7 @@
                                 <button @click="tOpen=!tOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Transaksi</button>
                                 <div x-show="tOpen" x-cloak @click.outside="tOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
                                     <a href="{% url 'pos_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kasir (POS)</a>
-                                    <a href="{% url 'purchase_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Pembelian</a>
+                                    <a href="{% url 'purchase_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kulakan</a>
                                     <a href="{% url 'internal_used_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Internal Used</a>
                                     <a href="{% url 'stock_opname_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Stock Opname</a>
                                     {% if is_admin_toko_role %}
@@ -124,7 +124,7 @@
                             <a href="{% url 'card_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Member</a>
                             <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Transaksi</p>
                             <a href="{% url 'pos_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kasir (POS)</a>
-                            <a href="{% url 'purchase_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Pembelian</a>
+                            <a href="{% url 'purchase_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kulakan</a>
                             <a href="{% url 'internal_used_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Internal Used</a>
                             <a href="{% url 'stock_opname_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Stock Opname</a>
                             {% if is_admin_toko_role %}
