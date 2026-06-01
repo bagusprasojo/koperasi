@@ -150,4 +150,5 @@ LOGOUT_REDIRECT_URL = 'login'
 CSRF_TRUSTED_ORIGINS = ["https://myservice.my.id","https://pondoksayur.my.id"]
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
+# Use X-Forwarded-Proto header to determine if the request is secure
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
