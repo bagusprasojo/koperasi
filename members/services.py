@@ -15,6 +15,15 @@ def get_or_create_wallet(member: Member) -> MemberWallet:
     return wallet
 
 
+def _get_wallet_for_update(member: Member) -> MemberWallet:
+    wallet = MemberWallet.objects.select_for_update().filter(member=member).first()
+    if wallet:
+        return wallet
+    # Aman dipanggil dalam transaksi atomic; baris baru langsung di-lock ulang.
+    get_or_create_wallet(member)
+    return MemberWallet.objects.select_for_update().get(member=member)
+
+
 def _generate_topup_number(prefix='TPU'):
     return f'{prefix}-{timezone.now().strftime("%Y%m%d")}-{uuid4().hex[:8].upper()}'
 
@@ -47,7 +56,7 @@ def request_member_topup(member: Member, amount: Decimal, requested_by=None, not
 
 def _apply_credit(member: Member, amount: Decimal, topup: MemberTopUp, description: str):
     _ensure_not_closed_today()
-    wallet = get_or_create_wallet(member)
+    wallet = _get_wallet_for_update(member)
     before = wallet.balance
     after = before + amount
     wallet.balance = after
@@ -144,7 +153,7 @@ def reverse_topup(topup: MemberTopUp, admin_user, note: str = '') -> MemberTopUp
     if topup.reversal_entries.exists():
         raise ValidationError('Topup ini sudah pernah direversal.')
 
-    wallet = get_or_create_wallet(topup.member)
+    wallet = _get_wallet_for_update(topup.member)
     before = wallet.balance
     if before < topup.amount:
         raise ValidationError('Saldo member tidak cukup untuk reversal topup.')
@@ -200,7 +209,7 @@ def charge_member_by_card(card_number: str, amount: Decimal, reference_code: str
     if not card.member.is_active:
         raise ValidationError('Member tidak aktif.')
 
-    wallet = get_or_create_wallet(card.member)
+    wallet = _get_wallet_for_update(card.member)
     before = wallet.balance
     if before < amount:
         raise ValidationError('Saldo member tidak mencukupi.')
@@ -232,7 +241,7 @@ def create_admin_withdrawal(member: Member, amount: Decimal, member_password: st
     if not member.user.check_password(member_password or ''):
         raise ValidationError('Password member tidak sesuai.')
 
-    wallet = get_or_create_wallet(member)
+    wallet = _get_wallet_for_update(member)
     before = wallet.balance
     if before < amount:
         raise ValidationError('Saldo deposit member tidak mencukupi.')
@@ -271,7 +280,7 @@ def reverse_withdrawal(withdrawal: MemberWithdrawal, admin_user, note: str = '')
     if withdrawal.reversal_entries.exists():
         raise ValidationError('Withdrawal ini sudah pernah direversal.')
 
-    wallet = get_or_create_wallet(withdrawal.member)
+    wallet = _get_wallet_for_update(withdrawal.member)
     before = wallet.balance
     after = before + withdrawal.amount
     wallet.balance = after
