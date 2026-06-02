@@ -15,6 +15,7 @@ urlpatterns = [
     path('cards/<uuid:uuid>/delete/', views.card_delete, name='card_delete'),
     path('topup/', views.topup_page, name='member_topup'),
     path('topup/request/', views.member_topup_request, name='member_topup_request'),
+    path('topup/<uuid:uuid>/proof/', views.topup_proof_file, name='topup_proof_file'),
     path('me/balance/', views.member_my_balance, name='member_my_balance'),
     path('me/ledger/', views.member_my_ledger, name='member_my_ledger'),
     path('me/purchases/', views.member_my_purchases, name='member_my_purchases'),

@@ -15,6 +15,10 @@ from django.db.models.deletion import ProtectedError
 from django.db.models import Q
 from django.db.models import Count, Sum
 from django.http import HttpResponse
+from django.http import FileResponse
+from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
@@ -51,6 +55,27 @@ def _exc_message(exc):
     if isinstance(exc, ValidationError):
         return exc.messages[0] if exc.messages else str(exc)
     return str(exc)
+
+
+@login_required
+def topup_proof_file(request, uuid):
+    topup = get_object_or_404(MemberTopUp.objects.select_related('member'), uuid=uuid)
+    is_admin = request.user.groups.filter(name='admin_toko').exists()
+    member_profile = getattr(request.user, 'member_profile', None)
+    is_owner = member_profile and topup.member_id == member_profile.id
+    if not is_admin and not is_owner:
+        raise PermissionDenied('Anda tidak memiliki akses ke bukti transfer ini.')
+    if not topup.proof_file:
+        raise PermissionDenied('Bukti transfer tidak tersedia.')
+
+    if settings.DEBUG:
+        return FileResponse(topup.proof_file.open('rb'), as_attachment=False, filename=topup.proof_file.name.rsplit('/', 1)[-1])
+
+    response = HttpResponse()
+    response['Content-Type'] = ''
+    response['X-Accel-Redirect'] = f'/protected-media/{topup.proof_file.name}'
+    response['Content-Disposition'] = f'inline; filename="{topup.proof_file.name.rsplit("/", 1)[-1]}"'
+    return response
 
 
 @role_required('admin_toko', 'pembelian', 'kasir')
