@@ -4,28 +4,62 @@
 {% block content %}
 <div class="rounded-xl bg-white p-6 shadow-sm">
     <h1 class="mb-4 text-xl font-semibold">Mutasi Saldo Saya</h1>
-    <form method="get" class="mb-4 grid gap-2 md:grid-cols-3">
-        <input type="date" name="date_from" value="{{ date_from }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-        <input type="date" name="date_to" value="{{ date_to }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-        <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Filter Periode</button>
+    <form method="get" class="mb-4 grid gap-2 md:grid-cols-4">
+        <select name="month" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            {% for m in month_options %}
+                <option value="{{ m.value }}" {% if m.value == selected_month %}selected{% endif %}>{{ m.label }}</option>
+            {% endfor %}
+        </select>
+        <select name="year" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            {% for y in year_options %}
+                <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+        <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Filter</button>
+        <a href="{% url 'member_my_ledger_pdf' %}?month={{ selected_month }}&year={{ selected_year }}" class="rounded-md border border-emerald-600 px-3 py-2 text-center text-sm font-medium text-emerald-700 hover:bg-emerald-50">Download PDF</a>
     </form>
+    <div class="mb-4 grid gap-3 md:grid-cols-5">
+        <div class="rounded-lg border bg-slate-50 p-3">
+            <p class="text-xs text-slate-500">Periode</p>
+            <p class="font-semibold">{{ summary.period_start|date:"d M Y" }} - {{ summary.period_end|date:"d M Y" }}</p>
+        </div>
+        <div class="rounded-lg border bg-slate-50 p-3">
+            <p class="text-xs text-slate-500">Saldo Awal</p>
+            <p class="font-semibold">{{ summary.saldo_awal|floatformat:2|intcomma }}</p>
+        </div>
+        <div class="rounded-lg border bg-emerald-50 p-3">
+            <p class="text-xs text-emerald-700">Mutasi In</p>
+            <p class="font-semibold text-emerald-800">{{ summary.mutasi_in|floatformat:2|intcomma }}</p>
+        </div>
+        <div class="rounded-lg border bg-red-50 p-3">
+            <p class="text-xs text-red-700">Mutasi Out</p>
+            <p class="font-semibold text-red-800">{{ summary.mutasi_out|floatformat:2|intcomma }}</p>
+        </div>
+        <div class="rounded-lg border border-sky-200 bg-sky-50 p-3">
+            <p class="text-xs text-sky-700">Saldo Akhir</p>
+            <p class="font-semibold text-sky-900">{{ summary.saldo_akhir|floatformat:2|intcomma }}</p>
+        </div>
+    </div>
     <div class="overflow-x-auto">
         <table class="min-w-full text-left text-sm">
-            <thead class="border-b bg-slate-50"><tr><th class="px-3 py-2">Waktu</th><th class="px-3 py-2">No Transaksi</th><th class="px-3 py-2">Tipe Topup</th><th class="px-3 py-2">Jenis</th><th class="px-3 py-2">Nominal</th><th class="px-3 py-2">Saldo Sebelum</th><th class="px-3 py-2">Saldo Sesudah</th><th class="px-3 py-2">Keterangan</th></tr></thead>
+            <thead class="border-b bg-slate-50"><tr><th class="px-3 py-2">Waktu</th><th class="px-3 py-2">No Transaksi</th><th class="px-3 py-2">Tipe Topup</th><th class="px-3 py-2">Jenis</th><th class="px-3 py-2 text-right">Saldo Sebelum</th><th class="px-3 py-2 text-right">Mutasi In</th><th class="px-3 py-2 text-right">Mutasi Out</th><th class="px-3 py-2 text-right">Saldo Akhir</th><th class="px-3 py-2">Keterangan</th></tr></thead>
             <tbody>
-                {% for l in page_obj %}
+                {% for row in page_obj %}
+                    {% with l=row.ledger %}
                     <tr class="border-b">
                         <td class="px-3 py-2">{{ l.created_at }}</td>
                         <td class="px-3 py-2">{% if l.topup %}{{ l.topup.topup_number }}{% elif l.withdrawal %}{{ l.withdrawal.withdrawal_number }}{% else %}-{% endif %}</td>
                         <td class="px-3 py-2">{% if l.topup %}{{ l.topup.get_topup_type_display }}{% elif l.withdrawal %}Admin{% else %}-{% endif %}</td>
                         <td class="px-3 py-2">{{ l.get_txn_type_display }}</td>
-                        <td class="px-3 py-2">{{ l.amount|floatformat:2|intcomma }}</td>
-                        <td class="px-3 py-2">{{ l.balance_before|floatformat:2|intcomma }}</td>
-                        <td class="px-3 py-2">{{ l.balance_after|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2 text-right">{{ l.balance_before|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2 text-right text-emerald-700">{% if row.amount_in %}{{ row.amount_in|floatformat:2|intcomma }}{% else %}-{% endif %}</td>
+                        <td class="px-3 py-2 text-right text-red-700">{% if row.amount_out %}{{ row.amount_out|floatformat:2|intcomma }}{% else %}-{% endif %}</td>
+                        <td class="px-3 py-2 text-right">{{ l.balance_after|floatformat:2|intcomma }}</td>
                         <td class="px-3 py-2">{{ l.description|default:'-' }}</td>
                     </tr>
+                    {% endwith %}
                 {% empty %}
-                    <tr><td colspan="8" class="px-3 py-4 text-slate-500">Belum ada mutasi.</td></tr>
+                    <tr><td colspan="9" class="px-3 py-4 text-slate-500">Belum ada mutasi pada periode ini.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -33,8 +67,8 @@
     <div class="mt-4 flex items-center justify-between text-sm">
         <p>Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}</p>
         <div class="flex gap-2">
-            {% if page_obj.has_previous %}<a href="?date_from={{ date_from }}&date_to={{ date_to }}&page={{ page_obj.previous_page_number }}" class="rounded-md border px-3 py-1">Sebelumnya</a>{% endif %}
-            {% if page_obj.has_next %}<a href="?date_from={{ date_from }}&date_to={{ date_to }}&page={{ page_obj.next_page_number }}" class="rounded-md border px-3 py-1">Berikutnya</a>{% endif %}
+            {% if page_obj.has_previous %}<a href="?month={{ selected_month }}&year={{ selected_year }}&page={{ page_obj.previous_page_number }}" class="rounded-md border px-3 py-1">Sebelumnya</a>{% endif %}
+            {% if page_obj.has_next %}<a href="?month={{ selected_month }}&year={{ selected_year }}&page={{ page_obj.next_page_number }}" class="rounded-md border px-3 py-1">Berikutnya</a>{% endif %}
         </div>
     </div>
 </div>

@@ -2,7 +2,8 @@ from decimal import Decimal, InvalidOperation
 import csv
 import io
 import json
-from datetime import timedelta
+from calendar import monthrange
+from datetime import date, timedelta
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -41,6 +42,10 @@ from .services import (
 User = get_user_model()
 
 
+DEPOSIT_IN_TYPES = [MemberLedger.TYPE_TOPUP, MemberLedger.TYPE_REFUND, MemberLedger.TYPE_REVERSAL_WITHDRAWAL]
+DEPOSIT_OUT_TYPES = [MemberLedger.TYPE_PURCHASE, MemberLedger.TYPE_REVERSAL_TOPUP, MemberLedger.TYPE_WITHDRAWAL]
+
+
 def _safe_next_url(request):
     next_url = request.GET.get('next') or request.POST.get('next') or ''
     if not url_has_allowed_host_and_scheme(
@@ -50,6 +55,119 @@ def _safe_next_url(request):
     ):
         return ''
     return next_url
+
+
+def _member_ledger_period_data(member, month_raw=None, year_raw=None):
+    today = timezone.localdate()
+    try:
+        selected_month = int(month_raw or today.month)
+        selected_year = int(year_raw or today.year)
+        period_start = date(selected_year, selected_month, 1)
+    except (TypeError, ValueError):
+        selected_month = today.month
+        selected_year = today.year
+        period_start = date(selected_year, selected_month, 1)
+
+    period_end = date(selected_year, selected_month, monthrange(selected_year, selected_month)[1])
+    next_period_start = period_end + timedelta(days=1)
+    ledgers = (
+        MemberLedger.objects
+        .filter(member=member, created_at__date__gte=period_start, created_at__date__lt=next_period_start)
+        .order_by('created_at', 'id')
+    )
+    previous_ledger = (
+        MemberLedger.objects
+        .filter(member=member, created_at__date__lt=period_start)
+        .order_by('-created_at', '-id')
+        .first()
+    )
+    saldo_awal = previous_ledger.balance_after if previous_ledger else Decimal('0.00')
+
+    mutasi_in = Decimal('0.00')
+    mutasi_out = Decimal('0.00')
+    ledger_rows = []
+    for ledger in ledgers:
+        amount_in = ledger.amount if ledger.txn_type in DEPOSIT_IN_TYPES else Decimal('0.00')
+        amount_out = ledger.amount if ledger.txn_type in DEPOSIT_OUT_TYPES else Decimal('0.00')
+        mutasi_in += amount_in
+        mutasi_out += amount_out
+        ledger_rows.append({'ledger': ledger, 'amount_in': amount_in, 'amount_out': amount_out})
+
+    return {
+        'selected_month': selected_month,
+        'selected_year': selected_year,
+        'period_start': period_start,
+        'period_end': period_end,
+        'rows': ledger_rows,
+        'summary': {
+            'period_start': period_start,
+            'period_end': period_end,
+            'saldo_awal': saldo_awal,
+            'mutasi_in': mutasi_in,
+            'mutasi_out': mutasi_out,
+            'saldo_akhir': saldo_awal + mutasi_in - mutasi_out,
+        },
+    }
+
+
+def _format_money(value):
+    return f'{Decimal(value or 0):,.2f}'
+
+
+def _pdf_escape(text):
+    return str(text).replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+
+
+def _simple_text_pdf(lines):
+    page_width = 842
+    page_height = 595
+    left = 32
+    top = 560
+    line_height = 12
+    lines_per_page = 43
+    pages = [lines[i:i + lines_per_page] for i in range(0, len(lines), lines_per_page)] or [[]]
+    objects = []
+    page_object_ids = []
+
+    def add_object(body):
+        objects.append(body)
+        return len(objects)
+
+    catalog_id = add_object('<< /Type /Catalog /Pages 2 0 R >>')
+    pages_id = add_object('')
+    font_id = add_object('<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>')
+
+    for page_lines in pages:
+        commands = ['BT', '/F1 8 Tf', f'{left} {top} Td']
+        for idx, line in enumerate(page_lines):
+            if idx:
+                commands.append(f'0 -{line_height} Td')
+            commands.append(f'({_pdf_escape(line)}) Tj')
+        commands.append('ET')
+        stream = '\n'.join(commands)
+        content_id = add_object(f'<< /Length {len(stream.encode("latin-1", "replace"))} >>\nstream\n{stream}\nendstream')
+        page_id = add_object(
+            f'<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {page_width} {page_height}] '
+            f'/Resources << /Font << /F1 {font_id} 0 R >> >> /Contents {content_id} 0 R >>'
+        )
+        page_object_ids.append(page_id)
+
+    objects[pages_id - 1] = f'<< /Type /Pages /Kids [{" ".join(f"{pid} 0 R" for pid in page_object_ids)}] /Count {len(page_object_ids)} >>'
+    content = bytearray(b'%PDF-1.4\n')
+    offsets = [0]
+    for idx, body in enumerate(objects, start=1):
+        offsets.append(len(content))
+        content.extend(f'{idx} 0 obj\n'.encode('latin-1'))
+        content.extend(str(body).encode('latin-1', 'replace'))
+        content.extend(b'\nendobj\n')
+    xref_offset = len(content)
+    content.extend(f'xref\n0 {len(objects) + 1}\n0000000000 65535 f \n'.encode('latin-1'))
+    for offset in offsets[1:]:
+        content.extend(f'{offset:010d} 00000 n \n'.encode('latin-1'))
+    content.extend(
+        f'trailer\n<< /Size {len(objects) + 1} /Root {catalog_id} 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n'.encode('latin-1')
+    )
+    return bytes(content)
 
 
 def _exc_message(exc):
@@ -384,19 +502,79 @@ def member_my_ledger(request):
     if not member:
         messages.error(request, 'Akun ini tidak terhubung ke data member.')
         return redirect('dashboard')
-    date_from = request.GET.get('date_from', '').strip()
-    date_to = request.GET.get('date_to', '').strip()
-    ledgers = MemberLedger.objects.filter(member=member).order_by('-created_at')
-    if date_from:
-        ledgers = ledgers.filter(created_at__date__gte=date_from)
-    if date_to:
-        ledgers = ledgers.filter(created_at__date__lte=date_to)
-    page_obj = Paginator(ledgers, 15).get_page(request.GET.get('page'))
+    period_data = _member_ledger_period_data(
+        member,
+        month_raw=request.GET.get('month'),
+        year_raw=request.GET.get('year'),
+    )
+    page_obj = Paginator(period_data['rows'], 15).get_page(request.GET.get('page'))
+    today = timezone.localdate()
+    month_labels = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    ]
+    month_options = [{'value': i, 'label': month_labels[i - 1]} for i in range(1, 13)]
+    year_options = range(today.year - 5, today.year + 2)
     return render(
         request,
         'members/member_my_ledger.html',
-        {'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'member': member},
+        {
+            'page_obj': page_obj,
+            'member': member,
+            'selected_month': period_data['selected_month'],
+            'selected_year': period_data['selected_year'],
+            'month_options': month_options,
+            'year_options': year_options,
+            'summary': period_data['summary'],
+        },
     )
+
+
+@role_required('member')
+def member_my_ledger_pdf(request):
+    member = getattr(request.user, 'member_profile', None)
+    if not member:
+        messages.error(request, 'Akun ini tidak terhubung ke data member.')
+        return redirect('dashboard')
+    period_data = _member_ledger_period_data(
+        member,
+        month_raw=request.GET.get('month'),
+        year_raw=request.GET.get('year'),
+    )
+    summary = period_data['summary']
+    lines = [
+        'MUTASI DEPOSIT MEMBER',
+        f'Member  : {member.code or "-"} - {member.full_name}',
+        f'Periode : {summary["period_start"].strftime("%d-%m-%Y")} s/d {summary["period_end"].strftime("%d-%m-%Y")}',
+        '',
+        f'Saldo Awal : {_format_money(summary["saldo_awal"])}',
+        f'Mutasi In  : {_format_money(summary["mutasi_in"])}',
+        f'Mutasi Out : {_format_money(summary["mutasi_out"])}',
+        f'Saldo Akhir: {_format_money(summary["saldo_akhir"])}',
+        '',
+        f'{"Waktu":16} {"No Transaksi":18} {"Jenis":18} {"Saldo Sblm":>13} {"In":>13} {"Out":>13} {"Saldo Akhir":>13}',
+        '-' * 115,
+    ]
+    for row in period_data['rows']:
+        ledger = row['ledger']
+        tx_number = ledger.topup.topup_number if ledger.topup else ledger.withdrawal.withdrawal_number if ledger.withdrawal else ledger.reference_code or '-'
+        lines.append(
+            f'{timezone.localtime(ledger.created_at).strftime("%d-%m-%Y %H:%M"):16} '
+            f'{tx_number[:18]:18} '
+            f'{ledger.get_txn_type_display()[:18]:18} '
+            f'{_format_money(ledger.balance_before):>13} '
+            f'{_format_money(row["amount_in"]) if row["amount_in"] else "-":>13} '
+            f'{_format_money(row["amount_out"]) if row["amount_out"] else "-":>13} '
+            f'{_format_money(ledger.balance_after):>13}'
+        )
+    if not period_data['rows']:
+        lines.append('Belum ada mutasi pada periode ini.')
+
+    pdf_bytes = _simple_text_pdf(lines)
+    filename = f'mutasi-deposit-{member.code or member.id}-{period_data["selected_year"]}-{period_data["selected_month"]:02d}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 @role_required('member')

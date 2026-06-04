@@ -18,6 +18,7 @@ urlpatterns = [
     path('topup/<uuid:uuid>/proof/', views.topup_proof_file, name='topup_proof_file'),
     path('me/balance/', views.member_my_balance, name='member_my_balance'),
     path('me/ledger/', views.member_my_ledger, name='member_my_ledger'),
+    path('me/ledger/pdf/', views.member_my_ledger_pdf, name='member_my_ledger_pdf'),
     path('me/purchases/', views.member_my_purchases, name='member_my_purchases'),
     path('topup/validations/', views.topup_validation_list, name='topup_validation_list'),
     path('topup/<uuid:uuid>/approve/', views.topup_approve_action, name='topup_approve_action'),
