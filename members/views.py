@@ -28,6 +28,7 @@ from .models import Member, MemberCard, MemberLedger, MemberTopUp, MemberWithdra
 from sales.models import Sale, SaleItem
 from .services import (
     approve_topup,
+    build_audit_context,
     create_admin_topup,
     create_admin_withdrawal,
     get_or_create_wallet,
@@ -299,7 +300,13 @@ def topup_page(request):
             if amount <= 0:
                 raise ValueError('Nominal topup harus lebih besar dari 0.')
             if do_confirm:
-                create_admin_topup(member=member, amount=amount, created_by=request.user, note=note)
+                create_admin_topup(
+                    member=member,
+                    amount=amount,
+                    created_by=request.user,
+                    note=note,
+                    audit_context=build_audit_context(request),
+                )
                 messages.success(request, 'Topup admin berhasil diproses.')
                 return redirect('member_topup')
             confirm_data = {
@@ -350,6 +357,7 @@ def member_topup_request(request):
                 requested_by=request.user,
                 note=note,
                 proof_file=proof_file,
+                audit_context=build_audit_context(request),
             )
             messages.success(request, 'Request topup dikirim. Menunggu validasi admin.')
             return redirect('member_topup_request')
@@ -482,7 +490,12 @@ def topup_approve_action(request, uuid):
     if request.method == 'POST':
         note = request.POST.get('validation_note', '').strip()
         try:
-            approve_topup(topup=topup, validated_by=request.user, validation_note=note)
+            approve_topup(
+                topup=topup,
+                validated_by=request.user,
+                validation_note=note,
+                audit_context=build_audit_context(request),
+            )
             messages.success(request, 'Topup berhasil di-approve.')
         except Exception as exc:
             messages.error(request, _exc_message(exc))
@@ -495,7 +508,12 @@ def topup_reject_action(request, uuid):
     if request.method == 'POST':
         note = request.POST.get('validation_note', '').strip()
         try:
-            reject_topup(topup=topup, validated_by=request.user, validation_note=note)
+            reject_topup(
+                topup=topup,
+                validated_by=request.user,
+                validation_note=note,
+                audit_context=build_audit_context(request),
+            )
             messages.warning(request, 'Topup ditolak.')
         except Exception as exc:
             messages.error(request, _exc_message(exc))
@@ -508,7 +526,12 @@ def topup_reverse_action(request, uuid):
     if request.method == 'POST':
         note = request.POST.get('validation_note', '').strip()
         try:
-            reverse_topup(topup=topup, admin_user=request.user, note=note)
+            reverse_topup(
+                topup=topup,
+                admin_user=request.user,
+                note=note,
+                audit_context=build_audit_context(request),
+            )
             messages.warning(request, 'Topup berhasil direversal.')
         except Exception as exc:
             messages.error(request, _exc_message(exc))
@@ -610,7 +633,14 @@ def topup_bulk_admin(request):
                             raise ValueError(f'Baris {r.get("line_no")}: member code {code} tidak ditemukan.')
                         if amount <= 0:
                             raise ValueError(f'Baris {r.get("line_no")}: nominal harus > 0.')
-                        create_admin_topup(member=member, amount=amount, created_by=request.user, note=note)
+                        create_admin_topup(
+                            member=member,
+                            amount=amount,
+                            created_by=request.user,
+                            note=note,
+                            kind=MemberTopUp.KIND_ADMIN_BULK,
+                            audit_context=build_audit_context(request),
+                        )
                 messages.success(request, f'Bulk topup berhasil diproses: {len(rows)} baris.')
                 return redirect('topup_bulk_admin')
             except Exception as exc:
@@ -738,6 +768,7 @@ def withdrawal_page(request):
                     member_password=request.POST.get('member_password_confirm', ''),
                     created_by=request.user,
                     note=note,
+                    audit_context=build_audit_context(request),
                 )
                 messages.success(request, f'Tarik deposit berhasil diproses. No transaksi: {wd.withdrawal_number}.')
                 return redirect('member_withdrawal')
@@ -772,7 +803,12 @@ def withdrawal_reverse_action(request, uuid):
     if request.method == 'POST':
         note = request.POST.get('note', '').strip()
         try:
-            reverse_withdrawal(withdrawal=wd, admin_user=request.user, note=note)
+            reverse_withdrawal(
+                withdrawal=wd,
+                admin_user=request.user,
+                note=note,
+                audit_context=build_audit_context(request),
+            )
             messages.warning(request, 'Withdrawal berhasil direversal.')
         except Exception as exc:
             messages.error(request, _exc_message(exc))

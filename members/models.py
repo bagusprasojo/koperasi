@@ -226,3 +226,70 @@ class MemberWithdrawal(BaseModel):
 
     def __str__(self):
         return f'Withdrawal {self.member.full_name} {self.amount}'
+
+
+class MemberDepositAuditLog(BaseModel):
+    ACTION_TOPUP_REQUEST = 'topup_request'
+    ACTION_TOPUP_APPROVE = 'topup_approve'
+    ACTION_TOPUP_REJECT = 'topup_reject'
+    ACTION_ADMIN_TOPUP = 'admin_topup'
+    ACTION_BULK_TOPUP = 'bulk_topup'
+    ACTION_TOPUP_REVERSAL = 'topup_reversal'
+    ACTION_POS_DEBIT = 'pos_debit'
+    ACTION_WITHDRAWAL = 'withdrawal'
+    ACTION_WITHDRAWAL_REVERSAL = 'withdrawal_reversal'
+    ACTION_CHOICES = (
+        (ACTION_TOPUP_REQUEST, 'Topup Request'),
+        (ACTION_TOPUP_APPROVE, 'Topup Approve'),
+        (ACTION_TOPUP_REJECT, 'Topup Reject'),
+        (ACTION_ADMIN_TOPUP, 'Admin Topup'),
+        (ACTION_BULK_TOPUP, 'Bulk Topup'),
+        (ACTION_TOPUP_REVERSAL, 'Topup Reversal'),
+        (ACTION_POS_DEBIT, 'POS Debit'),
+        (ACTION_WITHDRAWAL, 'Withdrawal'),
+        (ACTION_WITHDRAWAL_REVERSAL, 'Withdrawal Reversal'),
+    )
+
+    action = models.CharField(max_length=40, choices=ACTION_CHOICES, db_index=True)
+    member = models.ForeignKey(Member, on_delete=models.PROTECT, related_name='deposit_audit_logs')
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='member_deposit_audit_logs',
+    )
+    ledger = models.ForeignKey(
+        MemberLedger,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    topup = models.ForeignKey(
+        MemberTopUp,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    withdrawal = models.ForeignKey(
+        MemberWithdrawal,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    balance_before = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    balance_after = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True, default='')
+    note = models.CharField(max_length=255, blank=True, default='')
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.member.full_name} {self.action} {self.amount}'

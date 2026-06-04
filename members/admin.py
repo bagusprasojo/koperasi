@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Member, MemberCard, MemberWallet, MemberTopUp, MemberLedger, MemberWithdrawal
+from .models import Member, MemberCard, MemberDepositAuditLog, MemberWallet, MemberTopUp, MemberLedger, MemberWithdrawal
 
 
 @admin.register(Member)
@@ -40,3 +40,36 @@ class MemberWithdrawalAdmin(admin.ModelAdmin):
     list_display = ['withdrawal_number', 'member', 'amount', 'status', 'created_by', 'created_at']
     search_fields = ['withdrawal_number', 'member__full_name', 'member__code', 'note']
     list_filter = ['status']
+
+
+@admin.register(MemberDepositAuditLog)
+class MemberDepositAuditLogAdmin(admin.ModelAdmin):
+    list_display = ['created_at', 'action', 'member', 'amount', 'balance_before', 'balance_after', 'actor', 'ip_address']
+    search_fields = [
+        'member__full_name',
+        'member__code',
+        'actor__username',
+        'note',
+        'ledger__ledger_key',
+        'topup__topup_number',
+        'withdrawal__withdrawal_number',
+    ]
+    list_filter = ['action', 'created_at']
+    readonly_fields = [
+        'uuid',
+        'created_at',
+        'updated_at',
+        'action',
+        'member',
+        'actor',
+        'ledger',
+        'topup',
+        'withdrawal',
+        'amount',
+        'balance_before',
+        'balance_after',
+        'ip_address',
+        'user_agent',
+        'note',
+        'metadata',
+    ]

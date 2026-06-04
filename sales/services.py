@@ -191,6 +191,7 @@ def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number
                 amount=p['amount'],
                 reference_code=sale.sale_number,
                 description='Pembayaran POS',
+                actor=user,
             )
             reference = card_number
         elif p['method'] == SalePayment.METHOD_CASH:
