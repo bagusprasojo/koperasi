@@ -32,6 +32,10 @@ def _generate_withdrawal_number(prefix='WDR'):
     return f'{prefix}-{timezone.now().strftime("%Y%m%d")}-{uuid4().hex[:8].upper()}'
 
 
+def _ledger_key(prefix: str, value) -> str:
+    return f'{prefix}:{value}'
+
+
 def _ensure_not_closed_today():
     today = timezone.localdate()
     if DailyClosing.objects.filter(close_date=today, is_locked=True).exists():
@@ -70,12 +74,14 @@ def _apply_credit(member: Member, amount: Decimal, topup: MemberTopUp, descripti
         amount=amount,
         balance_before=before,
         balance_after=after,
+        ledger_key=_ledger_key('TOPUP', topup.id),
         description=description,
     )
 
 
 @transaction.atomic
 def approve_topup(topup: MemberTopUp, validated_by, validation_note: str = '') -> MemberTopUp:
+    topup = MemberTopUp.objects.select_for_update().select_related('member').get(pk=topup.pk)
     if topup.status != MemberTopUp.STATUS_PENDING:
         raise ValidationError('Topup bukan status pending.')
     now = timezone.now()
@@ -94,7 +100,9 @@ def approve_topup(topup: MemberTopUp, validated_by, validation_note: str = '') -
     return topup
 
 
+@transaction.atomic
 def reject_topup(topup: MemberTopUp, validated_by, validation_note: str = '') -> MemberTopUp:
+    topup = MemberTopUp.objects.select_for_update().get(pk=topup.pk)
     if topup.status != MemberTopUp.STATUS_PENDING:
         raise ValidationError('Topup bukan status pending.')
     topup.status = MemberTopUp.STATUS_REJECTED
@@ -145,6 +153,7 @@ def bulk_admin_topup(items, created_by):
 
 @transaction.atomic
 def reverse_topup(topup: MemberTopUp, admin_user, note: str = '') -> MemberTopUp:
+    topup = MemberTopUp.objects.select_for_update().select_related('member').get(pk=topup.pk)
     _ensure_not_closed_today()
     if topup.status != MemberTopUp.STATUS_APPROVED:
         raise ValidationError('Hanya topup approved yang bisa direversal.')
@@ -187,6 +196,7 @@ def reverse_topup(topup: MemberTopUp, admin_user, note: str = '') -> MemberTopUp
         amount=topup.amount,
         balance_before=before,
         balance_after=after,
+        ledger_key=_ledger_key('REV-TOPUP', topup.id),
         description=note or f'Reversal topup {topup.id}',
         reference_code=f'REV-{topup.id}',
     )
@@ -210,6 +220,10 @@ def charge_member_by_card(card_number: str, amount: Decimal, reference_code: str
         raise ValidationError('Member tidak aktif.')
 
     wallet = _get_wallet_for_update(card.member)
+    if reference_code and MemberLedger.objects.filter(
+        ledger_key=_ledger_key('POS', reference_code),
+    ).exists():
+        raise ValidationError('Pembayaran deposit dengan referensi ini sudah pernah diproses.')
     before = wallet.balance
     if before < amount:
         raise ValidationError('Saldo member tidak mencukupi.')
@@ -225,6 +239,7 @@ def charge_member_by_card(card_number: str, amount: Decimal, reference_code: str
         balance_before=before,
         balance_after=after,
         reference_code=reference_code,
+        ledger_key=_ledger_key('POS', reference_code) if reference_code else _ledger_key('POS', uuid4().hex),
         description=description or 'Pembayaran belanja member',
     )
 
@@ -267,6 +282,7 @@ def create_admin_withdrawal(member: Member, amount: Decimal, member_password: st
         balance_before=before,
         balance_after=after,
         reference_code=wd.withdrawal_number,
+        ledger_key=_ledger_key('WITHDRAWAL', wd.id),
         description=note or 'Penarikan deposit oleh admin',
     )
     return wd
@@ -274,6 +290,7 @@ def create_admin_withdrawal(member: Member, amount: Decimal, member_password: st
 
 @transaction.atomic
 def reverse_withdrawal(withdrawal: MemberWithdrawal, admin_user, note: str = '') -> MemberWithdrawal:
+    withdrawal = MemberWithdrawal.objects.select_for_update().select_related('member').get(pk=withdrawal.pk)
     _ensure_not_closed_today()
     if withdrawal.status != MemberWithdrawal.STATUS_APPROVED:
         raise ValidationError('Hanya withdrawal approved yang bisa direversal.')
@@ -305,6 +322,7 @@ def reverse_withdrawal(withdrawal: MemberWithdrawal, admin_user, note: str = '')
         balance_before=before,
         balance_after=after,
         reference_code=reversal.withdrawal_number,
+        ledger_key=_ledger_key('REV-WITHDRAWAL', withdrawal.id),
         description=note or f'Reversal withdrawal {withdrawal.withdrawal_number}',
     )
 

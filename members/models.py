@@ -159,25 +159,26 @@ class MemberLedger(BaseModel):
         blank=True,
         related_name='ledger_entries',
     )
-    topup = models.ForeignKey(
+    topup = models.OneToOneField(
         MemberTopUp,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='ledger_entries',
+        related_name='ledger_entry',
     )
-    withdrawal = models.ForeignKey(
+    withdrawal = models.OneToOneField(
         'MemberWithdrawal',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='ledger_entries',
+        related_name='ledger_entry',
     )
     txn_type = models.CharField(max_length=20, choices=TXN_TYPE_CHOICES)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     balance_before = models.DecimalField(max_digits=14, decimal_places=2)
     balance_after = models.DecimalField(max_digits=14, decimal_places=2)
     reference_code = models.CharField(max_length=100, blank=True, default='')
+    ledger_key = models.CharField(max_length=120, unique=True, null=True, blank=True)
     description = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:

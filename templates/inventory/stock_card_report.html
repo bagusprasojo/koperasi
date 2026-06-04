@@ -2,19 +2,42 @@
 {% load humanize %}
 {% block title %}Kartu Stok{% endblock %}
 {% block content %}
-<div class="rounded-xl bg-white p-6 shadow-sm">
+<div class="rounded-xl bg-white p-6 shadow-sm" x-data="stockCardForm()" x-init="init()">
     <h1 class="mb-4 text-xl font-semibold">Laporan Kartu Stok per Produk</h1>
     <form method="get" class="mb-4 grid gap-2 md:grid-cols-4">
-        <select name="product_id" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <option value="">Pilih produk</option>
-            {% for p in products %}
-                <option value="{{ p.id }}" {% if selected_product and selected_product.id == p.id %}selected{% endif %}>{{ p.name }}</option>
-            {% endfor %}
-        </select>
+        <div class="relative">
+            <input type="hidden" name="product_id" :value="selectedProductId">
+            <input
+                x-ref="productInput"
+                type="text"
+                x-model="productQuery"
+                @input="filterProducts()"
+                @focus="productOpen = true"
+                @keydown.enter.prevent="pickProductByEnter()"
+                @keydown.escape="productOpen = false"
+                placeholder="Scan barcode / ketik SKU / nama produk..."
+                class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <div x-show="productOpen && filteredProducts.length" x-cloak class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-white shadow">
+                <template x-for="p in filteredProducts" :key="p.id">
+                    <button type="button" @click="pickProduct(p)" class="block w-full border-b px-3 py-2 text-left text-sm hover:bg-slate-100">
+                        <span class="font-medium" x-text="p.name"></span>
+                        <span class="text-slate-500" x-text="' | SKU: ' + p.sku + (p.barcode ? ' | BC: ' + p.barcode : '')"></span>
+                    </button>
+                </template>
+            </div>
+            <p x-show="productWarning" x-cloak class="mt-1 text-xs text-amber-700" x-text="productWarning"></p>
+        </div>
         <input type="date" name="date_from" value="{{ date_from }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
         <input type="date" name="date_to" value="{{ date_to }}" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
         <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Tampilkan</button>
     </form>
+    <div x-show="selectedProduct.id" x-cloak class="mb-4 grid gap-3 rounded-md bg-slate-50 p-4 text-sm md:grid-cols-5">
+        <div><p class="text-slate-500">Produk</p><p class="font-semibold" x-text="selectedProduct.name"></p></div>
+        <div><p class="text-slate-500">SKU</p><p class="font-semibold" x-text="selectedProduct.sku || '-'"></p></div>
+        <div><p class="text-slate-500">Barcode</p><p class="font-semibold" x-text="selectedProduct.barcode || '-'"></p></div>
+        <div><p class="text-slate-500">Satuan</p><p class="font-semibold" x-text="selectedProduct.unit || '-'"></p></div>
+        <div><p class="text-slate-500">Stok Saat Ini</p><p class="font-semibold" x-text="selectedProduct.stock"></p></div>
+    </div>
     {% if selected_product %}
     <div class="overflow-x-auto">
         <table class="min-w-full text-left text-sm">
@@ -40,4 +63,67 @@
     </div>
     {% endif %}
 </div>
+<script>
+function stockCardForm() {
+    const rawProducts = JSON.parse(document.getElementById('stock-card-products-json').textContent || '[]');
+    const products = Array.isArray(rawProducts) ? rawProducts : JSON.parse(rawProducts || '[]');
+    return {
+        products,
+        selectedProductId: '',
+        selectedProduct: {},
+        productQuery: '',
+        productOpen: false,
+        productWarning: '',
+        filteredProducts: products,
+        init() {
+            const selectedId = '{{ selected_product.id|default:"" }}';
+            if (selectedId) {
+                const selected = this.products.find(p => p.id === selectedId);
+                if (selected) this.pickProduct(selected);
+            }
+            this.$nextTick(() => this.$refs.productInput.focus());
+        },
+        filterProducts() {
+            const q = (this.productQuery || '').trim().toLowerCase();
+            this.productWarning = '';
+            this.selectedProductId = '';
+            this.selectedProduct = {};
+            this.filteredProducts = this.products.filter(p =>
+                (p.name || '').toLowerCase().includes(q) ||
+                (p.sku || '').toLowerCase().includes(q) ||
+                (p.barcode || '').toLowerCase().includes(q)
+            );
+            this.productOpen = true;
+        },
+        pickProduct(p) {
+            this.selectedProductId = p.id;
+            this.selectedProduct = p;
+            this.productQuery = `${p.name} (${p.sku})`;
+            this.productWarning = '';
+            this.productOpen = false;
+        },
+        pickProductByEnter() {
+            const q = (this.productQuery || '').trim();
+            if (!q) return;
+            const needle = q.toLowerCase();
+            const exact = this.products.find(p => (p.barcode || '').toLowerCase() === needle)
+                || this.products.find(p => (p.sku || '').toLowerCase() === needle)
+                || this.products.find(p => (p.name || '').toLowerCase() === needle);
+            if (exact) {
+                this.pickProduct(exact);
+                return;
+            }
+            if (this.filteredProducts.length === 1) {
+                this.pickProduct(this.filteredProducts[0]);
+                return;
+            }
+            this.productWarning = this.filteredProducts.length
+                ? 'Pilih salah satu produk dari daftar hasil pencarian.'
+                : `Produk tidak ditemukan untuk input "${q}".`;
+            this.productOpen = this.filteredProducts.length > 0;
+        }
+    };
+}
+</script>
+{{ products_json|json_script:"stock-card-products-json" }}
 {% endblock %}

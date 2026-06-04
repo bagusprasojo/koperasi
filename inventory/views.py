@@ -903,7 +903,7 @@ def daily_closing_report(request):
 
 @role_required('admin_toko', 'pembelian', 'kasir')
 def stock_card_report(request):
-    products = Product.objects.order_by('name')
+    products = Product.objects.select_related('unit').order_by('name')
     product_id = request.GET.get('product_id', '').strip()
     date_from = request.GET.get('date_from', '').strip()
     date_to = request.GET.get('date_to', '').strip()
@@ -922,6 +922,19 @@ def stock_card_report(request):
         'inventory/stock_card_report.html',
         {
             'products': products,
+            'products_json': _to_json_payload(
+                [
+                    {
+                        'id': str(p.id),
+                        'name': p.name,
+                        'sku': p.sku,
+                        'barcode': p.barcode or '',
+                        'unit': p.unit.name if p.unit else '-',
+                        'stock': p.stock,
+                    }
+                    for p in products
+                ]
+            ),
             'selected_product': selected_product,
             'ledgers': ledgers,
             'date_from': date_from,
