@@ -4,6 +4,8 @@ from . import views
 
 urlpatterns = [
     path('pos/', views.pos_page, name='pos_page'),
+    path('reports/profit-loss/', views.profit_loss_report, name='profit_loss_report'),
+    path('reports/profit-loss/export/pdf/', views.profit_loss_report_export_pdf, name='profit_loss_report_export_pdf'),
     path('reports/daily-summary/', views.sales_daily_summary, name='sales_daily_summary'),
     path('reports/daily-summary/<str:tx_date>/', views.sales_daily_summary_detail, name='sales_daily_summary_detail'),
     path('reports/sale/<str:sale_number>/', views.sales_transaction_detail, name='sales_transaction_detail'),

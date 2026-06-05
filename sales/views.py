@@ -1,6 +1,7 @@
 import json
 import csv
-from datetime import timedelta
+from calendar import monthrange
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -12,7 +13,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 from django.utils import timezone
 
-from inventory.models import Product
+from inventory.models import InventoryTransaction, Product, StockLedger
 from core.decorators import role_required
 
 from .services import build_price_preview, checkout_pos, get_default_member, search_members
@@ -45,6 +46,140 @@ def _parse_date_range(request):
     if date_from > date_to:
         raise ValidationError('Periode tidak valid: tanggal awal lebih besar dari tanggal akhir.')
     return date_from, date_to
+
+
+def _parse_month_period(request):
+    today = timezone.localdate()
+    try:
+        selected_month = int(request.GET.get('month') or today.month)
+        selected_year = int(request.GET.get('year') or today.year)
+        period_start = date(selected_year, selected_month, 1)
+    except (TypeError, ValueError):
+        selected_month = today.month
+        selected_year = today.year
+        period_start = date(selected_year, selected_month, 1)
+    period_end = date(selected_year, selected_month, monthrange(selected_year, selected_month)[1])
+    return selected_month, selected_year, period_start, period_end
+
+
+def _month_options():
+    labels = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    ]
+    return [{'value': i, 'label': labels[i - 1]} for i in range(1, 13)]
+
+
+def _money(value):
+    return value or Decimal('0.00')
+
+
+def _profit_loss_data(request):
+    selected_month, selected_year, period_start, period_end = _parse_month_period(request)
+    sales_total = _money(
+        Sale.objects
+        .filter(created_at__date__gte=period_start, created_at__date__lte=period_end)
+        .aggregate(v=Sum('total'))['v']
+    )
+    cogs_sold = _money(
+        StockLedger.objects
+        .filter(
+            tx_date__gte=period_start,
+            tx_date__lte=period_end,
+            tx__tx_type=InventoryTransaction.TYPE_POS_SALE,
+        )
+        .aggregate(v=Sum('value_out'))['v']
+    )
+    internal_used = _money(
+        StockLedger.objects
+        .filter(
+            tx_date__gte=period_start,
+            tx_date__lte=period_end,
+            tx__tx_type=InventoryTransaction.TYPE_INTERNAL_USED,
+        )
+        .aggregate(v=Sum('value_out'))['v']
+    )
+    stock_opname_minus = _money(
+        StockLedger.objects
+        .filter(
+            tx_date__gte=period_start,
+            tx_date__lte=period_end,
+            tx__tx_type=InventoryTransaction.TYPE_STOCK_OPNAME,
+            qty_out__gt=0,
+        )
+        .aggregate(v=Sum('value_out'))['v']
+    )
+    gross_profit = sales_total - cogs_sold
+    temporary_operating_profit = gross_profit - internal_used - stock_opname_minus
+    rows = [
+        {'section': 'Pendapatan Penjualan', 'label': 'Total Omzet POS', 'amount': sales_total, 'level': 1, 'sign': 'positive'},
+        {'section': 'HPP', 'label': 'HPP Barang Terjual', 'amount': cogs_sold, 'level': 1, 'sign': 'negative'},
+        {'section': '', 'label': 'Laba Kotor', 'amount': gross_profit, 'level': 0, 'sign': 'total'},
+        {'section': 'Penyesuaian Operasional', 'label': 'Internal Used', 'amount': internal_used, 'level': 1, 'sign': 'negative'},
+        {'section': '', 'label': 'Selisih Stock Opname Minus', 'amount': stock_opname_minus, 'level': 1, 'sign': 'negative'},
+        {'section': '', 'label': 'Laba Operasional Sementara', 'amount': temporary_operating_profit, 'level': 0, 'sign': 'grand_total'},
+    ]
+    return {
+        'selected_month': selected_month,
+        'selected_year': selected_year,
+        'period_start': period_start,
+        'period_end': period_end,
+        'rows': rows,
+        'summary': {
+            'sales_total': sales_total,
+            'cogs_sold': cogs_sold,
+            'gross_profit': gross_profit,
+            'internal_used': internal_used,
+            'stock_opname_minus': stock_opname_minus,
+            'temporary_operating_profit': temporary_operating_profit,
+        },
+    }
+
+
+def _format_money(value):
+    return f'{Decimal(value or 0):,.2f}'
+
+
+def _pdf_escape(text):
+    return str(text).replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+
+
+def _simple_text_pdf(lines):
+    page_width = 595
+    page_height = 842
+    left = 48
+    top = 790
+    line_height = 15
+    commands = ['BT', '/F1 10 Tf', f'{left} {top} Td']
+    for idx, line in enumerate(lines):
+        if idx:
+            commands.append(f'0 -{line_height} Td')
+        commands.append(f'({_pdf_escape(line)}) Tj')
+    commands.append('ET')
+    stream = '\n'.join(commands)
+    objects = [
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [4 0 R] /Count 1 >>',
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>',
+        (
+            f'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_width} {page_height}] '
+            f'/Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>'
+        ),
+        f'<< /Length {len(stream.encode("latin-1", "replace"))} >>\nstream\n{stream}\nendstream',
+    ]
+    content = bytearray(b'%PDF-1.4\n')
+    offsets = [0]
+    for idx, body in enumerate(objects, start=1):
+        offsets.append(len(content))
+        content.extend(f'{idx} 0 obj\n'.encode('latin-1'))
+        content.extend(body.encode('latin-1', 'replace'))
+        content.extend(b'\nendobj\n')
+    xref_offset = len(content)
+    content.extend(f'xref\n0 {len(objects) + 1}\n0000000000 65535 f \n'.encode('latin-1'))
+    for offset in offsets[1:]:
+        content.extend(f'{offset:010d} 00000 n \n'.encode('latin-1'))
+    content.extend(f'trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n'.encode('latin-1'))
+    return bytes(content)
 
 
 @role_required('kasir', 'admin_toko')
@@ -188,6 +323,56 @@ def pos_dispatch_pending_print_jobs_api(request):
         sent, err = dispatch_receipt_print_job(job)
         result.append({'job_id': job.job_id, 'sent': sent, 'error': err})
     return JsonResponse({'success': True, 'data': result})
+
+
+@role_required('admin_toko')
+def profit_loss_report(request):
+    data = _profit_loss_data(request)
+    today = timezone.localdate()
+    return render(
+        request,
+        'sales/profit_loss_report.html',
+        {
+            **data,
+            'month_options': _month_options(),
+            'year_options': range(today.year - 5, today.year + 2),
+        },
+    )
+
+
+@role_required('admin_toko')
+def profit_loss_report_export_pdf(request):
+    data = _profit_loss_data(request)
+    lines = [
+        'LAPORAN LABA RUGI OPERASIONAL',
+        f'Periode: {data["period_start"].strftime("%d-%m-%Y")} s/d {data["period_end"].strftime("%d-%m-%Y")}',
+        '',
+    ]
+    current_section = None
+    for row in data['rows']:
+        if row['section'] and row['section'] != current_section:
+            current_section = row['section']
+            lines.append(row['section'])
+        amount = _format_money(row['amount'])
+        if row['sign'] == 'negative':
+            amount = f'({_format_money(row["amount"])})'
+        label = f'    {row["label"]}' if row['level'] else row['label']
+        lines.append(f'{label:<42} {amount:>18}')
+        if row['sign'] in ['total', 'grand_total']:
+            lines.append('')
+    lines.extend(
+        [
+            '',
+            'Catatan:',
+            '- Laporan ini belum memasukkan biaya operasional umum, pajak, retur, dan pendapatan lain-lain.',
+            '- Stock opname plus tidak dimasukkan sebagai pendapatan pada versi konservatif ini.',
+        ]
+    )
+    pdf_bytes = _simple_text_pdf(lines)
+    filename = f'laba_rugi_operasional_{data["selected_year"]}_{data["selected_month"]:02d}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 @role_required('admin_toko', 'kasir')

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Laba Rugi Operasional{% endblock %}
+{% block content %}
+<div class="space-y-4">
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <h1 class="mb-4 text-xl font-semibold">Laporan Laba Rugi Operasional</h1>
+        <form method="get" class="grid gap-2 md:grid-cols-4">
+            <select name="month" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+                {% for m in month_options %}
+                    <option value="{{ m.value }}" {% if m.value == selected_month %}selected{% endif %}>{{ m.label }}</option>
+                {% endfor %}
+            </select>
+            <select name="year" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+                {% for y in year_options %}
+                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Filter</button>
+            <a href="{% url 'profit_loss_report_export_pdf' %}?month={{ selected_month }}&year={{ selected_year }}" class="rounded-md border border-emerald-600 px-3 py-2 text-center text-sm font-medium text-emerald-700 hover:bg-emerald-50">Export PDF</a>
+        </form>
+    </div>
+
+    <div class="grid gap-3 md:grid-cols-4">
+        <div class="rounded-xl bg-white p-4 shadow-sm">
+            <p class="text-xs text-slate-500">Periode</p>
+            <p class="text-lg font-semibold">{{ period_start|date:"M Y" }}</p>
+        </div>
+        <div class="rounded-xl bg-white p-4 shadow-sm">
+            <p class="text-xs text-slate-500">Total Omzet POS</p>
+            <p class="text-lg font-semibold">{{ summary.sales_total|floatformat:2|intcomma }}</p>
+        </div>
+        <div class="rounded-xl bg-white p-4 shadow-sm">
+            <p class="text-xs text-slate-500">Laba Kotor</p>
+            <p class="text-lg font-semibold">{{ summary.gross_profit|floatformat:2|intcomma }}</p>
+        </div>
+        <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
+            <p class="text-xs text-sky-700">Laba Operasional Sementara</p>
+            <p class="text-lg font-semibold text-sky-900">{{ summary.temporary_operating_profit|floatformat:2|intcomma }}</p>
+        </div>
+    </div>
+
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+        <div class="mb-5">
+            <h2 class="text-lg font-semibold">Periode {{ period_start|date:"d M Y" }} - {{ period_end|date:"d M Y" }}</h2>
+            <p class="mt-1 text-sm text-slate-500">Versi konservatif: stock opname plus tidak dimasukkan sebagai pendapatan.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <tbody>
+                    <tr class="border-b bg-slate-50">
+                        <td colspan="2" class="py-2 font-semibold">Pendapatan Penjualan</td>
+                    </tr>
+                    <tr class="border-b">
+                        <td class="px-3 py-2">Total Omzet POS</td>
+                        <td class="px-3 py-2 text-right">{{ summary.sales_total|floatformat:2|intcomma }}</td>
+                    </tr>
+                    <tr class="border-b bg-slate-50">
+                        <td colspan="2" class="py-2 font-semibold">HPP</td>
+                    </tr>
+                    <tr class="border-b">
+                        <td class="px-3 py-2">HPP Barang Terjual</td>
+                        <td class="px-3 py-2 text-right text-red-700">({{ summary.cogs_sold|floatformat:2|intcomma }})</td>
+                    </tr>
+                    <tr class="border-b bg-slate-50">
+                        <td class="py-2 font-semibold">Laba Kotor</td>
+                        <td class="py-2 text-right font-semibold">{{ summary.gross_profit|floatformat:2|intcomma }}</td>
+                    </tr>
+                    <tr class="border-b bg-slate-50">
+                        <td colspan="2" class="py-2 font-semibold">Penyesuaian Operasional</td>
+                    </tr>
+                    <tr class="border-b">
+                        <td class="px-3 py-2">Internal Used</td>
+                        <td class="px-3 py-2 text-right text-red-700">({{ summary.internal_used|floatformat:2|intcomma }})</td>
+                    </tr>
+                    <tr class="border-b">
+                        <td class="px-3 py-2">Selisih Stock Opname Minus</td>
+                        <td class="px-3 py-2 text-right text-red-700">({{ summary.stock_opname_minus|floatformat:2|intcomma }})</td>
+                    </tr>
+                    <tr class="border-b bg-slate-50">
+                        <td class="py-2 font-semibold">Laba Operasional Sementara</td>
+                        <td class="py-2 text-right font-semibold">{{ summary.temporary_operating_profit|floatformat:2|intcomma }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
