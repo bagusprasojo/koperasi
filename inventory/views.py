@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 import json
 from datetime import date, timedelta
 
-from core.decorators import role_required
+from core.decorators import app_permission_required
 from .models import Category, DailyClosing, InventoryTransaction, InventoryTransactionItem, Product, ProductPriceTier, Supplier, Unit
 from .services import (
     close_daily,
@@ -269,7 +269,7 @@ def _default_tier_rows():
     ]
 
 
-@role_required('admin_toko', 'kasir', 'pembelian')
+@app_permission_required('core.view_product')
 def product_list(request):
     query = request.GET.get('q', '').strip()
     products = Product.objects.select_related('category', 'unit').prefetch_related('price_tiers').order_by('name')
@@ -292,7 +292,7 @@ def product_list(request):
     )
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_product')
 def product_create(request):
     error_message = ''
     categories = Category.objects.order_by('name')
@@ -378,7 +378,7 @@ def product_create(request):
     )
 
 
-@role_required('admin_toko', 'kasir', 'pembelian')
+@app_permission_required('core.view_product')
 def product_detail(request, uuid):
     product = get_object_or_404(
         Product.objects.select_related('category', 'unit').prefetch_related('price_tiers'),
@@ -387,7 +387,7 @@ def product_detail(request, uuid):
     return render(request, 'inventory/product_detail.html', {'product': product})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_product')
 def product_edit(request, uuid):
     product = get_object_or_404(Product.objects.prefetch_related('price_tiers'), uuid=uuid)
     categories = Category.objects.order_by('name')
@@ -502,7 +502,7 @@ def product_edit(request, uuid):
     )
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_product')
 def product_delete(request, uuid):
     product = get_object_or_404(Product, uuid=uuid)
     if request.method == 'POST':
@@ -517,7 +517,7 @@ def product_delete(request, uuid):
     return redirect('product_list')
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_purchase')
 def purchase_page(request):
     query = request.GET.get('q', '').strip()
     date_from = request.GET.get('date_from', '').strip()
@@ -582,7 +582,7 @@ def _build_purchase_initial_rows_from_request(request):
     return rows
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_purchase')
 def purchase_create(request):
     products = Product.objects.select_related('unit').order_by('name')
     suppliers = Supplier.objects.filter(is_active=True).order_by('name')
@@ -649,7 +649,7 @@ def purchase_create(request):
     )
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_purchase')
 def purchase_detail(request, uuid):
     tx = get_object_or_404(
         InventoryTransaction.objects.select_related('supplier').prefetch_related('items__product'),
@@ -660,7 +660,7 @@ def purchase_detail(request, uuid):
     return render(request, 'inventory/purchase_detail.html', {'tx': tx, 'can_modify': can_modify})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_purchase')
 def purchase_edit(request, uuid):
     tx = get_object_or_404(
         InventoryTransaction.objects.select_related('supplier').prefetch_related('items__product'),
@@ -752,7 +752,7 @@ def purchase_edit(request, uuid):
     )
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_purchase')
 def purchase_delete(request, uuid):
     tx = get_object_or_404(
         InventoryTransaction.objects.select_related('supplier').prefetch_related('items__product'),
@@ -771,7 +771,7 @@ def purchase_delete(request, uuid):
     return redirect('purchase_page')
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_internal_used')
 def internal_used_page(request):
     products = Product.objects.order_by('name')
     if request.method == 'POST':
@@ -787,7 +787,7 @@ def internal_used_page(request):
     return render(request, 'inventory/internal_used_page.html', {'products': products})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_stock_opname')
 def stock_opname_page(request):
     products = Product.objects.order_by('name')
     if request.method == 'POST':
@@ -803,7 +803,7 @@ def stock_opname_page(request):
     return render(request, 'inventory/stock_opname_page.html', {'products': products})
 
 
-@role_required('admin_toko')
+@app_permission_required('core.manage_daily_closing')
 def daily_closing_page(request):
     if request.method == 'POST':
         try:
@@ -832,7 +832,7 @@ def daily_closing_page(request):
     )
 
 
-@role_required('admin_toko')
+@app_permission_required('core.manage_daily_closing')
 def daily_closing_report(request):
     close_date = request.GET.get('close_date', '').strip()
     closing = None
@@ -901,7 +901,7 @@ def daily_closing_report(request):
     )
 
 
-@role_required('admin_toko', 'pembelian', 'kasir')
+@app_permission_required('core.access_stock_card_report')
 def stock_card_report(request):
     products = Product.objects.select_related('unit').order_by('name')
     product_id = request.GET.get('product_id', '').strip()
@@ -943,12 +943,12 @@ def stock_card_report(request):
     )
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.access_reorder_alert_report')
 def reorder_alert_page(request):
     return render(request, 'inventory/reorder_alert_page.html', {'products': low_stock_products()})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_category')
 def category_list(request):
     query = request.GET.get('q', '').strip()
     categories = Category.objects.order_by('name')
@@ -964,7 +964,7 @@ def category_list(request):
     )
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_category')
 def category_create(request):
     error_message = ''
     if request.method == 'POST':
@@ -982,13 +982,13 @@ def category_create(request):
     )
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_category')
 def category_detail(request, uuid):
     category = get_object_or_404(Category, uuid=uuid)
     return render(request, 'inventory/category_detail.html', {'category': category})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_category')
 def category_edit(request, uuid):
     category = get_object_or_404(Category, uuid=uuid)
     error_message = ''
@@ -1010,7 +1010,7 @@ def category_edit(request, uuid):
     )
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_category')
 def category_delete(request, uuid):
     category = get_object_or_404(Category, uuid=uuid)
     if request.method == 'POST':
@@ -1025,7 +1025,7 @@ def category_delete(request, uuid):
     return redirect('category_list')
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_unit')
 def unit_list(request):
     query = request.GET.get('q', '').strip()
     units = Unit.objects.order_by('name')
@@ -1036,7 +1036,7 @@ def unit_list(request):
     return render(request, 'inventory/unit_list.html', {'page_obj': page_obj, 'query': query})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_unit')
 def unit_create(request):
     error_message = ''
     if request.method == 'POST':
@@ -1057,13 +1057,13 @@ def unit_create(request):
     return render(request, 'inventory/unit_create.html', {'error_message': error_message})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_unit')
 def unit_detail(request, uuid):
     unit = get_object_or_404(Unit, uuid=uuid)
     return render(request, 'inventory/unit_detail.html', {'unit': unit})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_unit')
 def unit_edit(request, uuid):
     unit = get_object_or_404(Unit, uuid=uuid)
     next_url = _get_safe_next_url(request)
@@ -1095,7 +1095,7 @@ def unit_edit(request, uuid):
     )
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_unit')
 def unit_delete(request, uuid):
     unit = get_object_or_404(Unit, uuid=uuid)
     if request.method == 'POST':
@@ -1108,7 +1108,7 @@ def unit_delete(request, uuid):
     return redirect('unit_list')
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_supplier')
 def supplier_list(request):
     query = request.GET.get('q', '').strip()
     suppliers = Supplier.objects.order_by('name')
@@ -1125,7 +1125,7 @@ def supplier_list(request):
     return render(request, 'inventory/supplier_list.html', {'page_obj': page_obj, 'query': query})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_supplier')
 def supplier_create(request):
     error_message = ''
     if request.method == 'POST':
@@ -1164,13 +1164,13 @@ def supplier_create(request):
     return render(request, 'inventory/supplier_create.html', {'error_message': error_message})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_supplier')
 def supplier_detail(request, uuid):
     supplier = get_object_or_404(Supplier, uuid=uuid)
     return render(request, 'inventory/supplier_detail.html', {'supplier': supplier})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_supplier')
 def supplier_edit(request, uuid):
     supplier = get_object_or_404(Supplier, uuid=uuid)
     next_url = _get_safe_next_url(request)
@@ -1214,7 +1214,7 @@ def supplier_edit(request, uuid):
     )
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_supplier')
 def supplier_delete(request, uuid):
     supplier = get_object_or_404(Supplier, uuid=uuid)
     if request.method == 'POST':
@@ -1225,3 +1225,6 @@ def supplier_delete(request, uuid):
         except Exception:
             messages.error(request, 'Supplier tidak bisa dihapus karena sudah dipakai transaksi.')
     return redirect('supplier_list')
+
+
+

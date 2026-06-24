@@ -40,58 +40,64 @@
                     <button class="rounded-md border px-3 py-1 text-sm md:hidden" @click="open = !open">Menu</button>
                     <nav class="hidden items-center gap-3 md:flex">
                         <a href="{% url 'dashboard' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Dashboard</a>
-                        {% if is_member_role %}
-                            <a href="{% url 'member_topup_request' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Topup Saya</a>
-                            <a href="{% url 'member_my_balance' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Cek Saldo</a>
-                            <a href="{% url 'member_my_ledger' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Mutasi Saya</a>
-                            <a href="{% url 'member_my_purchases' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Riwayat Belanja</a>
+                        {% if has_member_menu %}
+                            {% if can_member_topup_request %}<a href="{% url 'member_topup_request' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Topup Saya</a>{% endif %}
+                            {% if can_member_balance %}<a href="{% url 'member_my_balance' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Cek Saldo</a>{% endif %}
+                            {% if can_member_ledger %}<a href="{% url 'member_my_ledger' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Mutasi Saya</a>{% endif %}
+                            {% if can_member_purchases %}<a href="{% url 'member_my_purchases' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Riwayat Belanja</a>{% endif %}
                         {% endif %}
-                        {% if is_admin_toko_role or is_kasir_role or is_pembelian_role %}
+                        {% if has_backoffice_menu %}
+                            {% if has_master_menu %}
                             <div class="relative" x-data="{ mOpen: false }">
                                 <button @click="mOpen=!mOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Master</button>
                                 <div x-show="mOpen" x-cloak @click.outside="mOpen=false" class="absolute left-0 z-40 mt-1 w-52 rounded-md border bg-white p-1 shadow">
-                                    <a href="{% url 'category_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kategori</a>
-                                    <a href="{% url 'unit_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Satuan</a>
-                                    <a href="{% url 'supplier_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Supplier</a>
-                                    <a href="{% url 'product_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Produk</a>
-                                    <a href="{% url 'member_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Member</a>
-                                    <a href="{% url 'card_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Member</a>
+                                    {% if can_category %}<a href="{% url 'category_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kategori</a>{% endif %}
+                                    {% if can_unit %}<a href="{% url 'unit_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Satuan</a>{% endif %}
+                                    {% if can_supplier %}<a href="{% url 'supplier_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Supplier</a>{% endif %}
+                                    {% if can_product %}<a href="{% url 'product_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Produk</a>{% endif %}
+                                    {% if can_member_master %}<a href="{% url 'member_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Member</a>{% endif %}
+                                    {% if can_member_card %}<a href="{% url 'card_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Member</a>{% endif %}
                                 </div>
                             </div>
+                            {% endif %}
+                            {% if has_transaction_menu %}
                             <div class="relative" x-data="{ tOpen: false }">
                                 <button @click="tOpen=!tOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Transaksi</button>
                                 <div x-show="tOpen" x-cloak @click.outside="tOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
-                                    <a href="{% url 'pos_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kasir (POS)</a>
-                                    <a href="{% url 'purchase_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kulakan</a>
-                                    <a href="{% url 'internal_used_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Internal Used</a>
-                                    <a href="{% url 'stock_opname_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Stock Opname</a>
-                                    {% if is_admin_toko_role %}
-                                        <a href="{% url 'member_topup' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Topup Admin</a>
-                                        <a href="{% url 'member_withdrawal' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Tarik Deposit</a>
-                                        <a href="{% url 'daily_closing_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Tutup Harian</a>
-                                    {% endif %}
+                                    {% if can_pos %}<a href="{% url 'pos_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kasir (POS)</a>{% endif %}
+                                    {% if can_purchase %}<a href="{% url 'purchase_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kulakan</a>{% endif %}
+                                    {% if can_internal_used %}<a href="{% url 'internal_used_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Internal Used</a>{% endif %}
+                                    {% if can_stock_opname %}<a href="{% url 'stock_opname_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Stock Opname</a>{% endif %}
+                                    {% if can_admin_topup %}<a href="{% url 'member_topup' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Topup Admin</a>{% endif %}
+                                    {% if can_withdrawal %}<a href="{% url 'member_withdrawal' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Tarik Deposit</a>{% endif %}
+                                    {% if can_daily_closing %}<a href="{% url 'daily_closing_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Tutup Harian</a>{% endif %}
                                 </div>
                             </div>
+                            {% endif %}
+                            {% if has_report_menu %}
                             <div class="relative" x-data="{ rOpen: false }">
                                 <button @click="rOpen=!rOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Laporan</button>
                                 <div x-show="rOpen" x-cloak @click.outside="rOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
+                                    {% if has_sales_report_menu %}
                                     <div class="relative" x-data="{ sOpen: false }">
                                         <button @click="sOpen=!sOpen" class="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm hover:bg-slate-100">
                                             <span>Penjualan</span>
                                             <span class="text-xs text-slate-500">▸</span>
                                         </button>
                                         <div x-show="sOpen" x-cloak @click.outside="sOpen=false" class="ml-2 mt-1 rounded-md border bg-white p-1">
-                                            <a href="{% url 'sales_daily_summary' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Rekap Penjualan Harian</a>
-                                            <a href="{% url 'sales_product_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Top/Bottom Produk Terjual</a>
-                                            <a href="{% url 'profit_loss_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Laba Rugi Operasional</a>
+                                            {% if can_sales_daily_summary %}<a href="{% url 'sales_daily_summary' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Rekap Penjualan Harian</a>{% endif %}
+                                            {% if can_sales_product_report %}<a href="{% url 'sales_product_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Top/Bottom Produk Terjual</a>{% endif %}
+                                            {% if can_profit_loss_report %}<a href="{% url 'profit_loss_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Laba Rugi Operasional</a>{% endif %}
                                         </div>
                                     </div>
-                                    <a href="{% url 'stock_card_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Stok</a>
-                                    <a href="{% url 'reorder_alert_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Reorder Alert</a>
-                                    <a href="{% url 'member_ledger' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Ledger Member</a>
+                                    {% endif %}
+                                    {% if can_stock_card_report %}<a href="{% url 'stock_card_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Stok</a>{% endif %}
+                                    {% if can_reorder_alert_report %}<a href="{% url 'reorder_alert_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Reorder Alert</a>{% endif %}
+                                    {% if can_member_ledger_report %}<a href="{% url 'member_ledger' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Ledger Member</a>{% endif %}
                                 </div>
                             </div>
-                            {% if is_admin_toko_role %}
+                            {% endif %}
+                            {% if can_topup_validation %}
                                 <a href="{% url 'topup_validation_list' %}?status=pending" class="rounded-md bg-slate-100 px-3 py-2 text-sm hover:bg-slate-200">
                                     Validasi Topup
                                     {% if pending_topup_count > 0 %}
@@ -109,39 +115,45 @@
                 <nav class="mx-auto max-w-7xl px-4 pb-4 md:hidden" x-show="open" x-transition>
                     <div class="grid gap-2">
                         <a href="{% url 'dashboard' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Dashboard</a>
-                        {% if is_member_role %}
-                            <a href="{% url 'member_topup_request' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Topup Saya</a>
-                            <a href="{% url 'member_my_balance' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Cek Saldo</a>
-                            <a href="{% url 'member_my_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Mutasi Saya</a>
-                            <a href="{% url 'member_my_purchases' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Riwayat Belanja</a>
+                        {% if has_member_menu %}
+                            {% if can_member_topup_request %}<a href="{% url 'member_topup_request' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Topup Saya</a>{% endif %}
+                            {% if can_member_balance %}<a href="{% url 'member_my_balance' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Cek Saldo</a>{% endif %}
+                            {% if can_member_ledger %}<a href="{% url 'member_my_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Mutasi Saya</a>{% endif %}
+                            {% if can_member_purchases %}<a href="{% url 'member_my_purchases' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Riwayat Belanja</a>{% endif %}
                         {% endif %}
-                        {% if is_admin_toko_role or is_kasir_role or is_pembelian_role %}
+                        {% if has_backoffice_menu %}
+                            {% if has_master_menu %}
                             <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Master</p>
-                            <a href="{% url 'category_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kategori</a>
-                            <a href="{% url 'unit_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Satuan</a>
-                            <a href="{% url 'supplier_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Supplier</a>
-                            <a href="{% url 'product_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Produk</a>
-                            <a href="{% url 'member_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Member</a>
-                            <a href="{% url 'card_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Member</a>
-                            <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Transaksi</p>
-                            <a href="{% url 'pos_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kasir (POS)</a>
-                            <a href="{% url 'purchase_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kulakan</a>
-                            <a href="{% url 'internal_used_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Internal Used</a>
-                            <a href="{% url 'stock_opname_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Stock Opname</a>
-                            {% if is_admin_toko_role %}
-                                <a href="{% url 'member_topup' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Topup Admin</a>
-                                <a href="{% url 'member_withdrawal' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Tarik Deposit</a>
-                                <a href="{% url 'daily_closing_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Tutup Harian</a>
+                            {% if can_category %}<a href="{% url 'category_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kategori</a>{% endif %}
+                            {% if can_unit %}<a href="{% url 'unit_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Satuan</a>{% endif %}
+                            {% if can_supplier %}<a href="{% url 'supplier_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Supplier</a>{% endif %}
+                            {% if can_product %}<a href="{% url 'product_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Produk</a>{% endif %}
+                            {% if can_member_master %}<a href="{% url 'member_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Member</a>{% endif %}
+                            {% if can_member_card %}<a href="{% url 'card_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Member</a>{% endif %}
                             {% endif %}
+                            {% if has_transaction_menu %}
+                            <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Transaksi</p>
+                            {% if can_pos %}<a href="{% url 'pos_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kasir (POS)</a>{% endif %}
+                            {% if can_purchase %}<a href="{% url 'purchase_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kulakan</a>{% endif %}
+                            {% if can_internal_used %}<a href="{% url 'internal_used_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Internal Used</a>{% endif %}
+                            {% if can_stock_opname %}<a href="{% url 'stock_opname_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Stock Opname</a>{% endif %}
+                            {% if can_admin_topup %}<a href="{% url 'member_topup' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Topup Admin</a>{% endif %}
+                            {% if can_withdrawal %}<a href="{% url 'member_withdrawal' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Tarik Deposit</a>{% endif %}
+                            {% if can_daily_closing %}<a href="{% url 'daily_closing_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Tutup Harian</a>{% endif %}
+                            {% endif %}
+                            {% if has_report_menu %}
                             <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Laporan</p>
+                            {% if has_sales_report_menu %}
                             <p class="px-2 text-xs font-semibold text-slate-500">Penjualan</p>
-                            <a href="{% url 'sales_daily_summary' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Rekap Penjualan Harian</a>
-                            <a href="{% url 'sales_product_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Top/Bottom Produk Terjual</a>
-                            <a href="{% url 'profit_loss_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Laba Rugi Operasional</a>
-                            <a href="{% url 'stock_card_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Stok</a>
-                            <a href="{% url 'reorder_alert_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Reorder Alert</a>
-                            <a href="{% url 'member_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Ledger Member</a>
-                            {% if is_admin_toko_role %}
+                            {% if can_sales_daily_summary %}<a href="{% url 'sales_daily_summary' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Rekap Penjualan Harian</a>{% endif %}
+                            {% if can_sales_product_report %}<a href="{% url 'sales_product_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Top/Bottom Produk Terjual</a>{% endif %}
+                            {% if can_profit_loss_report %}<a href="{% url 'profit_loss_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Laba Rugi Operasional</a>{% endif %}
+                            {% endif %}
+                            {% if can_stock_card_report %}<a href="{% url 'stock_card_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Stok</a>{% endif %}
+                            {% if can_reorder_alert_report %}<a href="{% url 'reorder_alert_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Reorder Alert</a>{% endif %}
+                            {% if can_member_ledger_report %}<a href="{% url 'member_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Ledger Member</a>{% endif %}
+                            {% endif %}
+                            {% if can_topup_validation %}
                                 <a href="{% url 'topup_validation_list' %}?status=pending" class="rounded-md bg-slate-100 px-3 py-2 text-sm">
                                     Validasi Topup
                                     {% if pending_topup_count > 0 %}

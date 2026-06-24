@@ -24,7 +24,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 
-from core.decorators import role_required
+from core.decorators import app_permission_required
 from .models import Member, MemberCard, MemberLedger, MemberTopUp, MemberWithdrawal
 from sales.models import Sale, SaleItem
 from .services import (
@@ -197,7 +197,7 @@ def topup_proof_file(request, uuid):
     return response
 
 
-@role_required('admin_toko', 'pembelian', 'kasir')
+@app_permission_required('core.view_member_master')
 def member_list(request):
     query = request.GET.get('q', '').strip()
     members = Member.objects.select_related('wallet').order_by('full_name')
@@ -211,7 +211,7 @@ def member_list(request):
     return render(request, 'members/member_list.html', {'page_obj': page_obj, 'query': query})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_member_master')
 def member_create(request):
     if request.method == 'POST':
         code = request.POST.get('code', '').strip().upper()
@@ -264,14 +264,14 @@ def member_create(request):
     return render(request, 'members/member_create.html')
 
 
-@role_required('admin_toko', 'pembelian', 'kasir')
+@app_permission_required('core.view_member_master')
 def member_detail(request, uuid):
     member = get_object_or_404(Member.objects.select_related('wallet'), uuid=uuid)
     wallet = get_or_create_wallet(member)
     return render(request, 'members/member_detail.html', {'member': member, 'wallet': wallet})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_member_master')
 def member_edit(request, uuid):
     member = get_object_or_404(Member, uuid=uuid)
     next_url = _safe_next_url(request)
@@ -308,7 +308,7 @@ def member_edit(request, uuid):
     return render(request, 'members/member_edit.html', {'member': member, 'next_url': next_url, 'back_url': back_url})
 
 
-@role_required('admin_toko')
+@app_permission_required('core.delete_member_master')
 def member_delete(request, uuid):
     member = get_object_or_404(Member, uuid=uuid)
     if request.method == 'POST':
@@ -324,7 +324,7 @@ def member_delete(request, uuid):
     return redirect('member_list')
 
 
-@role_required('admin_toko', 'pembelian', 'kasir')
+@app_permission_required('core.view_member_card')
 def card_list(request):
     query = request.GET.get('q', '').strip()
     cards = MemberCard.objects.select_related('member').order_by('-created_at')
@@ -334,7 +334,7 @@ def card_list(request):
     return render(request, 'members/card_list.html', {'page_obj': page_obj, 'query': query})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_member_card')
 def card_create(request):
     members = Member.objects.filter(card__isnull=True).order_by('full_name')
     if request.method == 'POST':
@@ -357,14 +357,14 @@ def card_create(request):
     return render(request, 'members/card_create.html', {'members': members})
 
 
-@role_required('admin_toko', 'pembelian', 'kasir')
+@app_permission_required('core.view_member_card')
 def card_detail(request, uuid):
     card = get_object_or_404(MemberCard.objects.select_related('member', 'member__wallet'), uuid=uuid)
     wallet = get_or_create_wallet(card.member)
     return render(request, 'members/card_detail.html', {'card': card, 'wallet': wallet})
 
 
-@role_required('admin_toko', 'pembelian')
+@app_permission_required('core.manage_member_card')
 def card_edit(request, uuid):
     card = get_object_or_404(MemberCard.objects.select_related('member'), uuid=uuid)
     next_url = _safe_next_url(request)
@@ -385,7 +385,7 @@ def card_edit(request, uuid):
     return render(request, 'members/card_edit.html', {'card': card, 'next_url': next_url, 'back_url': back_url})
 
 
-@role_required('admin_toko')
+@app_permission_required('core.delete_member_card')
 def card_delete(request, uuid):
     card = get_object_or_404(MemberCard, uuid=uuid)
     if request.method == 'POST':
@@ -395,7 +395,7 @@ def card_delete(request, uuid):
     return redirect('card_list')
 
 
-@role_required('admin_toko')
+@app_permission_required('core.admin_topup')
 def topup_page(request):
     query = request.GET.get('q', '').strip()
     members = Member.objects.order_by('full_name')
@@ -451,7 +451,7 @@ def topup_page(request):
     )
 
 
-@role_required('member')
+@app_permission_required('core.member_topup_request')
 def member_topup_request(request):
     member = getattr(request.user, 'member_profile', None)
     if not member:
@@ -486,7 +486,7 @@ def member_topup_request(request):
     return render(request, 'members/member_topup_request.html', {'member': member, 'topups': topups})
 
 
-@role_required('member')
+@app_permission_required('core.member_view_balance')
 def member_my_balance(request):
     member = getattr(request.user, 'member_profile', None)
     if not member:
@@ -496,7 +496,7 @@ def member_my_balance(request):
     return render(request, 'members/member_my_balance.html', {'member': member, 'wallet': wallet})
 
 
-@role_required('member')
+@app_permission_required('core.member_view_ledger')
 def member_my_ledger(request):
     member = getattr(request.user, 'member_profile', None)
     if not member:
@@ -530,7 +530,7 @@ def member_my_ledger(request):
     )
 
 
-@role_required('member')
+@app_permission_required('core.member_view_ledger')
 def member_my_ledger_pdf(request):
     member = getattr(request.user, 'member_profile', None)
     if not member:
@@ -577,7 +577,7 @@ def member_my_ledger_pdf(request):
     return response
 
 
-@role_required('member')
+@app_permission_required('core.member_view_purchases')
 def member_my_purchases(request):
     member = getattr(request.user, 'member_profile', None)
     if not member:
@@ -649,7 +649,7 @@ def member_my_purchases(request):
     )
 
 
-@role_required('admin_toko')
+@app_permission_required('core.validate_topup')
 def topup_validation_list(request):
     query = request.GET.get('q', '').strip()
     status = request.GET.get('status', '').strip() or MemberTopUp.STATUS_PENDING
@@ -662,7 +662,7 @@ def topup_validation_list(request):
     return render(request, 'members/topup_validation_list.html', {'page_obj': page_obj, 'query': query, 'status': status})
 
 
-@role_required('admin_toko')
+@app_permission_required('core.validate_topup')
 def topup_approve_action(request, uuid):
     topup = get_object_or_404(MemberTopUp, uuid=uuid)
     if request.method == 'POST':
@@ -680,7 +680,7 @@ def topup_approve_action(request, uuid):
     return redirect('topup_validation_list')
 
 
-@role_required('admin_toko')
+@app_permission_required('core.validate_topup')
 def topup_reject_action(request, uuid):
     topup = get_object_or_404(MemberTopUp, uuid=uuid)
     if request.method == 'POST':
@@ -698,7 +698,7 @@ def topup_reject_action(request, uuid):
     return redirect('topup_validation_list')
 
 
-@role_required('admin_toko')
+@app_permission_required('core.validate_topup')
 def topup_reverse_action(request, uuid):
     topup = get_object_or_404(MemberTopUp, uuid=uuid)
     if request.method == 'POST':
@@ -716,7 +716,7 @@ def topup_reverse_action(request, uuid):
     return redirect('topup_validation_list')
 
 
-@role_required('admin_toko')
+@app_permission_required('core.admin_topup')
 def topup_bulk_admin(request):
     preview_rows = []
     can_confirm = False
@@ -835,7 +835,7 @@ def topup_bulk_admin(request):
     )
 
 
-@role_required('admin_toko')
+@app_permission_required('core.admin_topup')
 def topup_bulk_template_csv(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="template_topup_bulk.csv"'
@@ -846,7 +846,7 @@ def topup_bulk_template_csv(request):
     return response
 
 
-@role_required('admin_toko', 'pembelian', 'kasir')
+@app_permission_required('core.access_member_ledger_report')
 def ledger_list(request):
     query = request.GET.get('q', '').strip()
     date_from = request.GET.get('date_from', '').strip()
@@ -871,7 +871,7 @@ def ledger_list(request):
     )
 
 
-@role_required('admin_toko')
+@app_permission_required('core.withdraw_deposit')
 def withdrawal_page(request):
     query = request.GET.get('q', '').strip()
     date_from = request.GET.get('date_from', '').strip()
@@ -969,13 +969,13 @@ def withdrawal_page(request):
     )
 
 
-@role_required('admin_toko')
+@app_permission_required('core.withdraw_deposit')
 def withdrawal_detail(request, uuid):
     wd = get_object_or_404(MemberWithdrawal.objects.select_related('member', 'created_by', 'reversed_by'), uuid=uuid)
     return render(request, 'members/withdrawal_detail.html', {'wd': wd})
 
 
-@role_required('admin_toko')
+@app_permission_required('core.withdraw_deposit')
 def withdrawal_reverse_action(request, uuid):
     wd = get_object_or_404(MemberWithdrawal, uuid=uuid)
     if request.method == 'POST':
@@ -991,3 +991,5 @@ def withdrawal_reverse_action(request, uuid):
         except Exception as exc:
             messages.error(request, _exc_message(exc))
     return redirect('member_withdrawal_detail', uuid=wd.uuid)
+
+

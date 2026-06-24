@@ -5,7 +5,9 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Sum, Q
 from django.db.models.functions import TruncDate
 from django.http import JsonResponse, HttpResponse
@@ -14,7 +16,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.utils import timezone
 
 from inventory.models import InventoryTransaction, Product, StockLedger
-from core.decorators import role_required
+from core.decorators import app_permission_required
 
 from .services import build_price_preview, checkout_pos, get_default_member, search_members
 from .services import (
@@ -182,7 +184,7 @@ def _simple_text_pdf(lines):
     return bytes(content)
 
 
-@role_required('kasir', 'admin_toko')
+@app_permission_required('core.use_pos')
 def pos_page(request):
     products = Product.objects.select_related('unit').filter(price_tiers__level=1).distinct().order_by('name')
     default_member = get_default_member()
@@ -206,7 +208,7 @@ def pos_page(request):
     )
 
 
-@role_required('kasir', 'admin_toko')
+@app_permission_required('core.use_pos')
 @require_GET
 def pos_member_search_api(request):
     keyword = request.GET.get('q', '').strip()
@@ -225,7 +227,7 @@ def pos_member_search_api(request):
     return JsonResponse({'success': True, 'data': data})
 
 
-@role_required('kasir', 'admin_toko')
+@app_permission_required('core.use_pos')
 @require_POST
 def pos_price_preview_api(request):
     try:
@@ -256,7 +258,7 @@ def pos_price_preview_api(request):
         return JsonResponse({'success': False, 'message': _exc_message(exc)}, status=400)
 
 
-@role_required('kasir', 'admin_toko')
+@app_permission_required('core.use_pos')
 @require_POST
 def pos_checkout_api(request):
     try:
@@ -287,7 +289,7 @@ def pos_checkout_api(request):
         return JsonResponse({'success': False, 'message': _exc_message(exc)}, status=400)
 
 
-@role_required('kasir', 'admin_toko')
+@app_permission_required('core.use_pos')
 @require_GET
 def pos_receipt_detail_api(request, sale_number):
     sale = Sale.objects.filter(sale_number=sale_number).first()
@@ -297,7 +299,7 @@ def pos_receipt_detail_api(request, sale_number):
     return JsonResponse({'success': True, 'data': data})
 
 
-@role_required('kasir', 'admin_toko')
+@app_permission_required('core.use_pos')
 @require_POST
 def pos_reprint_api(request, sale_number):
     sale = Sale.objects.filter(sale_number=sale_number).first()
@@ -314,7 +316,7 @@ def pos_reprint_api(request, sale_number):
     )
 
 
-@role_required('kasir', 'admin_toko')
+@app_permission_required('core.use_pos')
 @require_POST
 def pos_dispatch_pending_print_jobs_api(request):
     jobs = ReceiptPrintJob.objects.filter(status=ReceiptPrintJob.STATUS_FAILED).order_by('created_at')[:20]
@@ -325,7 +327,7 @@ def pos_dispatch_pending_print_jobs_api(request):
     return JsonResponse({'success': True, 'data': result})
 
 
-@role_required('admin_toko')
+@app_permission_required('core.access_profit_loss_report')
 def profit_loss_report(request):
     data = _profit_loss_data(request)
     today = timezone.localdate()
@@ -340,7 +342,7 @@ def profit_loss_report(request):
     )
 
 
-@role_required('admin_toko')
+@app_permission_required('core.access_profit_loss_report')
 def profit_loss_report_export_pdf(request):
     data = _profit_loss_data(request)
     lines = [
@@ -375,7 +377,7 @@ def profit_loss_report_export_pdf(request):
     return response
 
 
-@role_required('admin_toko', 'kasir')
+@app_permission_required('core.access_sales_daily_summary_report')
 def sales_daily_summary(request):
     try:
         date_from, date_to = _parse_date_range(request)
@@ -484,7 +486,7 @@ def sales_daily_summary(request):
     )
 
 
-@role_required('admin_toko', 'kasir')
+@app_permission_required('core.access_sales_daily_summary_report')
 def sales_daily_summary_detail(request, tx_date):
     try:
         target_date = timezone.datetime.fromisoformat(tx_date).date()
@@ -510,7 +512,7 @@ def sales_daily_summary_detail(request, tx_date):
     )
 
 
-@role_required('admin_toko', 'kasir')
+@app_permission_required('core.access_sales_daily_summary_report')
 def sales_daily_summary_export_csv(request):
     try:
         date_from, date_to = _parse_date_range(request)
@@ -565,20 +567,18 @@ def sales_daily_summary_export_csv(request):
     return response
 
 
-@role_required('admin_toko', 'kasir', 'member')
+@login_required
 def sales_transaction_detail(request, sale_number):
     sale = Sale.objects.select_related('member', 'created_by').prefetch_related('items__product', 'payments').filter(sale_number=sale_number).first()
     if not sale:
         messages.error(request, 'Transaksi tidak ditemukan.')
         return render(request, 'sales/transaction_detail.html', {'sale': None})
-    # Member hanya boleh membuka transaksi miliknya sendiri.
-    user_roles = set(request.user.groups.values_list('name', flat=True))
-    if 'member' in user_roles and 'admin_toko' not in user_roles and 'kasir' not in user_roles:
-        member_profile = getattr(request.user, 'member_profile', None)
-        if not member_profile or sale.member_id != member_profile.id:
-            messages.error(request, 'Anda tidak memiliki akses ke detail transaksi ini.')
-            return render(request, 'sales/transaction_detail.html', {'sale': None})
-    return render(request, 'sales/transaction_detail.html', {'sale': sale})
+    if request.user.has_perm('core.access_sales_daily_summary_report'):
+        return render(request, 'sales/transaction_detail.html', {'sale': sale})
+    member_profile = getattr(request.user, 'member_profile', None)
+    if member_profile and sale.member_id == member_profile.id:
+        return render(request, 'sales/transaction_detail.html', {'sale': sale})
+    raise PermissionDenied("Akun Anda tidak memiliki permission untuk detail transaksi ini.")
 
 
 def _parse_int(raw, default_value):
@@ -632,7 +632,7 @@ def _build_product_report_rows(*, date_from, date_to, category_id='', sort_mode=
     return rows, total_omzet, total_qty
 
 
-@role_required('admin_toko', 'kasir', 'pembelian')
+@app_permission_required('core.access_sales_product_report')
 def sales_product_report(request):
     try:
         date_from, date_to = _parse_date_range(request)
@@ -691,7 +691,7 @@ def sales_product_report(request):
     )
 
 
-@role_required('admin_toko', 'kasir', 'pembelian')
+@app_permission_required('core.access_sales_product_report')
 def sales_product_report_export_csv(request):
     date_from, date_to = _parse_date_range(request)
     category_id = (request.GET.get('category_id') or '').strip()
@@ -720,3 +720,4 @@ def sales_product_report_export_csv(request):
             r.get('kontribusi_pct') or Decimal('0.00'),
         ])
     return response
+
