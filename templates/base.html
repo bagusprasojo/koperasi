@@ -46,52 +46,99 @@
                             <a href="{% url 'member_my_ledger' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Mutasi Saya</a>
                             <a href="{% url 'member_my_purchases' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Riwayat Belanja</a>
                         {% endif %}
-                        {% if is_admin_toko_role or is_kasir_role or is_pembelian_role %}
-                            <div class="relative" x-data="{ mOpen: false }">
-                                <button @click="mOpen=!mOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Master</button>
-                                <div x-show="mOpen" x-cloak @click.outside="mOpen=false" class="absolute left-0 z-40 mt-1 w-52 rounded-md border bg-white p-1 shadow">
-                                    <a href="{% url 'category_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kategori</a>
-                                    <a href="{% url 'unit_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Satuan</a>
-                                    <a href="{% url 'supplier_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Supplier</a>
-                                    <a href="{% url 'product_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Produk</a>
-                                    <a href="{% url 'member_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Member</a>
-                                    <a href="{% url 'card_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Member</a>
-                                </div>
-                            </div>
-                            <div class="relative" x-data="{ tOpen: false }">
-                                <button @click="tOpen=!tOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Transaksi</button>
-                                <div x-show="tOpen" x-cloak @click.outside="tOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
-                                    <a href="{% url 'pos_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kasir (POS)</a>
-                                    <a href="{% url 'purchase_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kulakan</a>
-                                    <a href="{% url 'internal_used_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Internal Used</a>
-                                    <a href="{% url 'stock_opname_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Stock Opname</a>
-                                    {% if is_admin_toko_role %}
-                                        <a href="{% url 'member_topup' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Topup Admin</a>
-                                        <a href="{% url 'member_withdrawal' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Tarik Deposit</a>
-                                        <a href="{% url 'daily_closing_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Tutup Harian</a>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="relative" x-data="{ rOpen: false }">
-                                <button @click="rOpen=!rOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Laporan</button>
-                                <div x-show="rOpen" x-cloak @click.outside="rOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
-                                    <div class="relative" x-data="{ sOpen: false }">
-                                        <button @click="sOpen=!sOpen" class="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm hover:bg-slate-100">
-                                            <span>Penjualan</span>
-                                            <span class="text-xs text-slate-500">▸</span>
-                                        </button>
-                                        <div x-show="sOpen" x-cloak @click.outside="sOpen=false" class="ml-2 mt-1 rounded-md border bg-white p-1">
-                                            <a href="{% url 'sales_daily_summary' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Rekap Penjualan Harian</a>
-                                            <a href="{% url 'sales_product_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Top/Bottom Produk Terjual</a>
-                                            <a href="{% url 'profit_loss_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Laba Rugi Operasional</a>
-                                        </div>
+                        {% if is_staff_any %}
+                            {% if perms.core.view_inventory or perms.core.view_members or perms.core.manage_products or perms.core.manage_members %}
+                                <div class="relative" x-data="{ mOpen: false }">
+                                    <button @click="mOpen=!mOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Master</button>
+                                    <div x-show="mOpen" x-cloak @click.outside="mOpen=false" class="absolute left-0 z-40 mt-1 w-52 rounded-md border bg-white p-1 shadow">
+                                        {% if perms.core.manage_products %}
+                                            <a href="{% url 'category_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kategori</a>
+                                            <a href="{% url 'unit_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Satuan</a>
+                                            <a href="{% url 'supplier_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Supplier</a>
+                                        {% endif %}
+                                        {% if perms.core.view_inventory %}
+                                            <a href="{% url 'product_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Produk</a>
+                                        {% endif %}
+                                        {% if perms.core.view_members %}
+                                            <a href="{% url 'member_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Member</a>
+                                            <a href="{% url 'card_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Member</a>
+                                        {% endif %}
                                     </div>
-                                    <a href="{% url 'stock_card_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Stok</a>
-                                    <a href="{% url 'reorder_alert_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Reorder Alert</a>
-                                    <a href="{% url 'member_ledger' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Ledger Member</a>
                                 </div>
-                            </div>
-                            {% if is_admin_toko_role %}
+                            {% endif %}
+
+                            {% if perms.core.access_pos or perms.core.manage_purchases or perms.core.perform_stock_opname or perms.core.validate_topup or perms.core.withdraw_deposit or perms.core.perform_daily_closing %}
+                                <div class="relative" x-data="{ tOpen: false }">
+                                    <button @click="tOpen=!tOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Transaksi</button>
+                                    <div x-show="tOpen" x-cloak @click.outside="tOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
+                                        {% if perms.core.access_pos %}
+                                            <a href="{% url 'pos_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kasir (POS)</a>
+                                        {% endif %}
+                                        {% if perms.core.manage_purchases %}
+                                            <a href="{% url 'purchase_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kulakan</a>
+                                        {% endif %}
+                                        {% if perms.core.manage_purchases or perms.core.perform_stock_opname %}
+                                            <a href="{% url 'internal_used_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Internal Used</a>
+                                        {% endif %}
+                                        {% if perms.core.perform_stock_opname %}
+                                            <a href="{% url 'stock_opname_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Stock Opname</a>
+                                        {% endif %}
+                                        {% if perms.core.validate_topup %}
+                                            <a href="{% url 'member_topup' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Topup Admin</a>
+                                        {% endif %}
+                                        {% if perms.core.withdraw_deposit %}
+                                            <a href="{% url 'member_withdrawal' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Tarik Deposit</a>
+                                        {% endif %}
+                                        {% if perms.core.perform_daily_closing %}
+                                            <a href="{% url 'daily_closing_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Tutup Harian</a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            {% if perms.core.view_sales_reports or perms.core.view_inventory or perms.core.view_members %}
+                                <div class="relative" x-data="{ rOpen: false }">
+                                    <button @click="rOpen=!rOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Laporan</button>
+                                    <div x-show="rOpen" x-cloak @click.outside="rOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
+                                        {% if perms.core.view_sales_reports %}
+                                            <div class="relative" x-data="{ sOpen: false }">
+                                                <button @click="sOpen=!sOpen" class="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm hover:bg-slate-100">
+                                                    <span>Penjualan</span>
+                                                    <span class="text-xs text-slate-500">▸</span>
+                                                </button>
+                                                <div x-show="sOpen" x-cloak @click.outside="sOpen=false" class="ml-2 mt-1 rounded-md border bg-white p-1">
+                                                    <a href="{% url 'sales_daily_summary' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Rekap Penjualan Harian</a>
+                                                    <a href="{% url 'sales_product_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Top/Bottom Produk Terjual</a>
+                                                    <a href="{% url 'profit_loss_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Laba Rugi Operasional</a>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                        {% if perms.core.view_inventory %}
+                                            <a href="{% url 'stock_card_report' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kartu Stok</a>
+                                            <a href="{% url 'reorder_alert_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Reorder Alert</a>
+                                        {% endif %}
+                                        {% if perms.core.view_members %}
+                                            <a href="{% url 'member_ledger' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Ledger Member</a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            {% if perms.core.manage_staff or perms.core.manage_role_permissions %}
+                                <div class="relative" x-data="{ pOpen: false }">
+                                    <button @click="pOpen=!pOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Pengaturan</button>
+                                    <div x-show="pOpen" x-cloak @click.outside="pOpen=false" class="absolute left-0 z-40 mt-1 w-52 rounded-md border bg-white p-1 shadow">
+                                        {% if perms.core.manage_staff %}
+                                            <a href="{% url 'staff_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kelola Staf</a>
+                                        {% endif %}
+                                        {% if perms.core.manage_role_permissions %}
+                                            <a href="{% url 'role_permission_matrix' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Matriks Hak Akses Role</a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            {% if perms.core.validate_topup %}
                                 <a href="{% url 'topup_validation_list' %}?status=pending" class="rounded-md bg-slate-100 px-3 py-2 text-sm hover:bg-slate-200">
                                     Validasi Topup
                                     {% if pending_topup_count > 0 %}
@@ -115,39 +162,81 @@
                             <a href="{% url 'member_my_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Mutasi Saya</a>
                             <a href="{% url 'member_my_purchases' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Riwayat Belanja</a>
                         {% endif %}
-                        {% if is_admin_toko_role or is_kasir_role or is_pembelian_role %}
-                            <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Master</p>
-                            <a href="{% url 'category_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kategori</a>
-                            <a href="{% url 'unit_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Satuan</a>
-                            <a href="{% url 'supplier_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Supplier</a>
-                            <a href="{% url 'product_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Produk</a>
-                            <a href="{% url 'member_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Member</a>
-                            <a href="{% url 'card_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Member</a>
-                            <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Transaksi</p>
-                            <a href="{% url 'pos_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kasir (POS)</a>
-                            <a href="{% url 'purchase_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kulakan</a>
-                            <a href="{% url 'internal_used_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Internal Used</a>
-                            <a href="{% url 'stock_opname_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Stock Opname</a>
-                            {% if is_admin_toko_role %}
-                                <a href="{% url 'member_topup' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Topup Admin</a>
-                                <a href="{% url 'member_withdrawal' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Tarik Deposit</a>
-                                <a href="{% url 'daily_closing_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Tutup Harian</a>
+                        {% if is_staff_any %}
+                            {% if perms.core.view_inventory or perms.core.view_members or perms.core.manage_products or perms.core.manage_members %}
+                                <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Master</p>
+                                {% if perms.core.manage_products %}
+                                    <a href="{% url 'category_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kategori</a>
+                                    <a href="{% url 'unit_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Satuan</a>
+                                    <a href="{% url 'supplier_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Supplier</a>
+                                {% endif %}
+                                {% if perms.core.view_inventory %}
+                                    <a href="{% url 'product_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Produk</a>
+                                {% endif %}
+                                {% if perms.core.view_members %}
+                                    <a href="{% url 'member_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Member</a>
+                                    <a href="{% url 'card_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Member</a>
+                                {% endif %}
                             {% endif %}
-                            <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Laporan</p>
-                            <p class="px-2 text-xs font-semibold text-slate-500">Penjualan</p>
-                            <a href="{% url 'sales_daily_summary' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Rekap Penjualan Harian</a>
-                            <a href="{% url 'sales_product_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Top/Bottom Produk Terjual</a>
-                            <a href="{% url 'profit_loss_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Laba Rugi Operasional</a>
-                            <a href="{% url 'stock_card_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Stok</a>
-                            <a href="{% url 'reorder_alert_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Reorder Alert</a>
-                            <a href="{% url 'member_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Ledger Member</a>
-                            {% if is_admin_toko_role %}
-                                <a href="{% url 'topup_validation_list' %}?status=pending" class="rounded-md bg-slate-100 px-3 py-2 text-sm">
-                                    Validasi Topup
-                                    {% if pending_topup_count > 0 %}
-                                        <span class="ml-1 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white">{{ pending_topup_count }}</span>
-                                    {% endif %}
-                                </a>
+
+                            {% if perms.core.access_pos or perms.core.manage_purchases or perms.core.perform_stock_opname or perms.core.validate_topup or perms.core.withdraw_deposit or perms.core.perform_daily_closing %}
+                                <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Transaksi</p>
+                                {% if perms.core.access_pos %}
+                                    <a href="{% url 'pos_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kasir (POS)</a>
+                                {% endif %}
+                                {% if perms.core.manage_purchases %}
+                                    <a href="{% url 'purchase_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kulakan</a>
+                                {% endif %}
+                                {% if perms.core.manage_purchases or perms.core.perform_stock_opname %}
+                                    <a href="{% url 'internal_used_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Internal Used</a>
+                                {% endif %}
+                                {% if perms.core.perform_stock_opname %}
+                                    <a href="{% url 'stock_opname_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Stock Opname</a>
+                                {% endif %}
+                                {% if perms.core.validate_topup %}
+                                    <a href="{% url 'member_topup' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Topup Admin</a>
+                                {% endif %}
+                                {% if perms.core.withdraw_deposit %}
+                                    <a href="{% url 'member_withdrawal' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Tarik Deposit</a>
+                                {% endif %}
+                                {% if perms.core.perform_daily_closing %}
+                                    <a href="{% url 'daily_closing_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Tutup Harian</a>
+                                {% endif %}
+                            {% endif %}
+
+                            {% if perms.core.view_sales_reports or perms.core.view_inventory or perms.core.view_members %}
+                                <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Laporan</p>
+                                {% if perms.core.view_sales_reports %}
+                                    <p class="px-2 text-xs font-semibold text-slate-500">Penjualan</p>
+                                    <a href="{% url 'sales_daily_summary' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Rekap Penjualan Harian</a>
+                                    <a href="{% url 'sales_product_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Top/Bottom Produk Terjual</a>
+                                    <a href="{% url 'profit_loss_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Laba Rugi Operasional</a>
+                                {% endif %}
+                                {% if perms.core.view_inventory %}
+                                    <a href="{% url 'stock_card_report' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kartu Stok</a>
+                                    <a href="{% url 'reorder_alert_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Reorder Alert</a>
+                                {% endif %}
+                                {% if perms.core.view_members %}
+                                    <a href="{% url 'member_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Ledger Member</a>
+                                {% endif %}
+                            {% endif %}
+
+                            {% if perms.core.manage_staff or perms.core.manage_role_permissions or perms.core.validate_topup %}
+                                <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Pengaturan</p>
+                                {% if perms.core.manage_staff %}
+                                    <a href="{% url 'staff_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kelola Staf</a>
+                                {% endif %}
+                                {% if perms.core.manage_role_permissions %}
+                                    <a href="{% url 'role_permission_matrix' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Matriks Hak Akses Role</a>
+                                {% endif %}
+                                {% if perms.core.validate_topup %}
+                                    <a href="{% url 'topup_validation_list' %}?status=pending" class="rounded-md bg-slate-100 px-3 py-2 text-sm">
+                                        Validasi Topup
+                                        {% if pending_topup_count > 0 %}
+                                            <span class="ml-1 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white">{{ pending_topup_count }}</span>
+                                        {% endif %}
+                                    </a>
+                                {% endif %}
                             {% endif %}
                         {% endif %}
                         <form method="post" action="{% url 'logout' %}">

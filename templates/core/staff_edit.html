@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Edit Staf {{ target_user.username }} | POS Koperasi{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl rounded-xl bg-white p-6 shadow-sm">
+    <div class="mb-5 flex items-center justify-between border-b pb-4">
+        <div>
+            <h1 class="text-xl font-semibold text-slate-800">Edit Staf: {{ target_user.username }}</h1>
+            <p class="text-xs text-slate-500">Perbarui profil, informasi kontak, dan penugasan peran</p>
+        </div>
+        <a href="{% url 'staff_password_reset' target_user.id %}" class="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">🔑 Reset Password</a>
+    </div>
+
+    {% if is_self %}
+        <div class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            <strong>Catatan Keamanan:</strong> Ini adalah akun Anda sendiri yang sedang aktif. Anda tidak dapat menonaktifkan status akun atau mencabut role Admin Toko dari akun ini.
+        </div>
+    {% endif %}
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        <div>
+            <label class="mb-1 block text-sm font-medium text-slate-700">Username</label>
+            <input type="text" value="{{ target_user.username }}" disabled class="w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500 cursor-not-allowed">
+            <p class="mt-1 text-xs text-slate-400">Username tidak dapat diubah setelah dibuat.</p>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+                <label class="mb-1 block text-sm font-medium text-slate-700">Nama Depan</label>
+                <input type="text" name="first_name" value="{{ target_user.first_name }}" placeholder="Contoh: Ani" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
+            </div>
+            <div>
+                <label class="mb-1 block text-sm font-medium text-slate-700">Nama Belakang</label>
+                <input type="text" name="last_name" value="{{ target_user.last_name }}" placeholder="Contoh: Suryani" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
+            </div>
+        </div>
+
+        <div>
+            <label class="mb-1 block text-sm font-medium text-slate-700">Email</label>
+            <input type="email" name="email" value="{{ target_user.email }}" placeholder="staf@pondoksayur.id" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
+        </div>
+
+        <!-- Role Selection -->
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <label class="mb-2 block text-sm font-semibold text-slate-800">Peran / Role Staf <span class="text-red-500">*</span></label>
+            <p class="mb-3 text-xs text-slate-500">Pilih satu atau lebih peran yang dijalankan oleh staf ini:</p>
+            <div class="space-y-2">
+                {% for r_val, r_lbl in available_roles %}
+                    <label class="flex items-start gap-3 rounded-md bg-white p-2.5 border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                        <input type="checkbox" name="roles" value="{{ r_val }}"
+                            {% if r_val in current_user_roles %}checked{% endif %}
+                            {% if is_self and r_val == 'admin_toko' %}disabled{% endif %}
+                            class="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-0">
+                        <div>
+                            <span class="text-sm font-medium text-slate-800">{{ r_lbl }}</span>
+                            {% if is_self and r_val == 'admin_toko' %}
+                                <input type="hidden" name="roles" value="admin_toko">
+                                <span class="ml-1 text-[11px] text-slate-400">(Wajib aktif untuk akun Anda sendiri)</span>
+                            {% endif %}
+                        </div>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <input type="checkbox" name="is_active" id="is_active"
+                {% if target_user.is_active %}checked{% endif %}
+                {% if is_self %}disabled{% endif %}
+                class="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-0">
+            <label for="is_active" class="text-sm font-medium text-slate-700">Status Akun Aktif (bisa login)</label>
+            {% if is_self %}
+                <input type="hidden" name="is_active" value="on">
+            {% endif %}
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4 border-t">
+            <a href="{% url 'staff_list' %}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Batal</a>
+            <button type="submit" class="rounded-md bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-800">Simpan Perubahan</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

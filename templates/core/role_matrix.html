@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Matriks Hak Akses Role | POS Koperasi{% endblock %}
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <div class="mb-5 flex flex-col justify-between gap-3 border-b pb-4 md:flex-row md:items-center">
+        <div>
+            <h1 class="text-xl font-semibold text-slate-800">Matriks Hak Akses Role</h1>
+            <p class="text-xs text-slate-500">Tentukan wewenang aksi spesifik yang dapat dilakukan oleh setiap peran staf. Perubahan langsung aktif di seluruh sistem.</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'staff_list' %}" class="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">← Daftar Staf</a>
+        </div>
+    </div>
+
+    <form method="post" id="matrixForm">
+        {% csrf_token %}
+
+        <div class="overflow-x-auto rounded-lg border border-slate-200">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-100 text-xs font-semibold uppercase text-slate-700">
+                    <tr>
+                        <th class="w-1/2 px-4 py-3.5">Fungsi / Wewenang Sistem</th>
+                        {% for role in roles %}
+                            <th class="w-1/6 px-4 py-3.5 text-center">
+                                <span class="block text-sm font-bold text-slate-800">{{ role.label }}</span>
+                                <span class="text-[10px] font-mono lowercase text-slate-500">({{ role.name }})</span>
+                            </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for module in modules %}
+                        <!-- Section Header -->
+                        <tr class="bg-slate-50/80">
+                            <td colspan="{{ roles|length|add:1 }}" class="px-4 py-2.5">
+                                <span class="text-xs font-bold uppercase tracking-wider text-slate-700">{{ module.title }}</span>
+                                <span class="ml-2 text-[11px] text-slate-400">— {{ module.description }}</span>
+                            </td>
+                        </tr>
+
+                        <!-- Permission Rows -->
+                        {% for codename, perm_title, perm_desc in module.permissions %}
+                            <tr class="hover:bg-slate-50/50 transition-colors">
+                                <td class="px-4 py-3">
+                                    <p class="font-medium text-slate-800">{{ perm_title }}</p>
+                                    <p class="text-xs text-slate-500">{{ perm_desc }}</p>
+                                    <span class="inline-block mt-0.5 font-mono text-[10px] text-slate-400">core.{{ codename }}</span>
+                                </td>
+                                {% for role in roles %}
+                                    <td class="px-4 py-3 text-center align-middle">
+                                        <label class="inline-flex cursor-pointer items-center justify-center p-2 rounded hover:bg-slate-100">
+                                            <input type="checkbox"
+                                                name="perm_{{ role.name }}_{{ codename }}"
+                                                {% with key=role.name|add:":"|add:codename %}
+                                                    {# cek apakah di matrix true #}
+                                                {% endwith %}
+                                                {% for m_key, m_val in matrix.items %}
+                                                    {% if m_key.0 == role.name and m_key.1 == codename and m_val %}
+                                                        checked
+                                                    {% endif %}
+                                                {% endfor %}
+                                                class="h-5 w-5 rounded border-slate-300 text-slate-900 focus:ring-0">
+                                        </label>
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row border-t pt-4">
+            <p class="text-xs text-slate-500">
+                💡 <strong>Catatan:</strong> Akun bertipe <em>Superuser</em> selalu memiliki akses penuh ke seluruh fitur di atas terlepas dari centang matriks.
+            </p>
+            <div class="flex gap-2">
+                <a href="{% url 'role_permission_matrix' %}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Batalkan</a>
+                <button type="submit" class="rounded-md bg-slate-900 px-6 py-2 text-sm font-medium text-white hover:bg-slate-800 shadow">💾 Simpan Perubahan Matriks</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

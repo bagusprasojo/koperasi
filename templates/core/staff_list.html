@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Kelola Staf & Pengguna | POS Koperasi{% endblock %}
+{% block content %}
+<div class="rounded-xl bg-white p-6 shadow-sm">
+    <div class="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <div>
+            <h1 class="text-xl font-semibold">Pengguna & Staf Toko</h1>
+            <p class="text-xs text-slate-500">Kelola akun kasir, bagian pembelian, dan administrator toko</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <a href="{% url 'staff_create' %}" class="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">+ Tambah Staf Baru</a>
+            <a href="{% url 'role_permission_matrix' %}" class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">🛡️ Matriks Hak Akses Role</a>
+        </div>
+    </div>
+
+    <!-- Search & Filter Form -->
+    <form method="get" class="mb-4 flex flex-wrap gap-2">
+        <input name="q" value="{{ query }}" placeholder="Cari username / nama / email..." class="w-64 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
+        <select name="role" class="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
+            <option value="">-- Semua Role --</option>
+            {% for r_val, r_lbl in available_roles %}
+                <option value="{{ r_val }}" {% if role_filter == r_val %}selected{% endif %}>{{ r_lbl }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Filter</button>
+        {% if query or role_filter %}
+            <a href="{% url 'staff_list' %}" class="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">Reset</a>
+        {% endif %}
+    </form>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm">
+            <thead class="border-b bg-slate-50 text-xs font-semibold uppercase text-slate-600">
+                <tr>
+                    <th class="px-3 py-3">Username</th>
+                    <th class="px-3 py-3">Nama Lengkap</th>
+                    <th class="px-3 py-3">Email</th>
+                    <th class="px-3 py-3">Peran / Role</th>
+                    <th class="px-3 py-3">Status</th>
+                    <th class="px-3 py-3 text-right">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for u in page_obj %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td class="px-3 py-3 font-semibold text-slate-800">
+                            {{ u.username }}
+                            {% if u.id == request.user.id %}
+                                <span class="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">Anda</span>
+                            {% endif %}
+                            {% if u.is_superuser %}
+                                <span class="ml-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">Superuser</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-3 py-3">{{ u.get_full_name|default:'-' }}</td>
+                        <td class="px-3 py-3 text-slate-500">{{ u.email|default:'-' }}</td>
+                        <td class="px-3 py-3">
+                            <div class="flex flex-wrap gap-1">
+                                {% for g in u.groups.all %}
+                                    {% if g.name == 'admin_toko' %}
+                                        <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Admin Toko</span>
+                                    {% elif g.name == 'kasir' %}
+                                        <span class="rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">Kasir</span>
+                                    {% elif g.name == 'pembelian' %}
+                                        <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Pembelian</span>
+                                    {% elif g.name == 'member' %}
+                                        <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Member</span>
+                                    {% else %}
+                                        <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{{ g.name }}</span>
+                                    {% endif %}
+                                {% empty %}
+                                    <span class="text-xs italic text-slate-400">Tanpa Grup</span>
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td class="px-3 py-3">
+                            {% if u.is_active %}
+                                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Aktif
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                                    <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span> Nonaktif
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-3 py-3 text-right">
+                            <div class="flex items-center justify-end gap-1.5">
+                                <a href="{% url 'staff_edit' u.id %}" class="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">Edit</a>
+                                <a href="{% url 'staff_password_reset' u.id %}" class="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">Password</a>
+                                {% if u.id != request.user.id %}
+                                    <form method="post" action="{% url 'staff_toggle_active' u.id %}">
+                                        {% csrf_token %}
+                                        <button type="submit"
+                                            @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Status', message: 'Status akun staf {{ u.username|escapejs }} akan diubah menjadi {% if u.is_active %}Nonaktif{% else %}Aktif{% endif %}.' })"
+                                            class="rounded px-2.5 py-1 text-xs font-medium {% if u.is_active %}bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100{% else %}bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100{% endif %}">
+                                            {% if u.is_active %}Nonaktifkan{% else %}Aktifkan{% endif %}
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="6" class="px-3 py-6 text-center text-slate-500">Tidak ada data staf yang cocok.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="mt-4 flex items-center justify-between text-sm text-slate-600">
+        <p>Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }} (Total {{ page_obj.paginator.count }} staf)</p>
+        <div class="flex gap-2">
+            {% if page_obj.has_previous %}
+                <a href="?q={{ query }}&role={{ role_filter }}&page={{ page_obj.previous_page_number }}" class="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50">Sebelumnya</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+                <a href="?q={{ query }}&role={{ role_filter }}&page={{ page_obj.next_page_number }}" class="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50">Berikutnya</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
