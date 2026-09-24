@@ -18,7 +18,7 @@ from core.decorators import role_required
 from core.constants import Role, CASHIER_ROLES, STAFF_ROLES
 from .permissions import can_view_sale_detail
 
-from .services import build_price_preview, checkout_pos, get_default_member, search_members
+from .services import build_price_preview, checkout_pos, get_default_member, search_members, _format_qty
 from .services import (
     build_escpos_payload,
     dispatch_receipt_print_job,
@@ -195,7 +195,8 @@ def pos_page(request):
             'sku': p.sku,
             'barcode': p.barcode or '',
             'unit': p.unit.name if p.unit else '-',
-            'stock': p.stock,
+            'stock': float(p.stock),
+            'allow_decimal_qty': p.allow_decimal_qty,
         }
         for p in products
     ]
@@ -239,7 +240,10 @@ def pos_price_preview_api(request):
             {
                 'product_id': l['product_id'],
                 'product_name': l['product_name'],
-                'qty': l['qty'],
+                'unit': l.get('unit', ''),
+                'stock': str(l['stock']),
+                'qty': _format_qty(l['qty']),
+                'allow_decimal_qty': l.get('allow_decimal_qty', False),
                 'unit_price': str(l['unit_price']),
                 'line_total': str(l['line_total']),
             }

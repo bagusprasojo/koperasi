@@ -34,7 +34,7 @@ def _rebuild_product_stock_from_ledgers(product: Product):
     Rebuild saldo stok produk dari seluruh StockLedger berdasarkan urutan kronologis
     (tx_date lalu waktu transaksi) untuk mencegah drift saat ada edit/hapus/backdate.
     """
-    balance = 0
+    balance = Decimal('0.000')
     ledgers = (
         StockLedger.objects
         .select_related('tx')
@@ -42,8 +42,8 @@ def _rebuild_product_stock_from_ledgers(product: Product):
         .order_by('tx_date', 'tx__created_at', 'created_at', 'id')
     )
     for ledger in ledgers:
-        qty_in = int(ledger.qty_in or 0)
-        qty_out = int(ledger.qty_out or 0)
+        qty_in = Decimal(str(ledger.qty_in or 0))
+        qty_out = Decimal(str(ledger.qty_out or 0))
         before = balance
         after = before + qty_in - qty_out
         ledger.balance_before = before
@@ -126,11 +126,11 @@ def create_purchase_transaction(supplier: Supplier, tx_date: date, items: list, 
     for item in items:
         product = item['product']
         affected_products.add(product.id)
-        qty = int(item['qty'])
-        unit_cost = Decimal(item['unit_cost'])
-        if qty <= 0 or unit_cost <= 0:
+        qty = Decimal(str(item['qty']))
+        unit_cost = Decimal(str(item['unit_cost']))
+        if qty <= Decimal('0') or unit_cost <= Decimal('0'):
             raise ValidationError('Qty dan harga beli harus lebih besar dari 0.')
-        total = (unit_cost * Decimal(qty)).quantize(Decimal('0.01'))
+        total = (unit_cost * qty).quantize(Decimal('0.01'))
         InventoryTransactionItem.objects.create(
             transaction=tx,
             product=product,
@@ -183,11 +183,11 @@ def edit_purchase_transaction(tx: InventoryTransaction, supplier: Supplier, tx_d
     grand_total = Decimal('0.00')
     for item in items:
         product = item['product']
-        qty = int(item['qty'])
-        unit_cost = Decimal(item['unit_cost'])
-        if qty <= 0 or unit_cost <= 0:
+        qty = Decimal(str(item['qty']))
+        unit_cost = Decimal(str(item['unit_cost']))
+        if qty <= Decimal('0') or unit_cost <= Decimal('0'):
             raise ValidationError('Qty dan harga beli harus lebih besar dari 0.')
-        total = (unit_cost * Decimal(qty)).quantize(Decimal('0.01'))
+        total = (unit_cost * qty).quantize(Decimal('0.01'))
         InventoryTransactionItem.objects.create(
             transaction=tx,
             product=product,
@@ -232,9 +232,10 @@ def delete_purchase_transaction(tx: InventoryTransaction):
 
 
 @transaction.atomic
-def post_internal_used(product: Product, qty: int, user, note=''):
+def post_internal_used(product: Product, qty, user, note=''):
     _ensure_not_closed(date.today())
-    if qty <= 0:
+    qty = Decimal(str(qty))
+    if qty <= Decimal('0'):
         raise ValidationError('Qty internal used harus > 0.')
     if product.stock < qty:
         unit_label = product.unit.name if product.unit else 'item'
@@ -251,7 +252,7 @@ def post_internal_used(product: Product, qty: int, user, note=''):
         note=note,
         created_by=user,
     )
-    total = (unit_cost * Decimal(qty)).quantize(Decimal('0.01'))
+    total = (unit_cost * qty).quantize(Decimal('0.01'))
     InventoryTransactionItem.objects.create(
         transaction=tx,
         product=product,
@@ -279,9 +280,10 @@ def post_internal_used(product: Product, qty: int, user, note=''):
 
 
 @transaction.atomic
-def post_pos_sale(product: Product, qty: int, user, reference='', note=''):
+def post_pos_sale(product: Product, qty, user, reference='', note=''):
     _ensure_not_closed(date.today())
-    if qty <= 0:
+    qty = Decimal(str(qty))
+    if qty <= Decimal('0'):
         raise ValidationError('Qty penjualan harus > 0.')
     if product.stock < qty:
         unit_label = product.unit.name if product.unit else 'item'
@@ -299,7 +301,7 @@ def post_pos_sale(product: Product, qty: int, user, reference='', note=''):
         note=note,
         created_by=user,
     )
-    total = (unit_cost * Decimal(qty)).quantize(Decimal('0.01'))
+    total = (unit_cost * qty).quantize(Decimal('0.01'))
     InventoryTransactionItem.objects.create(
         transaction=tx,
         product=product,
@@ -327,9 +329,10 @@ def post_pos_sale(product: Product, qty: int, user, reference='', note=''):
 
 
 @transaction.atomic
-def post_stock_opname(product: Product, actual_stock: int, user, note=''):
+def post_stock_opname(product: Product, actual_stock, user, note=''):
     _ensure_not_closed(date.today())
-    if actual_stock < 0:
+    actual_stock = Decimal(str(actual_stock))
+    if actual_stock < Decimal('0'):
         raise ValidationError('Stok aktual tidak boleh negatif.')
     diff = actual_stock - product.stock
     tx = InventoryTransaction.objects.create(
@@ -342,7 +345,7 @@ def post_stock_opname(product: Product, actual_stock: int, user, note=''):
     unit_cost = product.cost_of_goods_sold
     if unit_cost <= 0 and diff != 0:
         raise ValidationError('HPP produk harus lebih besar dari 0 untuk transaksi stock opname.')
-    total = (unit_cost * Decimal(abs(diff))).quantize(Decimal('0.01'))
+    total = (unit_cost * abs(diff)).quantize(Decimal('0.01'))
     InventoryTransactionItem.objects.create(
         transaction=tx,
         product=product,
@@ -491,8 +494,9 @@ def import_products_batch(validated_rows: list, user) -> int:
         unit_id = row['unit_id']
         harga_beli = Decimal(str(row.get('harga_beli') or '0'))
         harga_jual = Decimal(str(row['harga_jual']))
-        min_stok = int(row.get('min_stok') or 0)
-        stok_awal = int(row.get('stok_awal') or 0)
+        min_stok = Decimal(str(row.get('min_stok') or '0'))
+        stok_awal = Decimal(str(row.get('stok_awal') or '0'))
+        allow_decimal_qty = bool(row.get('allow_decimal_qty', False))
 
         product = Product.objects.create(
             category_id=category_id,
@@ -504,20 +508,21 @@ def import_products_batch(validated_rows: list, user) -> int:
             last_purchase_price=harga_beli,
             cost_of_goods_sold=harga_beli,
             reorder_point=min_stok,
+            allow_decimal_qty=allow_decimal_qty,
         )
 
         ProductPriceTier.objects.create(
             product=product,
             level=1,
-            min_qty=1,
-            max_qty=999999,
+            min_qty=Decimal('1.000'),
+            max_qty=Decimal('999999.000'),
             price=harga_jual,
             source_mode='final',
             discount_type='',
             discount_value=None,
         )
 
-        if stok_awal > 0:
+        if stok_awal > Decimal('0'):
             _ensure_not_closed(today)
             tx = InventoryTransaction.objects.create(
                 tx_number=_tx_number('INI'),
@@ -526,7 +531,7 @@ def import_products_batch(validated_rows: list, user) -> int:
                 note=f'Saldo awal import: {product.name}',
                 created_by=user,
             )
-            total_cost = (harga_beli * Decimal(stok_awal)).quantize(Decimal('0.01'))
+            total_cost = (harga_beli * stok_awal).quantize(Decimal('0.01'))
             InventoryTransactionItem.objects.create(
                 transaction=tx,
                 product=product,

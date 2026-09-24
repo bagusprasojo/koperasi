@@ -1,5 +1,5 @@
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib import request as urllib_request
 from urllib.error import URLError
 from uuid import uuid4
@@ -49,6 +49,13 @@ def search_members(keyword: str, limit: int = 10):
     return qs.select_related('card').order_by('full_name')[:limit]
 
 
+def _format_qty(val) -> str:
+    d = Decimal(str(val))
+    if d % Decimal('1') == Decimal('0'):
+        return str(int(d))
+    return f"{d:f}".rstrip('0').rstrip('.')
+
+
 def build_price_preview(items: list):
     if not items:
         raise ValidationError('Item transaksi wajib diisi.')
@@ -57,10 +64,13 @@ def build_price_preview(items: list):
     qty_by_product = {}
     for row in items:
         product_id = str(row.get('product_id', '')).strip()
-        qty = int(row.get('qty', 0))
-        if not product_id or qty <= 0:
+        try:
+            qty = Decimal(str(row.get('qty', 0)))
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValidationError('Kuantitas item tidak valid.')
+        if not product_id or qty <= Decimal('0'):
             raise ValidationError('Item produk dan qty wajib valid.')
-        qty_by_product[product_id] = qty_by_product.get(product_id, 0) + qty
+        qty_by_product[product_id] = qty_by_product.get(product_id, Decimal('0')) + qty
 
     products = {
         str(p.id): p
@@ -73,13 +83,27 @@ def build_price_preview(items: list):
         product = products.get(product_id)
         if not product:
             raise ValidationError('Produk tidak ditemukan.')
+
+        # Validasi pembatasan bilangan bulat untuk produk yang tidak mengizinkan desimal
+        if not product.allow_decimal_qty and (qty % Decimal('1') != Decimal('0')):
+            raise ValidationError(
+                f"Produk '{product.name}' tidak dapat dibeli dengan jumlah pecahan (harus bilangan bulat)."
+            )
+
         selected_tier = product.price_tiers.filter(min_qty__lte=qty, max_qty__gte=qty).order_by('level').first()
+        if not selected_tier and product.allow_decimal_qty:
+            # Fallback untuk barang curah pecahan (misal qty 0.5 kg saat tier min_qty dimulai dari 1)
+            if qty < Decimal('1'):
+                selected_tier = product.price_tiers.order_by('level').first()
+            else:
+                selected_tier = product.price_tiers.filter(min_qty__lte=qty).order_by('-level').first()
+
         if not selected_tier:
             raise ValidationError(
-                f'Qty {qty} untuk produk {product.name} tidak masuk range level harga manapun.'
+                f'Qty {_format_qty(qty)} untuk produk {product.name} tidak masuk range level harga manapun.'
             )
         unit_price = selected_tier.price
-        line_total = (unit_price * Decimal(qty)).quantize(Decimal('0.01'))
+        line_total = (unit_price * qty).quantize(Decimal('0.01'))
         subtotal += line_total
         lines.append(
             {
@@ -88,6 +112,7 @@ def build_price_preview(items: list):
                 'unit': product.unit.name if product.unit else 'pcs',
                 'stock': product.stock,
                 'qty': qty,
+                'allow_decimal_qty': product.allow_decimal_qty,
                 'price_level': selected_tier.level,
                 'unit_price': unit_price,
                 'line_total': line_total,
@@ -120,7 +145,7 @@ def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number
         if line['stock'] < line['qty']:
             unit_label = line.get('unit') or 'pcs'
             insufficient_items.append(
-                f"• {line['product_name']}: sisa stok {line['stock']} {unit_label}, diminta {line['qty']} {unit_label}"
+                f"• {line['product_name']}: sisa stok {_format_qty(line['stock'])} {unit_label}, diminta {_format_qty(line['qty'])} {unit_label}"
             )
     if insufficient_items:
         raise ValidationError("Stok barang tidak mencukupi:\n" + "\n".join(insufficient_items))
@@ -229,7 +254,7 @@ def get_receipt_detail(sale: Sale):
     items = [
         {
             'product_name': it.product.name,
-            'qty': it.qty,
+            'qty': _format_qty(it.qty),
             'unit_price': str(it.unit_price),
             'line_total': str(it.line_total),
         }

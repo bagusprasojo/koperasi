@@ -788,4 +788,256 @@ class MemberImportExcelTests(TestCase):
         self.assertFalse(MemberLedger.objects.filter(member=m2).exists())
 
 
+class BulkProductDecimalQtyTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+        from core.constants import Role
+        from inventory.models import Category, Unit, Product, ProductPriceTier
+        from sales.models import SalePayment
+        from sales.services import get_default_member
+
+        User = get_user_model()
+        self.admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN_TOKO)
+        self.admin_user = User.objects.create_user(username='admin_bulk', password='password123')
+        self.admin_user.groups.add(self.admin_group)
+
+        self.category = Category.objects.create(name='Bahan Pokok')
+        self.unit_kg = Unit.objects.create(name='Kilogram', code='KG', is_active=True)
+        self.unit_pcs = Unit.objects.create(name='Pieces', code='PCS', is_active=True)
+
+        self.default_member = get_default_member()
+
+        from inventory.services import post_stock_opname
+
+        # Regular product (tidak bisa desimal)
+        self.prod_regular = Product.objects.create(
+            name='Sabun Mandi',
+            sku='SBN-01',
+            category=self.category,
+            unit=self.unit_pcs,
+            stock=Decimal('0.000'),
+            cost_of_goods_sold=Decimal('3000.00'),
+            last_purchase_price=Decimal('3000.00'),
+            allow_decimal_qty=False,
+        )
+        ProductPriceTier.objects.create(
+            product=self.prod_regular,
+            level=1,
+            min_qty=Decimal('1.000'),
+            max_qty=Decimal('9999.000'),
+            price=Decimal('5000.00'),
+        )
+        post_stock_opname(self.prod_regular, actual_stock=Decimal('10.000'), user=self.admin_user)
+
+        # Bulk product (bisa desimal/curah)
+        self.prod_bulk = Product.objects.create(
+            name='Gula Pasir Curah',
+            sku='GLA-CRH-01',
+            category=self.category,
+            unit=self.unit_kg,
+            stock=Decimal('0.000'),
+            cost_of_goods_sold=Decimal('14000.00'),
+            last_purchase_price=Decimal('14000.00'),
+            allow_decimal_qty=True,
+        )
+        ProductPriceTier.objects.create(
+            product=self.prod_bulk,
+            level=1,
+            min_qty=Decimal('1.000'),
+            max_qty=Decimal('9999.000'),
+            price=Decimal('18000.00'),
+        )
+        post_stock_opname(self.prod_bulk, actual_stock=Decimal('50.000'), user=self.admin_user)
+
+    def test_bulk_product_pos_decimal_qty_success(self):
+        from sales.services import build_price_preview, checkout_pos, get_receipt_detail
+        from sales.models import Sale, SaleItem, SalePayment
+        from inventory.models import Product, StockLedger
+
+        # Preview 0.750 kg gula pasir curah
+        items = [{'product_id': str(self.prod_bulk.id), 'qty': '0.75'}]
+        preview = build_price_preview(items)
+        # 18000 * 0.75 = 13500.00
+        self.assertEqual(preview['total'], Decimal('13500.00'))
+        self.assertEqual(preview['lines'][0]['qty'], Decimal('0.750'))
+        self.assertTrue(preview['lines'][0]['allow_decimal_qty'])
+
+        # Checkout POS
+        sale, created = checkout_pos(
+            member_id=self.default_member.id,
+            items=items,
+            payments=[{'method': SalePayment.METHOD_CASH, 'amount': '13500.00'}],
+            client_txn_id=f'test-bulk-pos-{sale_uuid_helper()}',
+            user=self.admin_user,
+            cash_received_raw='15000.00',
+        )
+        self.assertTrue(created)
+        self.assertEqual(sale.total, Decimal('13500.00'))
+
+        item = sale.items.first()
+        self.assertEqual(item.qty, Decimal('0.750'))
+        self.assertEqual(item.line_total, Decimal('13500.00'))
+
+        # Verifikasi stok berkurang tepat 0.750 (50.000 - 0.750 = 49.250)
+        self.prod_bulk.refresh_from_db()
+        self.assertEqual(self.prod_bulk.stock, Decimal('49.250'))
+
+        # Verifikasi kartu stok
+        ledger = StockLedger.objects.filter(product=self.prod_bulk).order_by('-id').first()
+        self.assertIsNotNone(ledger)
+        self.assertEqual(ledger.qty_out, Decimal('0.750'))
+        self.assertEqual(ledger.balance_after, Decimal('49.250'))
+
+        # Verifikasi format struk menampilkan 0.75
+        receipt_data = get_receipt_detail(sale)
+        self.assertEqual(receipt_data['items'][0]['qty'], '0.75')
+
+    def test_regular_product_pos_decimal_qty_rejected(self):
+        from sales.services import build_price_preview, checkout_pos
+        from django.core.exceptions import ValidationError
+        from sales.models import SalePayment
+
+        # Coba beli produk regular (allow_decimal_qty=False) dengan pecahan 1.5
+        items = [{'product_id': str(self.prod_regular.id), 'qty': '1.5'}]
+
+        with self.assertRaises(ValidationError) as ctx:
+            build_price_preview(items)
+        self.assertIn("tidak dapat dibeli dengan jumlah pecahan (harus bilangan bulat)", str(ctx.exception))
+
+        with self.assertRaises(ValidationError) as ctx2:
+            checkout_pos(
+                member_id=self.default_member.id,
+                items=items,
+                payments=[{'method': SalePayment.METHOD_CASH, 'amount': '7500.00'}],
+                client_txn_id=f'test-regular-reject-{sale_uuid_helper()}',
+                user=self.admin_user,
+                cash_received_raw='10000.00',
+            )
+        self.assertIn("tidak dapat dibeli dengan jumlah pecahan (harus bilangan bulat)", str(ctx2.exception))
+
+    def test_regular_product_pos_integer_qty_success(self):
+        from sales.services import build_price_preview, checkout_pos, get_receipt_detail
+        from sales.models import SalePayment
+        from inventory.models import StockLedger
+
+        # Beli produk regular dengan bilangan bulat (2)
+        items = [{'product_id': str(self.prod_regular.id), 'qty': 2}]
+        preview = build_price_preview(items)
+        self.assertEqual(preview['total'], Decimal('10000.00'))
+
+        sale, created = checkout_pos(
+            member_id=self.default_member.id,
+            items=items,
+            payments=[{'method': SalePayment.METHOD_CASH, 'amount': '10000.00'}],
+            client_txn_id=f'test-regular-ok-{sale_uuid_helper()}',
+            user=self.admin_user,
+            cash_received_raw='10000.00',
+        )
+        self.assertTrue(created)
+        self.assertEqual(sale.total, Decimal('10000.00'))
+
+        # Verifikasi format struk untuk integer tampil sebagai "2" tanpa desimal
+        receipt_data = get_receipt_detail(sale)
+        self.assertEqual(receipt_data['items'][0]['qty'], '2')
+
+        self.prod_regular.refresh_from_db()
+        self.assertEqual(self.prod_regular.stock, Decimal('8.000'))
+
+    def test_product_create_and_edit_allow_decimal_qty(self):
+        from django.test import Client
+        from inventory.models import Product
+
+        client = Client()
+        client.force_login(self.admin_user)
+
+        # 1. Create product with allow_decimal_qty=1
+        create_payload = {
+            'name': 'Tepung Terigu Curah',
+            'sku': 'TPG-CRH-01',
+            'category_id': str(self.category.id),
+            'unit_id': str(self.unit_kg.id),
+            'reorder_point': '5',
+            'last_purchase_price': '10000',
+            'cost_of_goods_sold': '10000',
+            'allow_decimal_qty': '1',
+            'tier_1_min_qty': '1',
+            'tier_1_max_qty': '9999',
+            'tier_1_value': '12000',
+            'tier_2_min_qty': '',
+            'tier_2_max_qty': '',
+            'tier_2_mode': 'final',
+            'tier_2_discount_type': 'percent',
+            'tier_2_value': '',
+            'tier_3_min_qty': '',
+            'tier_3_max_qty': '',
+            'tier_3_mode': 'final',
+            'tier_3_discount_type': 'percent',
+            'tier_3_value': '',
+        }
+        res = client.post('/inventory/products/create/', create_payload)
+        self.assertEqual(res.status_code, 302)
+
+        p = Product.objects.get(sku='TPG-CRH-01')
+        self.assertTrue(p.allow_decimal_qty)
+
+        # 2. Edit product to uncheck allow_decimal_qty
+        edit_payload = create_payload.copy()
+        del edit_payload['allow_decimal_qty']
+        res_edit = client.post(f'/inventory/products/{p.uuid}/edit/', edit_payload)
+        self.assertEqual(res_edit.status_code, 302)
+
+        p.refresh_from_db()
+        self.assertFalse(p.allow_decimal_qty)
+
+    def test_import_products_batch_with_allow_decimal_qty(self):
+        from inventory.services import import_products_batch
+        from inventory.models import Product
+
+        rows = [
+            {
+                'sku': 'IMP-BLK-01',
+                'barcode': '',
+                'nama_barang': 'Kacang Hijau Curah',
+                'category_id': self.category.id,
+                'unit_id': self.unit_kg.id,
+                'harga_beli': '15000.00',
+                'harga_jual': '18000.00',
+                'min_stok': '2.000',
+                'stok_awal': '12.500',
+                'allow_decimal_qty': True,
+                'is_valid': True,
+            },
+            {
+                'sku': 'IMP-REG-01',
+                'barcode': '',
+                'nama_barang': 'Sikat Gigi',
+                'category_id': self.category.id,
+                'unit_id': self.unit_pcs.id,
+                'harga_beli': '4000.00',
+                'harga_jual': '6000.00',
+                'min_stok': '5.000',
+                'stok_awal': '20.000',
+                'allow_decimal_qty': False,
+                'is_valid': True,
+            },
+        ]
+        created = import_products_batch(rows, self.admin_user)
+        self.assertEqual(created, 2)
+
+        p_bulk = Product.objects.get(sku='IMP-BLK-01')
+        self.assertTrue(p_bulk.allow_decimal_qty)
+        self.assertEqual(p_bulk.stock, Decimal('12.500'))
+
+        p_reg = Product.objects.get(sku='IMP-REG-01')
+        self.assertFalse(p_reg.allow_decimal_qty)
+        self.assertEqual(p_reg.stock, Decimal('20.000'))
+
+
+def sale_uuid_helper():
+    import uuid
+    return str(uuid.uuid4())[:8]
+
+
+
 

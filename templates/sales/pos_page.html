@@ -14,7 +14,10 @@
                         <template x-for="(p, idx) in productSuggestions" :key="p.id">
                             <button type="button" @click="addProductDirect(p)" :class="productCursor === idx ? 'bg-slate-100' : ''" class="block w-full border-b px-3 py-2 text-left text-sm hover:bg-slate-100">
                                 <div class="flex items-center justify-between">
-                                    <span class="font-medium" x-text="p.name"></span>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-medium" x-text="p.name"></span>
+                                        <span x-show="p.allow_decimal_qty" class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">Curah</span>
+                                    </div>
                                     <span class="rounded px-1.5 py-0.5 text-xs font-semibold"
                                           :class="p.stock > 0 ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'">
                                         Stok: <span x-text="p.stock"></span> <span x-text="p.unit"></span>
@@ -60,6 +63,16 @@
             <h2 class="text-lg font-semibold">Keranjang</h2>
             <p class="text-sm text-slate-500">F10 simpan transaksi | Pending: <span x-text="pendingTxns.length"></span></p>
         </div>
+        <!-- Banner Peringatan Produk / Validasi Keranjang -->
+        <div x-show="productWarning" x-cloak class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-sm font-medium text-amber-900 flex items-center justify-between gap-2 shadow-sm animate-pulse">
+            <div class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span x-text="productWarning"></span>
+            </div>
+            <button type="button" @click="productWarning=''" class="text-amber-700 hover:text-amber-900 font-bold px-1.5 py-0.5 text-base leading-none">&times;</button>
+        </div>
         <div class="overflow-x-auto">
             <table class="min-w-full text-left text-sm">
                 <thead class="border-b bg-slate-50">
@@ -76,14 +89,30 @@
                     <template x-for="(line, idx) in lines" :key="line.product_id">
                         <tr class="border-b" :class="selectedLineIndex === idx ? 'bg-slate-50' : ''" @click="selectedLineIndex = idx">
                             <td class="px-2 py-2">
-                                <div class="font-medium" x-text="line.product_name"></div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-medium" x-text="line.product_name"></span>
+                                    <span x-show="line.allow_decimal_qty" class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">Curah</span>
+                                </div>
                                 <div x-show="line.stock !== undefined && toNum(line.qty) > toNum(line.stock)" class="text-xs font-medium text-red-600">
                                     ⚠️ Melebihi stok (sisa: <span x-text="line.stock"></span> <span x-text="line.unit"></span>)
+                                </div>
+                                <div x-show="!line.allow_decimal_qty && (toNum(line.qty) % 1 !== 0)" class="text-xs font-semibold text-rose-600">
+                                    ⚠️ Bukan barang curah (harus bilangan bulat)
                                 </div>
                             </td>
                             <td class="px-2 py-2" x-text="line.unit"></td>
                             <td class="px-2 py-2">
-                                <input type="number" min="1" x-model.number="line.qty" @change="refreshPreview()" class="w-20 rounded-md border px-2 py-1" :class="line.stock !== undefined && toNum(line.qty) > toNum(line.stock) ? 'border-red-500 bg-red-50 text-red-700 font-semibold' : 'border-slate-300'">
+                                <input
+                                    type="number"
+                                    :min="line.allow_decimal_qty ? '0.001' : '1'"
+                                    :step="line.allow_decimal_qty ? 'any' : '1'"
+                                    x-model="line.qty"
+                                    @keydown="onQtyKeydown($event, line)"
+                                    @input="onQtyInput(line)"
+                                    @change="onQtyChange(line)"
+                                    class="w-24 rounded-md border px-2 py-1 text-sm font-semibold transition"
+                                    :class="(!line.allow_decimal_qty && (toNum(line.qty) % 1 !== 0)) || (line.stock !== undefined && toNum(line.qty) > toNum(line.stock)) ? 'border-red-500 bg-red-50 text-red-700 ring-1 ring-red-400' : 'border-slate-300 text-slate-800'"
+                                >
                             </td>
                             <td class="px-2 py-2" x-text="formatMoney(line.unit_price)"></td>
                             <td class="px-2 py-2" x-text="formatMoney(line.line_total)"></td>
@@ -434,7 +463,7 @@ function posApp() {
         async addProductDirect(product) {
             const existing = this.lines.find(l => String(l.product_id) === String(product.id));
             if (existing) existing.qty = this.toNum(existing.qty) + 1;
-            else this.lines.push({ product_id: product.id, product_name: product.name, unit: product.unit, stock: product.stock, qty: 1, unit_price: 0, line_total: 0 });
+            else this.lines.push({ product_id: product.id, product_name: product.name, unit: product.unit, stock: product.stock, allow_decimal_qty: !!product.allow_decimal_qty, qty: 1, unit_price: 0, line_total: 0 });
             this.scanQuery = '';
             this.productSuggestions = [];
             this.productSuggestOpen = false;
@@ -457,6 +486,39 @@ function posApp() {
             this.productWarning = `Produk tidak ditemukan untuk input "${q}".`;
             this.productSuggestOpen = false;
         },
+        onQtyKeydown(e, line) {
+            if (!line.allow_decimal_qty) {
+                // Blokir pengetikan karakter desimal atau eksponen untuk barang non-curah
+                if (e.key === '.' || e.key === ',' || e.key === 'e' || e.key === 'E' || e.key === '+' || e.key === '-') {
+                    e.preventDefault();
+                    this.productWarning = `⚠️ Produk "${line.product_name}" bukan barang curah. Kuantitas harus bilangan bulat.`;
+                }
+            }
+        },
+        onQtyInput(line) {
+            if (!line.allow_decimal_qty) {
+                const valStr = String(line.qty ?? '');
+                if (valStr.includes('.') || valStr.includes(',')) {
+                    const cleaned = valStr.split(/[.,]/)[0];
+                    line.qty = cleaned ? parseInt(cleaned, 10) : 1;
+                    this.productWarning = `⚠️ Produk "${line.product_name}" bukan barang curah. Pecahan otomatis dihapus menjadi (${line.qty}).`;
+                }
+            }
+        },
+        async onQtyChange(line) {
+            const num = this.toNum(line.qty);
+            if (!line.allow_decimal_qty) {
+                if (num % 1 !== 0 || num < 1) {
+                    line.qty = Math.max(1, Math.floor(num) || 1);
+                    this.productWarning = `⚠️ Produk "${line.product_name}" bukan barang curah. Kuantitas disesuaikan menjadi (${line.qty}).`;
+                }
+            } else {
+                if (num <= 0) {
+                    line.qty = 0.001;
+                }
+            }
+            await this.refreshPreview();
+        },
         async refreshPreview() {
             if (!this.lines.length) {
                 this.subtotal = '0.00'; this.total = '0.00';
@@ -469,7 +531,17 @@ function posApp() {
                 body: JSON.stringify({ items })
             });
             const data = await res.json();
-            if (!data.success) return;
+            if (!data.success) {
+                this.productWarning = data.message || 'Gagal memuat harga item.';
+                // Jika ada barang biasa yang pecahan, rapikan ke bilangan bulat
+                this.lines.forEach(l => {
+                    if (!l.allow_decimal_qty && (this.toNum(l.qty) % 1 !== 0)) {
+                        l.qty = Math.max(1, Math.floor(this.toNum(l.qty)) || 1);
+                    }
+                });
+                return;
+            }
+            this.productWarning = '';
             this.subtotal = data.data.subtotal;
             this.total = data.data.total;
             const byId = {};
@@ -485,6 +557,7 @@ function posApp() {
                     product_name: latest.product_name,
                     stock: latest.stock !== undefined ? latest.stock : old.stock,
                     unit: latest.unit || old.unit,
+                    allow_decimal_qty: latest.allow_decimal_qty !== undefined ? latest.allow_decimal_qty : old.allow_decimal_qty,
                 };
             });
             this.syncPayment();
@@ -519,6 +592,11 @@ function posApp() {
         },
         openCheckout() {
             if (!this.lines.length) return;
+            const invalidLine = this.lines.find(l => !l.allow_decimal_qty && (this.toNum(l.qty) % 1 !== 0));
+            if (invalidLine) {
+                this.productWarning = `⚠️ Produk "${invalidLine.product_name}" bukan barang curah dan tidak boleh dibeli dengan jumlah pecahan (${invalidLine.qty}). Harap ubah ke bilangan bulat sebelum checkout.`;
+                return;
+            }
             this.checkoutError = '';
             this.checkoutOpen = true;
             if (this.isNonMemberSelected()) this.payment.deposit = '0.00';
@@ -586,6 +664,11 @@ function posApp() {
         async submitCheckout() {
             this.checkoutError = '';
             if (!this.lines.length) { this.checkoutError = 'Keranjang masih kosong.'; return; }
+            const invalidLine = this.lines.find(l => !l.allow_decimal_qty && (this.toNum(l.qty) % 1 !== 0));
+            if (invalidLine) {
+                this.checkoutError = `Produk "${invalidLine.product_name}" bukan barang curah dan tidak boleh dibeli dengan jumlah pecahan (harus bilangan bulat).`;
+                return;
+            }
             const total = this.toNum(this.total);
             const deposit = this.toNum(this.payment.deposit);
             const cashDue = this.cashDue();

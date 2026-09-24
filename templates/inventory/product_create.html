@@ -54,7 +54,16 @@
                 </div>
                 <div>
                     <label class="mb-1 block text-sm font-medium">Reorder Point</label>
-                    <input type="number" name="reorder_point" step="1" min="0" value="{{ request.POST.reorder_point }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                    <input type="number" name="reorder_point" step="0.001" min="0" value="{{ request.POST.reorder_point }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                </div>
+                <div class="rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+                    <label class="flex items-start gap-2.5 cursor-pointer">
+                        <input type="checkbox" name="allow_decimal_qty" value="1" {% if request.POST.allow_decimal_qty %}checked{% endif %} class="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800">
+                        <div>
+                            <span class="block text-sm font-semibold text-slate-800">Bisa Dijual Pecahan / Curah (Desimal)</span>
+                            <span class="block text-xs text-slate-600">Centang jika produk ini ditimbang/diukur saat transaksi POS sehingga kuantitas boleh berupa desimal (misal: 0.5 kg, 1.25 meter). Jika tidak dicentang, transaksi wajib bilangan bulat.</span>
+                        </div>
+                    </label>
                 </div>
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
                     <h3 class="mb-2 text-sm font-semibold">Supplier Terakhir</h3>

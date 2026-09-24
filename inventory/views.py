@@ -346,6 +346,7 @@ def product_create(request):
                         reorder_point=reorder_point,
                         category=category,
                         unit=unit,
+                        allow_decimal_qty=bool(request.POST.get('allow_decimal_qty')),
                     )
                     _create_price_tiers(product, tier_rows)
                 messages.success(request, 'Produk berhasil ditambahkan.')
@@ -466,6 +467,7 @@ def product_edit(request, uuid):
                     product.last_purchase_price = buy_price
                     product.cost_of_goods_sold = hpp
                     product.reorder_point = reorder_point
+                    product.allow_decimal_qty = bool(request.POST.get('allow_decimal_qty'))
                     product.save()
                     product.price_tiers.all().delete()
                     _create_price_tiers(product, tier_rows)
@@ -1258,6 +1260,7 @@ def product_import_template_excel(request):
         ("harga_jual", 16),
         ("min_stok", 14),
         ("stok_awal", 14),
+        ("bisa_desimal", 16),
     ]
 
     header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
@@ -1284,8 +1287,8 @@ def product_import_template_excel(request):
 
     # Sample rows to demonstrate formatting
     sample_rows = [
-        ["BRG-001", "8991234567890", "Beras Ramos 5kg", "Sembako", "PCS", 60000, 68000, 10, 50],
-        ["BRG-002", "", "Gula Pasir 1kg", "Sembako", "KG", 15000, 17500, 20, 100],
+        ["BRG-001", "8991234567890", "Beras Ramos 5kg", "Sembako", "PCS", 60000, 68000, 10, 50, "TIDAK"],
+        ["BRG-002", "", "Gula Pasir (Curah)", "Sembako", "KG", 15000, 17500, 20, 100, "YA"],
     ]
     sample_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
     for row_idx, srow in enumerate(sample_rows, start=2):
@@ -1295,7 +1298,7 @@ def product_import_template_excel(request):
             cell.fill = sample_fill
             if col_idx in [6, 7, 8, 9]:
                 cell.alignment = right_align
-            elif col_idx in [1, 2, 5]:
+            elif col_idx in [1, 2, 5, 10]:
                 cell.alignment = center_align
             else:
                 cell.alignment = left_align
@@ -1567,23 +1570,28 @@ def product_import_excel(request):
                     except (InvalidOperation, ValueError):
                         row_errors.append(f"Format harga beli tidak valid: '{raw_harga_beli}'.")
 
-                parsed_min_stok = 0
+                parsed_min_stok = Decimal('0')
                 if raw_min_stok:
                     try:
-                        parsed_min_stok = int(float(raw_min_stok.replace(',', '')))
-                        if parsed_min_stok < 0:
+                        clean_ms = raw_min_stok.replace(',', '').replace(' ', '')
+                        parsed_min_stok = Decimal(clean_ms)
+                        if parsed_min_stok < Decimal('0'):
                             row_errors.append("Min stok tidak boleh negatif.")
-                    except ValueError:
+                    except (InvalidOperation, ValueError):
                         row_errors.append(f"Format min stok tidak valid: '{raw_min_stok}'.")
 
-                parsed_stok_awal = 0
+                parsed_stok_awal = Decimal('0')
                 if raw_stok_awal:
                     try:
-                        parsed_stok_awal = int(float(raw_stok_awal.replace(',', '')))
-                        if parsed_stok_awal < 0:
+                        clean_sa = raw_stok_awal.replace(',', '').replace(' ', '')
+                        parsed_stok_awal = Decimal(clean_sa)
+                        if parsed_stok_awal < Decimal('0'):
                             row_errors.append("Stok awal tidak boleh negatif.")
-                    except ValueError:
+                    except (InvalidOperation, ValueError):
                         row_errors.append(f"Format stok awal tidak valid: '{raw_stok_awal}'.")
+
+                raw_bisa_desimal = get_val('bisa_desimal') or get_val('curah') or get_val('desimal')
+                is_decimal = raw_bisa_desimal.lower() in ['ya', 'y', 'true', '1', 'yes', 'curah']
 
                 is_valid = len(row_errors) == 0
                 if is_valid:
@@ -1603,8 +1611,9 @@ def product_import_excel(request):
                     'unit_display': f"{unit_obj.name} ({unit_obj.code})" if unit_obj else raw_satuan,
                     'harga_beli': str(parsed_harga_beli),
                     'harga_jual': str(parsed_harga_jual),
-                    'min_stok': parsed_min_stok,
-                    'stok_awal': parsed_stok_awal,
+                    'min_stok': str(parsed_min_stok),
+                    'stok_awal': str(parsed_stok_awal),
+                    'allow_decimal_qty': is_decimal,
                     'is_valid': is_valid,
                     'errors': row_errors,
                 })

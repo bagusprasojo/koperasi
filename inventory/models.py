@@ -70,10 +70,11 @@ class Product(BaseModel):
     name = models.CharField(max_length=150)
     sku = models.CharField(max_length=50, unique=True)
     barcode = models.CharField(max_length=80, unique=True, null=True, blank=True)
-    stock = models.IntegerField(default=0)
+    stock = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     last_purchase_price = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     cost_of_goods_sold = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    reorder_point = models.PositiveIntegerField(default=0)
+    reorder_point = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    allow_decimal_qty = models.BooleanField(default=False, verbose_name="Bisa Dijual Pecahan / Curah")
 
     def __str__(self):
         return self.name
@@ -95,8 +96,8 @@ class ProductPriceTier(BaseModel):
         related_name='price_tiers'
     )
     level = models.PositiveSmallIntegerField()
-    min_qty = models.PositiveIntegerField()
-    max_qty = models.PositiveIntegerField()
+    min_qty = models.DecimalField(max_digits=12, decimal_places=3, default=1)
+    max_qty = models.DecimalField(max_digits=12, decimal_places=3, default=999999)
     price = models.DecimalField(
         max_digits=12,
         decimal_places=2
@@ -213,7 +214,7 @@ class InventoryTransaction(BaseModel):
 class InventoryTransactionItem(BaseModel):
     transaction = models.ForeignKey(InventoryTransaction, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    qty = models.IntegerField()  # +in / -out
+    qty = models.DecimalField(max_digits=12, decimal_places=3)  # +in / -out
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
@@ -222,10 +223,10 @@ class StockLedger(BaseModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='stock_ledgers')
     tx = models.ForeignKey(InventoryTransaction, on_delete=models.CASCADE, related_name='stock_ledgers')
     tx_date = models.DateField()
-    qty_in = models.IntegerField(default=0)
-    qty_out = models.IntegerField(default=0)
-    balance_before = models.IntegerField(default=0)
-    balance_after = models.IntegerField(default=0)
+    qty_in = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    qty_out = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    balance_before = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     unit_cost_at_txn = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     value_in = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     value_out = models.DecimalField(max_digits=14, decimal_places=2, default=0)
