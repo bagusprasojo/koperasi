@@ -64,7 +64,7 @@ def build_price_preview(items: list):
 
     products = {
         str(p.id): p
-        for p in Product.objects.prefetch_related('price_tiers').filter(id__in=list(qty_by_product.keys()))
+        for p in Product.objects.select_related('unit').prefetch_related('price_tiers').filter(id__in=list(qty_by_product.keys()))
     }
 
     lines = []
@@ -85,6 +85,8 @@ def build_price_preview(items: list):
             {
                 'product_id': product_id,
                 'product_name': product.name,
+                'unit': product.unit.name if product.unit else 'pcs',
+                'stock': product.stock,
                 'qty': qty,
                 'price_level': selected_tier.level,
                 'unit_price': unit_price,
@@ -111,6 +113,17 @@ def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number
 
     preview = build_price_preview(items)
     total = preview['total']
+
+    # Pre-validation: Periksa ketersediaan stok seluruh item sebelum memproses pembayaran
+    insufficient_items = []
+    for line in preview['lines']:
+        if line['stock'] < line['qty']:
+            unit_label = line.get('unit') or 'pcs'
+            insufficient_items.append(
+                f"• {line['product_name']}: sisa stok {line['stock']} {unit_label}, diminta {line['qty']} {unit_label}"
+            )
+    if insufficient_items:
+        raise ValidationError("Stok barang tidak mencukupi:\n" + "\n".join(insufficient_items))
 
     if not payments:
         raise ValidationError('Pembayaran wajib diisi.')

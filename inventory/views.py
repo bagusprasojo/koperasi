@@ -23,6 +23,7 @@ from .services import (
     post_stock_opname,
     reopen_last_closing,
     low_stock_products,
+    import_products_batch,
 )
 
 TWOPLACES = Decimal('0.01')
@@ -1226,3 +1227,414 @@ def supplier_delete(request, uuid):
         except Exception:
             messages.error(request, 'Supplier tidak bisa dihapus karena sudah dipakai transaksi.')
     return redirect('supplier_list')
+
+
+@role_required(*MANAGEMENT_ROLES, perm='manage_products')
+def product_import_template_excel(request):
+    """
+    Download template Excel (.xlsx) resmi untuk import data master barang.
+    Sheet 1: Template Import (kolom sku, barcode, nama_barang, kategori, satuan, harga_beli, harga_jual, min_stok, stok_awal)
+    Sheet 2: Referensi Master Data (daftar Kategori dan Satuan aktif di database)
+    """
+    import io
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from django.http import HttpResponse
+
+    wb = openpyxl.Workbook()
+
+    # Sheet 1: Template Import
+    ws1 = wb.active
+    ws1.title = "Template Import"
+
+    headers = [
+        ("sku", 18),
+        ("barcode", 20),
+        ("nama_barang", 35),
+        ("kategori", 20),
+        ("satuan", 15),
+        ("harga_beli", 16),
+        ("harga_jual", 16),
+        ("min_stok", 14),
+        ("stok_awal", 14),
+    ]
+
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    center_align = Alignment(horizontal="center", vertical="center")
+    left_align = Alignment(horizontal="left", vertical="center")
+    right_align = Alignment(horizontal="right", vertical="center")
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1'),
+    )
+
+    # Write headers
+    for col_idx, (col_id, col_width) in enumerate(headers, start=1):
+        cell = ws1.cell(row=1, column=col_idx, value=col_id)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center_align
+        cell.border = thin_border
+        col_letter = get_column_letter(col_idx)
+        ws1.column_dimensions[col_letter].width = col_width
+
+    # Sample rows to demonstrate formatting
+    sample_rows = [
+        ["BRG-001", "8991234567890", "Beras Ramos 5kg", "Sembako", "PCS", 60000, 68000, 10, 50],
+        ["BRG-002", "", "Gula Pasir 1kg", "Sembako", "KG", 15000, 17500, 20, 100],
+    ]
+    sample_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    for row_idx, srow in enumerate(sample_rows, start=2):
+        for col_idx, val in enumerate(srow, start=1):
+            cell = ws1.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
+            cell.fill = sample_fill
+            if col_idx in [6, 7, 8, 9]:
+                cell.alignment = right_align
+            elif col_idx in [1, 2, 5]:
+                cell.alignment = center_align
+            else:
+                cell.alignment = left_align
+
+    # Sheet 2: Referensi Master Data
+    ws2 = wb.create_sheet(title="Referensi Master Data")
+    ref_header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    ref_header_fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid")
+
+    # Categories in Col A
+    cat_header = ws2.cell(row=1, column=1, value="Kategori Terdaftar")
+    cat_header.font = ref_header_font
+    cat_header.fill = ref_header_fill
+    cat_header.alignment = center_align
+    cat_header.border = thin_border
+    ws2.column_dimensions['A'].width = 28
+
+    categories = Category.objects.all().order_by('name')
+    for idx, c in enumerate(categories, start=2):
+        cell = ws2.cell(row=idx, column=1, value=c.name)
+        cell.border = thin_border
+
+    # Units in Col C, D
+    unit_code_header = ws2.cell(row=1, column=3, value="Kode Satuan")
+    unit_code_header.font = ref_header_font
+    unit_code_header.fill = ref_header_fill
+    unit_code_header.alignment = center_align
+    unit_code_header.border = thin_border
+    ws2.column_dimensions['C'].width = 18
+
+    unit_name_header = ws2.cell(row=1, column=4, value="Nama Satuan")
+    unit_name_header.font = ref_header_font
+    unit_name_header.fill = ref_header_fill
+    unit_name_header.alignment = center_align
+    unit_name_header.border = thin_border
+    ws2.column_dimensions['D'].width = 25
+
+    active_units = Unit.objects.filter(is_active=True).order_by('name')
+    for idx, u in enumerate(active_units, start=2):
+        cell_code = ws2.cell(row=idx, column=3, value=u.code)
+        cell_code.border = thin_border
+        cell_code.alignment = center_align
+        cell_name = ws2.cell(row=idx, column=4, value=u.name)
+        cell_name.border = thin_border
+
+    ws2.column_dimensions['B'].width = 5
+
+    # Instructions note on Sheet 2
+    note_cell = ws2.cell(row=1, column=6, value="PERHATIAN:")
+    note_cell.font = Font(name="Calibri", size=11, bold=True, color="DC2626")
+    ws2.cell(row=2, column=6, value="1. Sistem TIDAK membuat Kategori dan Satuan baru secara otomatis.")
+    ws2.cell(row=3, column=6, value="2. Nama kategori dan satuan di sheet 'Template Import' harus persis sama dengan daftar master di atas.")
+    ws2.cell(row=4, column=6, value="3. Jika ada kategori/satuan yang tidak cocok atau SKU duplikat, seluruh data import akan ditolak.")
+    ws2.column_dimensions['F'].width = 70
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="template_import_produk.xlsx"'
+    return response
+
+
+@role_required(*MANAGEMENT_ROLES, perm='manage_products')
+def product_import_excel(request):
+    """
+    Import data master barang dari file Excel (.xlsx) dengan validasi ketat:
+    - Tidak ada auto-create kategori atau satuan.
+    - Menolak jika ada SKU yang sudah ada di database atau duplikat di file.
+    - All-or-nothing: Jika ada 1 baris error, seluruh data tidak bisa disimpan.
+    """
+    import openpyxl
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'cancel':
+            request.session.pop('product_import_batch', None)
+            messages.info(request, 'Proses import dibatalkan.')
+            return redirect('product_import_excel')
+
+        elif action == 'confirm':
+            batch = request.session.get('product_import_batch')
+            if not batch or not batch.get('can_confirm') or batch.get('total_errors', 1) > 0:
+                messages.error(request, 'Data import tidak valid, memiliki error, atau sesi telah kedaluwarsa. Silakan unggah ulang.')
+                return redirect('product_import_excel')
+
+            validated_rows = batch.get('rows', [])
+            try:
+                created_count = import_products_batch(validated_rows, request.user)
+                request.session.pop('product_import_batch', None)
+                messages.success(request, f'Berhasil mengimpor {created_count} produk ke data master.')
+                return redirect('product_list')
+            except Exception as e:
+                messages.error(request, f'Gagal menyimpan data import: {_exc_message(e)}')
+                return render(request, 'inventory/product_import.html', {
+                    'preview_mode': True,
+                    'rows': validated_rows,
+                    'total_rows': batch.get('total_rows', 0),
+                    'total_errors': batch.get('total_errors', 0),
+                    'total_valid': batch.get('total_valid', 0),
+                    'can_confirm': False,
+                    'system_error': _exc_message(e),
+                })
+
+        elif action == 'preview':
+            uploaded_file = request.FILES.get('file')
+            if not uploaded_file:
+                messages.error(request, 'Silakan pilih file Excel (.xlsx) terlebih dahulu.')
+                return render(request, 'inventory/product_import.html')
+
+            if not uploaded_file.name.lower().endswith(('.xlsx', '.xlsm')):
+                messages.error(request, 'Format file tidak didukung. Harap unggah file berformat .xlsx.')
+                return render(request, 'inventory/product_import.html')
+
+            try:
+                wb = openpyxl.load_workbook(uploaded_file, data_only=True)
+            except Exception as e:
+                messages.error(request, f'Gagal membaca file Excel: {str(e)}')
+                return render(request, 'inventory/product_import.html')
+
+            ws = wb['Template Import'] if 'Template Import' in wb.sheetnames else wb.active
+
+            rows_iter = ws.iter_rows(values_only=True)
+            try:
+                header_row = next(rows_iter)
+            except StopIteration:
+                messages.error(request, 'File Excel kosong.')
+                return render(request, 'inventory/product_import.html')
+
+            if not header_row:
+                messages.error(request, 'Baris header tidak ditemukan pada file Excel.')
+                return render(request, 'inventory/product_import.html')
+
+            # Map header columns
+            col_map = {}
+            for idx, cell_value in enumerate(header_row):
+                if cell_value is not None:
+                    norm_key = str(cell_value).strip().lower().replace(' ', '_').replace('*', '').strip('_')
+                    col_map[norm_key] = idx
+
+            # Mandatory headers
+            required_cols = ['sku', 'nama_barang', 'kategori', 'satuan', 'harga_jual']
+            if 'nama' in col_map and 'nama_barang' not in col_map:
+                col_map['nama_barang'] = col_map['nama']
+
+            missing_headers = [c for c in required_cols if c not in col_map]
+            if missing_headers:
+                messages.error(
+                    request,
+                    f"Kolom wajib tidak ditemukan di file Excel: {', '.join(missing_headers)}. Silakan gunakan template resmi."
+                )
+                return render(request, 'inventory/product_import.html')
+
+            # Pre-load master categories and units for fast and case-insensitive matching
+            categories = {c.name.strip().lower(): c for c in Category.objects.all()}
+            units = {}
+            for u in Unit.objects.filter(is_active=True):
+                units[u.code.strip().lower()] = u
+                units[u.name.strip().lower()] = u
+
+            # Existing SKUs and barcodes in DB
+            existing_skus_db = {s.lower() for s in Product.objects.values_list('sku', flat=True)}
+            existing_barcodes_db = {
+                b.lower()
+                for b in Product.objects.exclude(barcode__isnull=True).exclude(barcode='').values_list('barcode', flat=True)
+            }
+
+            seen_skus_file = {}
+            seen_barcodes_file = {}
+
+            parsed_rows = []
+            total_errors = 0
+            total_valid = 0
+
+            for row_idx, row_values in enumerate(rows_iter, start=2):
+                if not any(v is not None and str(v).strip() != '' for v in row_values):
+                    continue  # skip completely blank line
+
+                def get_val(col_name, default=''):
+                    idx = col_map.get(col_name)
+                    if idx is not None and idx < len(row_values):
+                        val = row_values[idx]
+                        return str(val).strip() if val is not None else default
+                    return default
+
+                raw_sku = get_val('sku')
+                raw_barcode = get_val('barcode')
+                raw_nama = get_val('nama_barang')
+                raw_kategori = get_val('kategori')
+                raw_satuan = get_val('satuan')
+                raw_harga_beli = get_val('harga_beli', '0')
+                raw_harga_jual = get_val('harga_jual')
+                raw_min_stok = get_val('min_stok', '0')
+                raw_stok_awal = get_val('stok_awal', '0')
+
+                row_errors = []
+
+                # 1. Mandatory checks
+                if not raw_sku:
+                    row_errors.append("SKU wajib diisi.")
+                if not raw_nama:
+                    row_errors.append("Nama barang wajib diisi.")
+                if not raw_kategori:
+                    row_errors.append("Kategori wajib diisi.")
+                if not raw_satuan:
+                    row_errors.append("Satuan wajib diisi.")
+                if not raw_harga_jual:
+                    row_errors.append("Harga jual wajib diisi.")
+
+                # 2. SKU checks
+                if raw_sku:
+                    sku_lower = raw_sku.lower()
+                    if sku_lower in seen_skus_file:
+                        row_errors.append(f"SKU '{raw_sku}' duplikat dengan baris {seen_skus_file[sku_lower]} di file Excel.")
+                    else:
+                        seen_skus_file[sku_lower] = row_idx
+
+                    if sku_lower in existing_skus_db:
+                        row_errors.append(f"SKU '{raw_sku}' sudah terdaftar di database.")
+
+                # 3. Barcode checks
+                if raw_barcode:
+                    bc_lower = raw_barcode.lower()
+                    if bc_lower in seen_barcodes_file:
+                        row_errors.append(f"Barcode '{raw_barcode}' duplikat dengan baris {seen_barcodes_file[bc_lower]} di file Excel.")
+                    else:
+                        seen_barcodes_file[bc_lower] = row_idx
+
+                    if bc_lower in existing_barcodes_db:
+                        row_errors.append(f"Barcode '{raw_barcode}' sudah digunakan produk lain di database.")
+
+                # 4. Kategori master check (NO auto-create!)
+                cat_obj = None
+                if raw_kategori:
+                    cat_obj = categories.get(raw_kategori.lower())
+                    if not cat_obj:
+                        row_errors.append(f"Kategori '{raw_kategori}' tidak ditemukan di data master.")
+
+                # 5. Satuan master check (NO auto-create!)
+                unit_obj = None
+                if raw_satuan:
+                    unit_obj = units.get(raw_satuan.lower())
+                    if not unit_obj:
+                        row_errors.append(f"Satuan '{raw_satuan}' tidak ditemukan atau nonaktif di data master.")
+
+                # 6. Numeric checks
+                parsed_harga_jual = Decimal('0')
+                if raw_harga_jual:
+                    try:
+                        clean_hj = raw_harga_jual.replace(',', '').replace(' ', '')
+                        parsed_harga_jual = Decimal(clean_hj)
+                        if parsed_harga_jual <= 0:
+                            row_errors.append("Harga jual harus lebih besar dari 0.")
+                    except (InvalidOperation, ValueError):
+                        row_errors.append(f"Format harga jual tidak valid: '{raw_harga_jual}'.")
+
+                parsed_harga_beli = Decimal('0')
+                if raw_harga_beli:
+                    try:
+                        clean_hb = raw_harga_beli.replace(',', '').replace(' ', '')
+                        parsed_harga_beli = Decimal(clean_hb)
+                        if parsed_harga_beli < 0:
+                            row_errors.append("Harga beli tidak boleh negatif.")
+                    except (InvalidOperation, ValueError):
+                        row_errors.append(f"Format harga beli tidak valid: '{raw_harga_beli}'.")
+
+                parsed_min_stok = 0
+                if raw_min_stok:
+                    try:
+                        parsed_min_stok = int(float(raw_min_stok.replace(',', '')))
+                        if parsed_min_stok < 0:
+                            row_errors.append("Min stok tidak boleh negatif.")
+                    except ValueError:
+                        row_errors.append(f"Format min stok tidak valid: '{raw_min_stok}'.")
+
+                parsed_stok_awal = 0
+                if raw_stok_awal:
+                    try:
+                        parsed_stok_awal = int(float(raw_stok_awal.replace(',', '')))
+                        if parsed_stok_awal < 0:
+                            row_errors.append("Stok awal tidak boleh negatif.")
+                    except ValueError:
+                        row_errors.append(f"Format stok awal tidak valid: '{raw_stok_awal}'.")
+
+                is_valid = len(row_errors) == 0
+                if is_valid:
+                    total_valid += 1
+                else:
+                    total_errors += 1
+
+                parsed_rows.append({
+                    'row_idx': row_idx,
+                    'sku': raw_sku,
+                    'barcode': raw_barcode,
+                    'nama_barang': raw_nama,
+                    'kategori': raw_kategori,
+                    'category_id': cat_obj.id if cat_obj else None,
+                    'satuan': raw_satuan,
+                    'unit_id': unit_obj.id if unit_obj else None,
+                    'unit_display': f"{unit_obj.name} ({unit_obj.code})" if unit_obj else raw_satuan,
+                    'harga_beli': str(parsed_harga_beli),
+                    'harga_jual': str(parsed_harga_jual),
+                    'min_stok': parsed_min_stok,
+                    'stok_awal': parsed_stok_awal,
+                    'is_valid': is_valid,
+                    'errors': row_errors,
+                })
+
+            total_rows = len(parsed_rows)
+            if total_rows == 0:
+                messages.warning(request, 'Tidak ada baris data barang yang ditemukan di file Excel.')
+                return render(request, 'inventory/product_import.html')
+
+            can_confirm = (total_rows > 0 and total_errors == 0)
+
+            # Store in session for confirmation
+            request.session['product_import_batch'] = {
+                'rows': parsed_rows,
+                'can_confirm': can_confirm,
+                'total_rows': total_rows,
+                'total_errors': total_errors,
+                'total_valid': total_valid,
+            }
+
+            return render(request, 'inventory/product_import.html', {
+                'preview_mode': True,
+                'rows': parsed_rows,
+                'can_confirm': can_confirm,
+                'total_rows': total_rows,
+                'total_errors': total_errors,
+                'total_valid': total_valid,
+            })
+
+    # GET request
+    return render(request, 'inventory/product_import.html', {
+        'preview_mode': False,
+    })

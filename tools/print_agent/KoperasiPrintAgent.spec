@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['D:\\bp\\sharedprojects\\koperasi\\tools\\print_agent\\app.py'],
+    ['D:\\BP\\sharedprojects\\koperasi\\tools\\print_agent\\app.py'],
     pathex=[],
     binaries=[],
     datas=[],

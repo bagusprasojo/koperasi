@@ -195,6 +195,7 @@ def pos_page(request):
             'sku': p.sku,
             'barcode': p.barcode or '',
             'unit': p.unit.name if p.unit else '-',
+            'stock': p.stock,
         }
         for p in products
     ]

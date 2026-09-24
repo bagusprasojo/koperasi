@@ -237,7 +237,10 @@ def post_internal_used(product: Product, qty: int, user, note=''):
     if qty <= 0:
         raise ValidationError('Qty internal used harus > 0.')
     if product.stock < qty:
-        raise ValidationError('Stok tidak mencukupi.')
+        unit_label = product.unit.name if product.unit else 'item'
+        raise ValidationError(
+            f"Stok tidak mencukupi untuk '{product.name}'. Tersedia: {product.stock} {unit_label}, diminta: {qty} {unit_label}."
+        )
     unit_cost = product.cost_of_goods_sold
     if unit_cost <= 0:
         raise ValidationError('HPP produk harus lebih besar dari 0 untuk transaksi internal used.')
@@ -281,7 +284,10 @@ def post_pos_sale(product: Product, qty: int, user, reference='', note=''):
     if qty <= 0:
         raise ValidationError('Qty penjualan harus > 0.')
     if product.stock < qty:
-        raise ValidationError('Stok tidak mencukupi.')
+        unit_label = product.unit.name if product.unit else 'item'
+        raise ValidationError(
+            f"Stok tidak mencukupi untuk '{product.name}'. Tersedia: {product.stock} {unit_label}, diminta: {qty} {unit_label}."
+        )
     unit_cost = product.cost_of_goods_sold
     if unit_cost <= 0:
         raise ValidationError('HPP produk harus lebih besar dari 0 untuk transaksi penjualan POS.')
@@ -439,3 +445,111 @@ def reopen_last_closing(user):
 
 def low_stock_products():
     return Product.objects.filter(reorder_point__gt=0, stock__lte=F('reorder_point')).order_by('stock')
+
+
+@transaction.atomic
+def import_products_batch(validated_rows: list, user) -> int:
+    """
+    Menyimpan seluruh data produk dari batch validasi import Excel secara atomik.
+    Membuat:
+    - Product
+    - ProductPriceTier (Level 1)
+    - InventoryTransaction & StockLedger (jika stok_awal > 0)
+
+    Jika ada 1 saja kesalahan atau duplikasi di tahap akhir, seluruh transaksi di-rollback.
+    """
+    from .models import Category, Unit, Product, ProductPriceTier, InventoryTransaction, InventoryTransactionItem, StockLedger
+
+    if not validated_rows:
+        raise ValidationError('Tidak ada data produk yang diproses.')
+
+    today = date.today()
+
+    # Re-check race conditions: SKU, barcode, category, unit
+    for row in validated_rows:
+        sku = str(row['sku']).strip()
+        if Product.objects.filter(sku__iexact=sku).exists():
+            raise ValidationError(f"SKU '{sku}' sudah terdaftar di database.")
+
+        barcode = str(row.get('barcode') or '').strip()
+        if barcode and Product.objects.filter(barcode__iexact=barcode).exists():
+            raise ValidationError(f"Barcode '{barcode}' sudah digunakan produk lain di database.")
+
+        if not Category.objects.filter(id=row['category_id']).exists():
+            raise ValidationError(f"Kategori dengan ID {row['category_id']} tidak ditemukan.")
+
+        if not Unit.objects.filter(id=row['unit_id'], is_active=True).exists():
+            raise ValidationError(f"Satuan dengan ID {row['unit_id']} tidak ditemukan atau nonaktif.")
+
+    created_count = 0
+
+    for row in validated_rows:
+        sku = str(row['sku']).strip()
+        barcode = str(row.get('barcode') or '').strip() or None
+        name = str(row['nama_barang']).strip()
+        category_id = row['category_id']
+        unit_id = row['unit_id']
+        harga_beli = Decimal(str(row.get('harga_beli') or '0'))
+        harga_jual = Decimal(str(row['harga_jual']))
+        min_stok = int(row.get('min_stok') or 0)
+        stok_awal = int(row.get('stok_awal') or 0)
+
+        product = Product.objects.create(
+            category_id=category_id,
+            unit_id=unit_id,
+            name=name,
+            sku=sku,
+            barcode=barcode,
+            stock=0,
+            last_purchase_price=harga_beli,
+            cost_of_goods_sold=harga_beli,
+            reorder_point=min_stok,
+        )
+
+        ProductPriceTier.objects.create(
+            product=product,
+            level=1,
+            min_qty=1,
+            max_qty=999999,
+            price=harga_jual,
+            source_mode='final',
+            discount_type='',
+            discount_value=None,
+        )
+
+        if stok_awal > 0:
+            _ensure_not_closed(today)
+            tx = InventoryTransaction.objects.create(
+                tx_number=_tx_number('INI'),
+                tx_type=InventoryTransaction.TYPE_STOCK_OPNAME,
+                tx_date=today,
+                note=f'Saldo awal import: {product.name}',
+                created_by=user,
+            )
+            total_cost = (harga_beli * Decimal(stok_awal)).quantize(Decimal('0.01'))
+            InventoryTransactionItem.objects.create(
+                transaction=tx,
+                product=product,
+                qty=stok_awal,
+                unit_cost=harga_beli,
+                total_cost=total_cost,
+            )
+            StockLedger.objects.create(
+                product=product,
+                tx=tx,
+                tx_date=today,
+                qty_in=stok_awal,
+                qty_out=0,
+                balance_before=0,
+                balance_after=stok_awal,
+                unit_cost_at_txn=harga_beli,
+                value_in=total_cost,
+                value_out=Decimal('0.00'),
+                note='Saldo Awal Import Excel',
+            )
+            product.stock = stok_awal
+            product.save(update_fields=['stock', 'updated_at'])
+
+        created_count += 1
+
+    return created_count

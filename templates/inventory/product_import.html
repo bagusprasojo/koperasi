@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Import Master Produk | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+            <div class="flex items-center gap-2 text-sm text-slate-500 mb-1">
+                <a href="{% url 'product_list' %}" class="hover:text-slate-800 transition-colors">Sampul Produk</a>
+                <span>/</span>
+                <span class="text-slate-700 font-medium">Import Excel</span>
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900">Import Data Master Produk</h1>
+            <p class="text-sm text-slate-600 mt-0.5">Tambahkan banyak produk sekaligus menggunakan file spreadsheet Excel (.xlsx).</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="{% url 'product_import_template_excel' %}" class="inline-flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download Template Excel (.xlsx)
+            </a>
+            <a href="{% url 'product_list' %}" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                Kembali
+            </a>
+        </div>
+    </div>
+
+    <!-- Petunjuk & Aturan Validasi Ketat -->
+    <div class="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+        <div class="flex items-start gap-3">
+            <div class="mt-0.5 rounded-full bg-amber-200 p-1 text-amber-800">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="text-xs md:text-sm text-amber-900 leading-relaxed space-y-1">
+                <p class="font-semibold text-amber-950">Aturan Ketat Import Data Master:</p>
+                <ul class="list-disc list-inside space-y-0.5 text-amber-900">
+                    <li><strong class="font-semibold">Kategori & Satuan Wajib Ada:</strong> Sistem <em>tidak membuat kategori atau satuan baru</em> secara otomatis. Pastikan nama kategori dan kode/nama satuan sudah terdaftar di data master (dapat dilihat pada sheet <em>"Referensi Master Data"</em> di dalam template).</li>
+                    <li><strong class="font-semibold">SKU Unik:</strong> SKU tidak boleh duplikat di dalam file Excel dan tidak boleh sudah ada di database.</li>
+                    <li><strong class="font-semibold">Aturan All-or-Nothing:</strong> Jika ditemukan <strong class="underline decoration-red-500 font-bold">1 saja baris error</strong>, tombol proses simpan akan dinonaktifkan dan <strong>seluruh data tidak bisa disimpan</strong> hingga file diperbaiki.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    {% if not preview_mode %}
+    <!-- Form Upload File -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 class="text-base font-semibold text-slate-900 mb-4">Langkah 1: Unggah Berkas Excel</h2>
+        <form method="post" enctype="multipart/form-data" class="space-y-5">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="preview">
+
+            <div class="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 p-8 text-center hover:border-slate-400 transition-colors bg-slate-50/50">
+                <div class="rounded-full bg-blue-50 p-3 text-blue-600 mb-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </div>
+                <label for="excel-file" class="cursor-pointer">
+                    <span class="text-sm font-semibold text-blue-600 hover:text-blue-700">Pilih file Excel (.xlsx)</span>
+                    <span class="text-sm text-slate-500"> atau seret ke sini</span>
+                    <input id="excel-file" name="file" type="file" accept=".xlsx, .xlsm" required class="sr-only" onchange="displayFileName(this)">
+                </label>
+                <p id="file-name-display" class="mt-2 text-xs font-medium text-slate-600 italic">Belum ada file dipilih</p>
+                <p class="mt-1 text-xs text-slate-400">Gunakan template resmi untuk memastikan struktur kolom sesuai</p>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-2">
+                <a href="{% url 'product_list' %}" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                    Batal
+                </a>
+                <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Periksa & Preview Data
+                </button>
+            </div>
+        </form>
+    </div>
+    {% else %}
+
+    <!-- Preview & Validation Mode -->
+    <div class="space-y-6">
+        <!-- Stat Cards -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Baris Terbaca</p>
+                <p class="mt-1 text-2xl font-bold text-slate-900">{{ total_rows }}</p>
+            </div>
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
+                <p class="text-xs font-medium text-emerald-700 uppercase tracking-wider">Baris Valid (Siap Simpan)</p>
+                <p class="mt-1 text-2xl font-bold text-emerald-700">{{ total_valid }}</p>
+            </div>
+            <div class="rounded-xl border {% if total_errors > 0 %}border-rose-300 bg-rose-50/60{% else %}border-slate-200 bg-white{% endif %} p-4 shadow-sm">
+                <p class="text-xs font-medium {% if total_errors > 0 %}text-rose-700{% else %}text-slate-500{% endif %} uppercase tracking-wider">Baris Bermasalah (Error)</p>
+                <p class="mt-1 text-2xl font-bold {% if total_errors > 0 %}text-rose-700{% else %}text-slate-700{% endif %}">{{ total_errors }}</p>
+            </div>
+        </div>
+
+        <!-- Banner Status All-or-Nothing -->
+        {% if can_confirm %}
+        <div class="rounded-xl border border-emerald-300 bg-emerald-50 p-4 shadow-sm">
+            <div class="flex items-center gap-3">
+                <div class="rounded-full bg-emerald-200 p-1.5 text-emerald-800">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-emerald-950">Validasi Berhasil (100% Valid)</h3>
+                    <p class="text-xs text-emerald-800 mt-0.5">Seluruh {{ total_valid }} baris data siap dimasukkan ke database master produk.</p>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="rounded-xl border border-rose-300 bg-rose-50 p-4 shadow-sm">
+            <div class="flex items-start gap-3">
+                <div class="rounded-full bg-rose-200 p-1.5 text-rose-800 mt-0.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-rose-950">Data Tidak Dapat Disimpan (Ditemukan {{ total_errors }} Baris Error)</h3>
+                    <p class="text-xs text-rose-900 mt-0.5 leading-relaxed">
+                        Sesuai aturan keamanan data, tombol simpan dinonaktifkan karena terdapat baris yang salah (kategori/satuan tidak terdaftar, SKU duplikat, atau format salah). Silakan periksa tabel di bawah, perbaiki file Excel Anda, dan unggah ulang.
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Table Preview -->
+        <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h2 class="text-base font-semibold text-slate-900">Rincian Hasil Pengecekan Baris</h2>
+                <span class="text-xs text-slate-500">Menampilkan seluruh baris dari file Excel</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-left text-xs md:text-sm">
+                    <thead class="border-b bg-slate-50 text-slate-700">
+                        <tr>
+                            <th class="px-3 py-3 font-semibold text-center w-12">No. Baris</th>
+                            <th class="px-3 py-3 font-semibold text-center w-28">Status</th>
+                            <th class="px-3 py-3 font-semibold">SKU</th>
+                            <th class="px-3 py-3 font-semibold">Barcode</th>
+                            <th class="px-3 py-3 font-semibold">Nama Barang</th>
+                            <th class="px-3 py-3 font-semibold">Kategori</th>
+                            <th class="px-3 py-3 font-semibold">Satuan</th>
+                            <th class="px-3 py-3 font-semibold text-right">Harga Beli</th>
+                            <th class="px-3 py-3 font-semibold text-right">Harga Jual</th>
+                            <th class="px-3 py-3 font-semibold text-right">Min Stok</th>
+                            <th class="px-3 py-3 font-semibold text-right">Stok Awal</th>
+                            <th class="px-3 py-3 font-semibold">Catatan / Rincian Masalah</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        {% for row in rows %}
+                        <tr class="{% if not row.is_valid %}bg-rose-50/70 hover:bg-rose-100/50{% else %}hover:bg-slate-50/60{% endif %} transition-colors">
+                            <td class="px-3 py-2.5 text-center font-mono text-slate-500 font-semibold">{{ row.row_idx }}</td>
+                            <td class="px-3 py-2.5 text-center">
+                                {% if row.is_valid %}
+                                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                                    <svg class="w-3 h-3 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    Valid
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800">
+                                    <svg class="w-3 h-3 text-rose-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                    </svg>
+                                    Error
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2.5 font-mono font-medium {% if not row.is_valid and 'SKU' in row.errors.0 %}text-rose-700 font-bold{% else %}text-slate-900{% endif %}">
+                                {{ row.sku|default:'-' }}
+                            </td>
+                            <td class="px-3 py-2.5 font-mono text-slate-600">{{ row.barcode|default:'-' }}</td>
+                            <td class="px-3 py-2.5 font-medium text-slate-900">{{ row.nama_barang }}</td>
+                            <td class="px-3 py-2.5">
+                                {% if row.category_id %}
+                                <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-800 font-medium">{{ row.kategori }}</span>
+                                {% else %}
+                                <span class="rounded bg-rose-200 px-1.5 py-0.5 text-rose-900 font-bold">{{ row.kategori|default:'(Kosong)' }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2.5">
+                                {% if row.unit_id %}
+                                <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-800 font-medium">{{ row.unit_display }}</span>
+                                {% else %}
+                                <span class="rounded bg-rose-200 px-1.5 py-0.5 text-rose-900 font-bold">{{ row.satuan|default:'(Kosong)' }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2.5 text-right font-mono">{{ row.harga_beli }}</td>
+                            <td class="px-3 py-2.5 text-right font-mono font-semibold text-slate-900">{{ row.harga_jual }}</td>
+                            <td class="px-3 py-2.5 text-right font-mono text-slate-600">{{ row.min_stok }}</td>
+                            <td class="px-3 py-2.5 text-right font-mono font-medium text-slate-700">{{ row.stok_awal }}</td>
+                            <td class="px-3 py-2.5">
+                                {% if row.errors %}
+                                <ul class="list-disc list-inside space-y-0.5 text-xs text-rose-700 font-medium">
+                                    {% for err in row.errors %}
+                                    <li>{{ err }}</li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <span class="text-xs text-emerald-600 font-medium">Siap diproses</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Footer Action Form -->
+            <div class="border-t border-slate-200 bg-slate-50 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="cancel">
+                    <button type="submit" class="w-full sm:w-auto rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors shadow-sm">
+                        ← Upload Ulang File Lain
+                    </button>
+                </form>
+
+                <form method="post" class="w-full sm:w-auto">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="confirm">
+                    {% if can_confirm %}
+                    <button type="submit" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Simpan & Proses Import ({{ total_valid }} Produk)
+                    </button>
+                    {% else %}
+                    <button type="button" disabled title="Terdapat {{ total_errors }} baris error. Perbaiki file sebelum menyimpan." class="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-slate-300 px-6 py-2.5 text-sm font-semibold text-slate-500 cursor-not-allowed shadow-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        Simpan Dinonaktifkan (Ada {{ total_errors }} Error)
+                    </button>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function displayFileName(input) {
+    const display = document.getElementById('file-name-display');
+    if (input.files && input.files.length > 0) {
+        display.textContent = 'File dipilih: ' + input.files[0].name;
+        display.classList.remove('italic', 'text-slate-600');
+        display.classList.add('text-emerald-700', 'font-semibold');
+    } else {
+        display.textContent = 'Belum ada file dipilih';
+        display.classList.remove('text-emerald-700', 'font-semibold');
+        display.classList.add('italic', 'text-slate-600');
+    }
+}
+</script>
+{% endblock %}

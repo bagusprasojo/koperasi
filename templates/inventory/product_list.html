@@ -6,9 +6,20 @@
 {% block content %}
 <div class="rounded-xl bg-white p-6 shadow-sm">
     <div class="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <h1 class="text-xl font-semibold">Sampul Produk</h1>
+        <h1 class="text-xl font-semibold">Daftar Produk</h1>
         <div class="flex flex-wrap items-center gap-2">
-            <a href="{% url 'product_create' %}" class="rounded-md bg-emerald-600 px-3 py-2 text-sm text-white">Tambah Produk</a>
+            <a href="{% url 'product_create' %}" style="background-color: #059669 !important; color: #ffffff !important;" class="inline-flex items-center justify-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-all min-w-[150px]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+                </svg>
+                <span>Tambah Produk</span>
+            </a>
+            <a href="{% url 'product_import_excel' %}" style="background-color: #2563eb !important; color: #ffffff !important;" class="inline-flex items-center justify-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-all min-w-[150px]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                <span>Import Excel</span>
+            </a>
             <form method="get" class="flex gap-2">
                 <input
                     type="text"

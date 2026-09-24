@@ -5,7 +5,15 @@
 
 {% block content %}
 <div class="mx-auto max-w-6xl rounded-xl bg-white p-6 shadow-sm">
-    <h1 class="mb-4 text-xl font-semibold">Form Tambah Produk</h1>
+    <div class="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <h1 class="text-xl font-semibold">Form Tambah Produk</h1>
+        <a href="{% url 'product_import_excel' %}" style="background-color: #eff6ff !important; color: #1d4ed8 !important; border: 1px solid #93c5fd !important;" class="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-blue-100 transition-all shadow-sm min-w-[210px]">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" style="color: #2563eb;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <span style="color: #1d4ed8 !important;" class="font-semibold">Import dari Excel (.xlsx)</span>
+        </a>
+    </div>
     <form method="post" class="grid gap-4" x-data="{ tiers: [] }" x-init="tiers = JSON.parse('{{ tier_rows_json|escapejs }}')">
         {% csrf_token %}
         <div class="grid gap-4 md:grid-cols-2 items-start">
