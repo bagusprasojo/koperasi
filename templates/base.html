@@ -47,7 +47,7 @@
                             <a href="{% url 'member_my_purchases' %}" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Riwayat Belanja</a>
                         {% endif %}
                         {% if is_staff_any %}
-                            {% if perms.core.view_inventory or perms.core.view_members or perms.core.manage_products or perms.core.manage_members %}
+                            {% if perms.core.view_inventory or perms.core.view_members or perms.core.manage_products %}
                                 <div class="relative" x-data="{ mOpen: false }">
                                     <button @click="mOpen=!mOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Master</button>
                                     <div x-show="mOpen" x-cloak @click.outside="mOpen=false" class="absolute left-0 z-40 mt-1 w-52 rounded-md border bg-white p-1 shadow">
@@ -58,12 +58,6 @@
                                         {% endif %}
                                         {% if perms.core.view_inventory %}
                                             <a href="{% url 'product_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Produk</a>
-                                        {% endif %}
-                                        {% if perms.core.manage_products %}
-                                            <a href="{% url 'product_import_excel' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100 flex items-center justify-between">
-                                                <span>Import Produk</span>
-                                                <span class="rounded bg-blue-100 text-blue-800 text-[10px] font-semibold px-1.5 py-0.5">Excel</span>
-                                            </a>
                                         {% endif %}
                                         {% if perms.core.view_members %}
                                             <a href="{% url 'member_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Member</a>
@@ -169,7 +163,7 @@
                             <a href="{% url 'member_my_purchases' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Riwayat Belanja</a>
                         {% endif %}
                         {% if is_staff_any %}
-                            {% if perms.core.view_inventory or perms.core.view_members or perms.core.manage_products or perms.core.manage_members %}
+                            {% if perms.core.view_inventory or perms.core.view_members or perms.core.manage_products %}
                                 <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Master</p>
                                 {% if perms.core.manage_products %}
                                     <a href="{% url 'category_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kategori</a>
@@ -178,12 +172,6 @@
                                 {% endif %}
                                 {% if perms.core.view_inventory %}
                                     <a href="{% url 'product_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Produk</a>
-                                {% endif %}
-                                {% if perms.core.manage_products %}
-                                    <a href="{% url 'product_import_excel' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm flex items-center justify-between">
-                                        <span>Import Produk (Excel)</span>
-                                        <span class="rounded bg-blue-100 text-blue-800 text-[10px] font-semibold px-1.5 py-0.5">XLSX</span>
-                                    </a>
                                 {% endif %}
                                 {% if perms.core.view_members %}
                                     <a href="{% url 'member_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Member</a>

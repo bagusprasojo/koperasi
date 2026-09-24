@@ -453,3 +453,113 @@ def reverse_withdrawal(withdrawal: MemberWithdrawal, admin_user, note: str = '',
     withdrawal.reversed_at = timezone.now()
     withdrawal.save(update_fields=['status', 'reversed_by', 'reversed_at', 'updated_at'])
     return reversal
+
+
+@transaction.atomic
+def import_members_batch(validated_rows: list, user, audit_context=None) -> int:
+    """
+    Menyimpan batch data member hasil import Excel secara atomik:
+    1. Membuat akun login User (username=kode_member, group=Role.MEMBER).
+    2. Membuat data Member.
+    3. Menerbitkan MemberCard aktif (nomor kartu = nomor_kartu atau kode_member).
+    4. Membuat MemberWallet dengan saldo_awal.
+    5. Jika saldo_awal > 0, mencatat MemberLedger (TYPE_TOPUP) dan MemberDepositAuditLog.
+    """
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from core.constants import Role
+
+    User = get_user_model()
+    member_group, _ = Group.objects.get_or_create(name=Role.MEMBER)
+
+    if not validated_rows:
+        raise ValidationError('Tidak ada data member yang diproses.')
+
+    # Re-check collision race conditions
+    for row in validated_rows:
+        code = str(row['kode_member']).strip().upper()
+        phone = str(row['telepon']).strip()
+        card_number = str(row.get('nomor_kartu') or code).strip()
+
+        if Member.objects.filter(code__iexact=code).exists():
+            raise ValidationError(f"Kode member '{code}' sudah terdaftar di database.")
+        if User.objects.filter(username__iexact=code).exists():
+            raise ValidationError(f"Username '{code}' sudah terdaftar sebagai akun pengguna.")
+        if Member.objects.filter(phone=phone).exists():
+            raise ValidationError(f"Nomor telepon '{phone}' sudah terdaftar di database.")
+        if MemberCard.objects.filter(card_number=card_number).exists():
+            raise ValidationError(f"Nomor kartu '{card_number}' sudah terdaftar di database.")
+
+    created_count = 0
+
+    for row in validated_rows:
+        code = str(row['kode_member']).strip().upper()
+        full_name = str(row['nama_lengkap']).strip()
+        phone = str(row['telepon']).strip()
+        email = str(row.get('email') or '').strip()
+        address = str(row.get('alamat') or '').strip()
+        card_number = str(row.get('nomor_kartu') or code).strip()
+        password = str(row.get('password') or '').strip() or phone or 'Koperasi123!'
+        saldo_awal = Decimal(str(row.get('saldo_awal') or '0'))
+
+        # 1. User
+        user_obj = User.objects.create_user(
+            username=code,
+            password=password,
+            is_active=True,
+        )
+        user_obj.groups.add(member_group)
+
+        # 2. Member
+        member = Member.objects.create(
+            code=code,
+            user=user_obj,
+            full_name=full_name,
+            phone=phone,
+            email=email,
+            address=address,
+            is_active=True,
+        )
+
+        # 3. Card
+        card = MemberCard.objects.create(
+            member=member,
+            card_number=card_number,
+            status=MemberCard.STATUS_ACTIVE,
+        )
+
+        # 4. Wallet
+        MemberWallet.objects.create(
+            member=member,
+            balance=saldo_awal,
+        )
+
+        # 5. Saldo awal jika > 0
+        if saldo_awal > 0:
+            _ensure_not_closed_today()
+            ledger = MemberLedger.objects.create(
+                member=member,
+                card=card,
+                txn_type=MemberLedger.TYPE_TOPUP,
+                amount=saldo_awal,
+                balance_before=Decimal('0.00'),
+                balance_after=saldo_awal,
+                reference_code=f'INI-{code}',
+                ledger_key=_ledger_key('INI-IMPORT', member.id),
+                description='Saldo awal import member',
+            )
+            _write_deposit_audit(
+                action=MemberDepositAuditLog.ACTION_ADMIN_TOPUP,
+                member=member,
+                actor=user,
+                ledger=ledger,
+                amount=saldo_awal,
+                balance_before=Decimal('0.00'),
+                balance_after=saldo_awal,
+                note='Saldo awal import member via Excel',
+                audit_context=audit_context,
+            )
+
+        created_count += 1
+
+    return created_count

@@ -39,6 +39,7 @@ from .services import (
     request_member_topup,
     reverse_withdrawal,
     reverse_topup,
+    import_members_batch,
 )
 
 User = get_user_model()
@@ -990,3 +991,379 @@ def withdrawal_reverse_action(request, uuid):
         except Exception as exc:
             messages.error(request, _exc_message(exc))
     return redirect('member_withdrawal_detail', uuid=wd.uuid)
+
+
+@role_required(*MANAGEMENT_ROLES, perm='manage_members')
+def member_import_template_excel(request):
+    """
+    Download template Excel (.xlsx) resmi untuk import data master member.
+    Sheet 1: Template Import Member (kolom kode_member, nama_lengkap, telepon, email, alamat, nomor_kartu, saldo_awal, password)
+    Sheet 2: Panduan Pengisian
+    """
+    import io
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+
+    # Sheet 1: Template Import Member
+    ws1 = wb.active
+    ws1.title = "Template Import Member"
+
+    headers = [
+        ("kode_member", 18),
+        ("nama_lengkap", 30),
+        ("telepon", 20),
+        ("email", 25),
+        ("alamat", 35),
+        ("nomor_kartu", 20),
+        ("saldo_awal", 16),
+        ("password", 18),
+    ]
+
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    center_align = Alignment(horizontal="center", vertical="center")
+    left_align = Alignment(horizontal="left", vertical="center")
+    right_align = Alignment(horizontal="right", vertical="center")
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1'),
+    )
+
+    for col_idx, (col_id, col_width) in enumerate(headers, start=1):
+        cell = ws1.cell(row=1, column=col_idx, value=col_id)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center_align
+        cell.border = thin_border
+        col_letter = get_column_letter(col_idx)
+        ws1.column_dimensions[col_letter].width = col_width
+
+    # Sample rows
+    sample_rows = [
+        ["MBR-001", "Budi Santoso", "081234567890", "budi@gmail.com", "Jl. Mawar No. 12, Sleman", "MBR-001", 100000, "Password123"],
+        ["MBR-002", "Siti Aminah", "085678901234", "", "Jl. Melati No. 5, Bantul", "", 50000, ""],
+    ]
+    sample_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    for row_idx, srow in enumerate(sample_rows, start=2):
+        for col_idx, val in enumerate(srow, start=1):
+            cell = ws1.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
+            cell.fill = sample_fill
+            if col_idx in [1, 3, 6]:
+                cell.number_format = '@'
+                cell.alignment = center_align
+            elif col_idx == 7:
+                cell.alignment = right_align
+            else:
+                cell.alignment = left_align
+
+    # Sheet 2: Panduan Pengisian
+    ws2 = wb.create_sheet(title="Panduan Pengisian")
+    guide_header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    guide_header_fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid")
+
+    cols_guide = [
+        ("Nama Kolom", 18),
+        ("Status", 14),
+        ("Tipe Data", 14),
+        ("Aturan & Keterangan Validasi", 60),
+    ]
+    for col_idx, (title, width) in enumerate(cols_guide, start=1):
+        cell = ws2.cell(row=1, column=col_idx, value=title)
+        cell.font = guide_header_font
+        cell.fill = guide_header_fill
+        cell.alignment = center_align
+        cell.border = thin_border
+        col_letter = get_column_letter(col_idx)
+        ws2.column_dimensions[col_letter].width = width
+
+    guides = [
+        ("kode_member", "Wajib", "Teks", "Kode anggota (contoh: MBR-001). Harus unik, digunakan sebagai username login."),
+        ("nama_lengkap", "Wajib", "Teks", "Nama lengkap anggota (maks. 150 karakter)."),
+        ("telepon", "Wajib", "Teks", "Nomor WhatsApp/HP aktif. Harus unik di sistem. Beri awalan '0' atau '62'."),
+        ("email", "Opsional", "Teks", "Email anggota. Jika diisi harus format email valid."),
+        ("alamat", "Opsional", "Teks", "Alamat tempat tinggal anggota."),
+        ("nomor_kartu", "Opsional", "Teks", "Nomor kartu RFID/barcode fisik. Jika kosong otomatis disamakan dengan kode_member."),
+        ("saldo_awal", "Opsional", "Angka", "Saldo simpanan/deposit awal (>= 0). Jika diisi > 0, otomatis tercatat di kartu deposit."),
+        ("password", "Opsional", "Teks", "Password login akun anggota. Jika kosong otomatis menggunakan nomor telepon."),
+    ]
+    for row_idx, grow in enumerate(guides, start=2):
+        for col_idx, val in enumerate(grow, start=1):
+            cell = ws2.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
+            if col_idx in [1, 2, 3]:
+                cell.alignment = center_align
+            else:
+                cell.alignment = left_align
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="template_import_member.xlsx"'
+    return response
+
+
+@role_required(*MANAGEMENT_ROLES, perm='manage_members')
+def member_import_excel(request):
+    """
+    Import data master member dari file Excel (.xlsx) dengan validasi ketat:
+    - Keunikan kode member, username user, nomor telepon, dan nomor kartu.
+    - All-or-nothing: Jika ada 1 baris error, seluruh data tidak bisa disimpan.
+    - Pembuatan User, Member, MemberCard, MemberWallet, dan saldo awal atomik.
+    """
+    import openpyxl
+    from decimal import Decimal, InvalidOperation
+    from django.core.validators import validate_email
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'cancel':
+            request.session.pop('member_import_batch', None)
+            messages.info(request, 'Proses import member dibatalkan.')
+            return redirect('member_import_excel')
+
+        elif action == 'confirm':
+            batch = request.session.get('member_import_batch')
+            if not batch or not batch.get('can_confirm') or batch.get('total_errors', 1) > 0:
+                messages.error(request, 'Data import tidak valid, memiliki error, atau sesi telah kedaluwarsa. Silakan unggah ulang.')
+                return redirect('member_import_excel')
+
+            validated_rows = batch.get('rows', [])
+            try:
+                created_count = import_members_batch(
+                    validated_rows,
+                    request.user,
+                    audit_context=build_audit_context(request),
+                )
+                request.session.pop('member_import_batch', None)
+                messages.success(request, f'Berhasil mengimpor {created_count} member ke data master.')
+                return redirect('member_list')
+            except Exception as e:
+                messages.error(request, f'Gagal menyimpan data import: {_exc_message(e)}')
+                return render(request, 'members/member_import.html', {
+                    'preview_mode': True,
+                    'rows': validated_rows,
+                    'total_rows': batch.get('total_rows', 0),
+                    'total_errors': batch.get('total_errors', 0),
+                    'total_valid': batch.get('total_valid', 0),
+                    'can_confirm': False,
+                    'system_error': _exc_message(e),
+                })
+
+        elif action == 'preview':
+            uploaded_file = request.FILES.get('file')
+            if not uploaded_file:
+                messages.error(request, 'Silakan pilih file Excel (.xlsx) terlebih dahulu.')
+                return render(request, 'members/member_import.html')
+
+            if not uploaded_file.name.lower().endswith(('.xlsx', '.xlsm')):
+                messages.error(request, 'Format file tidak didukung. Harap unggah file berformat .xlsx.')
+                return render(request, 'members/member_import.html')
+
+            try:
+                wb = openpyxl.load_workbook(uploaded_file, data_only=True)
+            except Exception as e:
+                messages.error(request, f'Gagal membaca file Excel: {str(e)}')
+                return render(request, 'members/member_import.html')
+
+            ws = wb['Template Import Member'] if 'Template Import Member' in wb.sheetnames else wb.active
+
+            rows_iter = ws.iter_rows(values_only=True)
+            try:
+                header_row = next(rows_iter)
+            except StopIteration:
+                messages.error(request, 'File Excel kosong.')
+                return render(request, 'members/member_import.html')
+
+            if not header_row:
+                messages.error(request, 'Baris header tidak ditemukan pada file Excel.')
+                return render(request, 'members/member_import.html')
+
+            col_map = {}
+            for idx, cell_value in enumerate(header_row):
+                if cell_value is not None:
+                    norm_key = str(cell_value).strip().lower().replace(' ', '_').replace('*', '').strip('_')
+                    col_map[norm_key] = idx
+
+            # Mandatory headers
+            required_cols = ['kode_member', 'nama_lengkap', 'telepon']
+            if 'kode' in col_map and 'kode_member' not in col_map:
+                col_map['kode_member'] = col_map['kode']
+            if 'nama' in col_map and 'nama_lengkap' not in col_map:
+                col_map['nama_lengkap'] = col_map['nama']
+            if 'hp' in col_map and 'telepon' not in col_map:
+                col_map['telepon'] = col_map['hp']
+            if 'no_hp' in col_map and 'telepon' not in col_map:
+                col_map['telepon'] = col_map['no_hp']
+
+            missing_headers = [c for c in required_cols if c not in col_map]
+            if missing_headers:
+                messages.error(
+                    request,
+                    f"Kolom wajib tidak ditemukan di file Excel: {', '.join(missing_headers)}. Silakan gunakan template resmi."
+                )
+                return render(request, 'members/member_import.html')
+
+            # Pre-load existing DB unique values
+            existing_codes_db = {
+                c.lower()
+                for c in Member.objects.exclude(code__isnull=True).exclude(code='').values_list('code', flat=True)
+            }
+            existing_usernames_db = {u.lower() for u in User.objects.values_list('username', flat=True)}
+            existing_phones_db = {p for p in Member.objects.values_list('phone', flat=True)}
+            existing_cards_db = {c.lower() for c in MemberCard.objects.values_list('card_number', flat=True)}
+
+            seen_codes_file = {}
+            seen_phones_file = {}
+            seen_cards_file = {}
+
+            parsed_rows = []
+            total_errors = 0
+            total_valid = 0
+
+            for row_idx, row_values in enumerate(rows_iter, start=2):
+                if not any(v is not None and str(v).strip() != '' for v in row_values):
+                    continue
+
+                def get_val(col_name, default=''):
+                    idx = col_map.get(col_name)
+                    if idx is not None and idx < len(row_values):
+                        val = row_values[idx]
+                        return str(val).strip() if val is not None else default
+                    return default
+
+                raw_code = get_val('kode_member').upper()
+                raw_nama = get_val('nama_lengkap')
+                raw_telepon = get_val('telepon')
+                raw_email = get_val('email')
+                raw_alamat = get_val('alamat')
+                raw_kartu = get_val('nomor_kartu') or raw_code
+                raw_saldo = get_val('saldo_awal', '0')
+                raw_password = get_val('password')
+
+                row_errors = []
+
+                # 1. Mandatory checks
+                if not raw_code:
+                    row_errors.append("Kode member wajib diisi.")
+                if not raw_nama:
+                    row_errors.append("Nama lengkap wajib diisi.")
+                if not raw_telepon:
+                    row_errors.append("Nomor telepon wajib diisi.")
+
+                # 2. Kode member & username checks
+                if raw_code:
+                    code_lower = raw_code.lower()
+                    if code_lower in seen_codes_file:
+                        row_errors.append(f"Kode member '{raw_code}' duplikat dengan baris {seen_codes_file[code_lower]} di file Excel.")
+                    else:
+                        seen_codes_file[code_lower] = row_idx
+
+                    if code_lower in existing_codes_db:
+                        row_errors.append(f"Kode member '{raw_code}' sudah terdaftar di database.")
+                    elif code_lower in existing_usernames_db:
+                        row_errors.append(f"Kode member '{raw_code}' sudah terdaftar sebagai akun pengguna.")
+
+                # 3. Telepon checks
+                if raw_telepon:
+                    if raw_telepon in seen_phones_file:
+                        row_errors.append(f"Nomor telepon '{raw_telepon}' duplikat dengan baris {seen_phones_file[raw_telepon]} di file Excel.")
+                    else:
+                        seen_phones_file[raw_telepon] = row_idx
+
+                    if raw_telepon in existing_phones_db:
+                        row_errors.append(f"Nomor telepon '{raw_telepon}' sudah terdaftar di database.")
+
+                # 4. Nomor Kartu checks
+                if raw_kartu:
+                    kartu_lower = raw_kartu.lower()
+                    if kartu_lower in seen_cards_file:
+                        row_errors.append(f"Nomor kartu '{raw_kartu}' duplikat dengan baris {seen_cards_file[kartu_lower]} di file Excel.")
+                    else:
+                        seen_cards_file[kartu_lower] = row_idx
+
+                    if kartu_lower in existing_cards_db:
+                        row_errors.append(f"Nomor kartu '{raw_kartu}' sudah terdaftar di database.")
+
+                # 5. Email check
+                if raw_email:
+                    try:
+                        validate_email(raw_email)
+                    except DjangoValidationError:
+                        row_errors.append(f"Format email tidak valid: '{raw_email}'.")
+
+                # 6. Saldo awal check
+                parsed_saldo = Decimal('0.00')
+                if raw_saldo:
+                    try:
+                        clean_saldo = raw_saldo.replace(',', '').replace(' ', '')
+                        parsed_saldo = Decimal(clean_saldo)
+                        if parsed_saldo < 0:
+                            row_errors.append("Saldo awal tidak boleh negatif.")
+                    except (InvalidOperation, ValueError):
+                        row_errors.append(f"Format saldo awal tidak valid: '{raw_saldo}'.")
+
+                # 7. Password check
+                if raw_password and len(raw_password) < 6:
+                    row_errors.append("Password minimal 6 karakter.")
+
+                is_valid = len(row_errors) == 0
+                if is_valid:
+                    total_valid += 1
+                else:
+                    total_errors += 1
+
+                parsed_rows.append({
+                    'row_idx': row_idx,
+                    'kode_member': raw_code,
+                    'nama_lengkap': raw_nama,
+                    'telepon': raw_telepon,
+                    'email': raw_email,
+                    'alamat': raw_alamat,
+                    'nomor_kartu': raw_kartu,
+                    'saldo_awal': str(parsed_saldo),
+                    'password': raw_password or raw_telepon or 'Koperasi123!',
+                    'is_valid': is_valid,
+                    'errors': row_errors,
+                })
+
+            total_rows = len(parsed_rows)
+            if total_rows == 0:
+                messages.warning(request, 'Tidak ada baris data member yang ditemukan di file Excel.')
+                return render(request, 'members/member_import.html')
+
+            can_confirm = (total_rows > 0 and total_errors == 0)
+
+            # Store in session
+            request.session['member_import_batch'] = {
+                'rows': parsed_rows,
+                'can_confirm': can_confirm,
+                'total_rows': total_rows,
+                'total_errors': total_errors,
+                'total_valid': total_valid,
+            }
+
+            return render(request, 'members/member_import.html', {
+                'preview_mode': True,
+                'rows': parsed_rows,
+                'can_confirm': can_confirm,
+                'total_rows': total_rows,
+                'total_errors': total_errors,
+                'total_valid': total_valid,
+            })
+
+    return render(request, 'members/member_import.html', {
+        'preview_mode': False,
+    })

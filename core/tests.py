@@ -604,3 +604,188 @@ class ProductImportExcelTests(TestCase):
         self.assertFalse(StockLedger.objects.filter(product=p2).exists())
 
 
+class MemberImportExcelTests(TestCase):
+    def setUp(self):
+        self.admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN_TOKO)
+        self.admin_user = User.objects.create_user(username='admin_import_mbr', password='password123')
+        self.admin_user.groups.add(self.admin_group)
+
+    def _make_excel_file(self, rows, sheet_name='Template Import Member'):
+        import io
+        import openpyxl
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = sheet_name
+
+        # Headers
+        ws.append(['kode_member', 'nama_lengkap', 'telepon', 'email', 'alamat', 'nomor_kartu', 'saldo_awal', 'password'])
+        for r in rows:
+            ws.append(r)
+
+        out = io.BytesIO()
+        wb.save(out)
+        out.seek(0)
+        return SimpleUploadedFile('test_members_import.xlsx', out.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    def test_download_template_excel(self):
+        import openpyxl
+        import io
+        self.client.force_login(self.admin_user)
+        resp = self.client.get('/members/import/template/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', resp['Content-Type'])
+        self.assertIn('template_import_member.xlsx', resp['Content-Disposition'])
+
+        wb = openpyxl.load_workbook(io.BytesIO(resp.content))
+        self.assertIn('Template Import Member', wb.sheetnames)
+        self.assertIn('Panduan Pengisian', wb.sheetnames)
+
+    def test_preview_rejects_duplicate_code_in_db(self):
+        existing_user = User.objects.create_user(username='mbr_dummy', password='password123')
+        Member.objects.create(code='MBR-EXIST', user=existing_user, full_name='Dummy Member', phone='0811119999')
+
+        self.client.force_login(self.admin_user)
+        rows = [
+            ['MBR-EXIST', 'Budi Dua', '0899999999', 'budi@test.com', 'Alamat', '', 0, '']
+        ]
+        excel_file = self._make_excel_file(rows)
+        resp = self.client.post('/members/import/', {'action': 'preview', 'file': excel_file})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['preview_mode'])
+        self.assertFalse(resp.context['can_confirm'])
+        self.assertEqual(resp.context['total_errors'], 1)
+        err_list = resp.context['rows'][0]['errors']
+        self.assertTrue(any("sudah terdaftar" in e for e in err_list))
+
+    def test_preview_rejects_duplicate_phone_in_db(self):
+        existing_user = User.objects.create_user(username='mbr_dummy2', password='password123')
+        Member.objects.create(code='MBR-DUMMY2', user=existing_user, full_name='Dummy Member 2', phone='08123456789')
+
+        self.client.force_login(self.admin_user)
+        rows = [
+            ['MBR-BARU', 'Budi Baru', '08123456789', 'budi@test.com', 'Alamat', '', 0, '']
+        ]
+        excel_file = self._make_excel_file(rows)
+        resp = self.client.post('/members/import/', {'action': 'preview', 'file': excel_file})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['preview_mode'])
+        self.assertFalse(resp.context['can_confirm'])
+        self.assertEqual(resp.context['total_errors'], 1)
+        err_list = resp.context['rows'][0]['errors']
+        self.assertTrue(any("sudah terdaftar" in e for e in err_list))
+
+    def test_preview_rejects_duplicate_card_in_db(self):
+        from members.models import MemberCard
+        existing_user = User.objects.create_user(username='mbr_dummy3', password='password123')
+        m3 = Member.objects.create(code='MBR-DUMMY3', user=existing_user, full_name='Dummy Member 3', phone='08123456780')
+        MemberCard.objects.create(member=m3, card_number='CRD-EXIST', status=MemberCard.STATUS_ACTIVE)
+
+        self.client.force_login(self.admin_user)
+        rows = [
+            ['MBR-BARU3', 'Budi Baru 3', '0899999988', 'budi@test.com', 'Alamat', 'CRD-EXIST', 0, '']
+        ]
+        excel_file = self._make_excel_file(rows)
+        resp = self.client.post('/members/import/', {'action': 'preview', 'file': excel_file})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['preview_mode'])
+        self.assertFalse(resp.context['can_confirm'])
+        self.assertEqual(resp.context['total_errors'], 1)
+        err_list = resp.context['rows'][0]['errors']
+        self.assertTrue(any("sudah terdaftar" in e for e in err_list))
+
+    def test_preview_rejects_internal_duplicates_in_file(self):
+        self.client.force_login(self.admin_user)
+        rows = [
+            ['MBR-DUP', 'Member A', '0812000001', '', '', '', 0, ''],
+            ['MBR-DUP', 'Member B', '0812000002', '', '', '', 0, ''],
+        ]
+        excel_file = self._make_excel_file(rows)
+        resp = self.client.post('/members/import/', {'action': 'preview', 'file': excel_file})
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context['can_confirm'])
+        self.assertGreaterEqual(resp.context['total_errors'], 1)
+
+    def test_confirm_blocked_when_session_batch_has_errors(self):
+        self.client.force_login(self.admin_user)
+        session = self.client.session
+        session['member_import_batch'] = {
+            'rows': [{'kode_member': 'MBR-ERR', 'nama_lengkap': 'Error Mbr', 'telepon': '081', 'is_valid': False, 'errors': ['Error']}],
+            'can_confirm': False,
+            'total_rows': 1,
+            'total_errors': 1,
+            'total_valid': 0,
+        }
+        session.save()
+
+        resp = self.client.post('/members/import/', {'action': 'confirm'}, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Member.objects.filter(code='MBR-ERR').exists())
+
+    def test_successful_import_and_atomic_entities(self):
+        from members.models import MemberCard, MemberWallet, MemberLedger, MemberDepositAuditLog
+        self.client.force_login(self.admin_user)
+
+        rows = [
+            ['MBR-OK-01', 'Budi Santoso', '0899123401', 'budi@example.com', 'Sleman', 'CRD-901', 50000, 'rahasia123'],
+            ['MBR-OK-02', 'Siti Aminah', '0899123402', '', 'Bantul', '', 0, ''],
+        ]
+        excel_file = self._make_excel_file(rows)
+
+        # 1. Preview
+        resp_preview = self.client.post('/members/import/', {'action': 'preview', 'file': excel_file})
+        self.assertEqual(resp_preview.status_code, 200)
+        self.assertTrue(resp_preview.context['can_confirm'])
+        self.assertEqual(resp_preview.context['total_errors'], 0)
+        self.assertEqual(resp_preview.context['total_valid'], 2)
+
+        # 2. Confirm
+        resp_confirm = self.client.post('/members/import/', {'action': 'confirm'}, follow=True)
+        self.assertEqual(resp_confirm.status_code, 200)
+
+        # Verifikasi Member 1 (dengan saldo awal 50000 dan kartu custom)
+        m1 = Member.objects.get(code='MBR-OK-01')
+        self.assertEqual(m1.full_name, 'Budi Santoso')
+        self.assertEqual(m1.phone, '0899123401')
+        self.assertEqual(m1.email, 'budi@example.com')
+        self.assertEqual(m1.address, 'Sleman')
+        self.assertIsNotNone(m1.user)
+        self.assertEqual(m1.user.username, 'MBR-OK-01')
+        self.assertTrue(m1.user.check_password('rahasia123'))
+        self.assertTrue(m1.user.groups.filter(name=Role.MEMBER).exists())
+
+        c1 = MemberCard.objects.get(member=m1)
+        self.assertEqual(c1.card_number, 'CRD-901')
+        self.assertEqual(c1.status, MemberCard.STATUS_ACTIVE)
+
+        w1 = MemberWallet.objects.get(member=m1)
+        self.assertEqual(w1.balance, Decimal('50000.00'))
+
+        ledger1 = MemberLedger.objects.filter(member=m1).first()
+        self.assertIsNotNone(ledger1)
+        self.assertEqual(ledger1.txn_type, MemberLedger.TYPE_TOPUP)
+        self.assertEqual(ledger1.amount, Decimal('50000.00'))
+        self.assertEqual(ledger1.balance_after, Decimal('50000.00'))
+
+        audit1 = MemberDepositAuditLog.objects.filter(member=m1).first()
+        self.assertIsNotNone(audit1)
+        self.assertEqual(audit1.amount, Decimal('50000.00'))
+
+        # Verifikasi Member 2 (saldo awal 0, default kartu = kode, default password = telepon)
+        m2 = Member.objects.get(code='MBR-OK-02')
+        self.assertEqual(m2.full_name, 'Siti Aminah')
+        self.assertEqual(m2.phone, '0899123402')
+        self.assertIsNotNone(m2.user)
+        self.assertEqual(m2.user.username, 'MBR-OK-02')
+        self.assertTrue(m2.user.check_password('0899123402'))
+
+        c2 = MemberCard.objects.get(member=m2)
+        self.assertEqual(c2.card_number, 'MBR-OK-02')
+
+        w2 = MemberWallet.objects.get(member=m2)
+        self.assertEqual(w2.balance, Decimal('0.00'))
+        self.assertFalse(MemberLedger.objects.filter(member=m2).exists())
+
+
+

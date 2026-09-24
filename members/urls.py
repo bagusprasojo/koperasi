@@ -5,6 +5,8 @@ from . import views
 urlpatterns = [
     path('', views.member_list, name='member_list'),
     path('create/', views.member_create, name='member_create'),
+    path('import/', views.member_import_excel, name='member_import_excel'),
+    path('import/template/', views.member_import_template_excel, name='member_import_template_excel'),
     path('<uuid:uuid>/', views.member_detail, name='member_detail'),
     path('<uuid:uuid>/edit/', views.member_edit, name='member_edit'),
     path('<uuid:uuid>/delete/', views.member_delete, name='member_delete'),

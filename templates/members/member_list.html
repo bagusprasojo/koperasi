@@ -4,12 +4,23 @@
 {% block content %}
 <div class="rounded-xl bg-white p-6 shadow-sm">
     <div class="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <h1 class="text-xl font-semibold">Sampul Member</h1>
-        <div class="flex gap-2">
-            <a href="{% url 'member_create' %}" class="rounded-md bg-emerald-600 px-3 py-2 text-sm text-white">Tambah Member</a>
-            <a href="{% url 'card_list' %}" class="rounded-md border px-3 py-2 text-sm">Kartu</a>
-            <a href="{% url 'member_topup' %}" class="rounded-md border px-3 py-2 text-sm">Topup</a>
-            <a href="{% url 'member_ledger' %}" class="rounded-md border px-3 py-2 text-sm">Ledger</a>
+        <h1 class="text-xl font-semibold">Daftar Member</h1>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="{% url 'member_create' %}" style="background-color: #059669 !important; color: #ffffff !important;" class="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-all min-w-[140px]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+                </svg>
+                <span>Tambah Member</span>
+            </a>
+            <a href="{% url 'member_import_excel' %}" style="background-color: #2563eb !important; color: #ffffff !important;" class="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-all min-w-[140px]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                <span>Import Excel</span>
+            </a>
+            <a href="{% url 'card_list' %}" class="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">Kartu</a>
+            <a href="{% url 'member_topup' %}" class="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">Topup</a>
+            <a href="{% url 'member_ledger' %}" class="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">Ledger</a>
         </div>
     </div>
     <form method="get" class="mb-4 flex gap-2">
