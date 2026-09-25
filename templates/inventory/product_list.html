@@ -68,16 +68,16 @@
                         <td class="px-3 py-2">
                             {% for tier in product.price_tiers.all %}
                                 {% if tier.level == 1 %}
-                                    {{ tier.price|floatformat:2|intcomma }}
+                                    {{ tier.price|clean_number }}
                                 {% endif %}
                             {% empty %}
                                 -
                             {% endfor %}
                         </td>
-                        <td class="px-3 py-2">{{ product.last_purchase_price|floatformat:2|intcomma }}</td>
-                        <td class="px-3 py-2">{{ product.cost_of_goods_sold|floatformat:2|intcomma }}</td>
-                        <td class="px-3 py-2">{{ product.reorder_point|floatformat:"-3"|intcomma }}</td>
-                        <td class="px-3 py-2">{{ product.stock|floatformat:"-3"|intcomma }}</td>
+                        <td class="px-3 py-2">{{ product.last_purchase_price|clean_number }}</td>
+                        <td class="px-3 py-2">{{ product.cost_of_goods_sold|clean_number }}</td>
+                        <td class="px-3 py-2">{{ product.reorder_point|clean_qty }}</td>
+                        <td class="px-3 py-2">{{ product.stock|clean_qty }}</td>
                         <td class="px-3 py-2">
                             <div class="flex justify-end gap-2">
                                 <a href="{% url 'product_detail' product.uuid %}" class="rounded-md border px-3 py-1">Detail</a>

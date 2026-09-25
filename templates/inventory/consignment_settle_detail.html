@@ -52,7 +52,7 @@
                 {% if batch.consignor.member %}
                     <div class="rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-800 border border-emerald-200 mt-0.5">
                         <span class="font-bold">✓ Anggota Koperasi</span>
-                        <div class="text-[11px] text-emerald-700">Saldo Dompet Saat Ini: Rp {{ batch.consignor.member.wallet.balance|floatformat:0 }}</div>
+                        <div class="text-[11px] text-emerald-700">Saldo Dompet Saat Ini: Rp {{ batch.consignor.member.wallet.balance|clean_number }}</div>
                     </div>
                 {% else %}
                     <span class="text-xs text-slate-500">Bukan Anggota</span>
@@ -71,7 +71,7 @@
     </div>
 
     <!-- Settlement Table Card -->
-    <form method="post" @submit.prevent="submitSettlement()" class="space-y-6">
+    <form id="consignment-settle-form" method="post" @submit.prevent="submitSettlement()" class="space-y-6">
         {% csrf_token %}
         <input type="hidden" name="settlement_items_json" :value="JSON.stringify(items)">
 
@@ -114,21 +114,21 @@
                                     <div class="text-xs text-slate-400 font-mono" x-text="item.product_sku"></div>
                                 </td>
                                 <td class="px-3 py-3 text-center font-medium text-slate-800">
-                                    <span x-text="item.qty_received"></span> <span class="text-xs text-slate-400" x-text="item.unit_name"></span>
+                                    <span x-text="formatNumber(item.qty_received)"></span> <span class="text-xs text-slate-400" x-text="item.unit_name"></span>
                                 </td>
                                 <td class="px-3 py-3 text-center font-bold text-blue-700">
-                                    <span x-text="item.pos_sold"></span>
+                                    <span x-text="formatNumber(item.pos_sold)"></span>
                                 </td>
                                 <td class="px-3 py-3 text-center">
                                     <span class="rounded px-2 py-0.5 text-xs font-semibold"
                                         :class="item.current_stock > 0 ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-400'"
-                                        x-text="item.current_stock">
+                                        x-text="formatNumber(item.current_stock)">
                                     </span>
                                 </td>
                                 <!-- Fisik Retur Input -->
                                 <td class="px-3 py-3 text-center bg-amber-50/30">
                                     {% if is_settled %}
-                                        <span class="font-bold text-amber-900" x-text="item.qty_returned"></span>
+                                        <span class="font-bold text-amber-900" x-text="formatNumber(item.qty_returned)"></span>
                                     {% else %}
                                         <input type="number" step="any" min="0" :max="item.qty_received"
                                             x-model.number="item.qty_returned" @input="recalcItem(item)"
@@ -138,7 +138,7 @@
                                 <!-- Fisik Rusak/Basi Input -->
                                 <td class="px-3 py-3 text-center bg-red-50/30">
                                     {% if is_settled %}
-                                        <span class="font-bold text-red-900" x-text="item.qty_loss"></span>
+                                        <span class="font-bold text-red-900" x-text="formatNumber(item.qty_loss)"></span>
                                     {% else %}
                                         <input type="number" step="any" min="0" :max="item.qty_received"
                                             x-model.number="item.qty_loss" @input="recalcItem(item)"
@@ -147,7 +147,7 @@
                                 </td>
                                 <!-- Qty Laku Final -->
                                 <td class="px-3 py-3 text-center font-extrabold text-slate-900 text-base">
-                                    <span x-text="item.qty_sold"></span>
+                                    <span x-text="formatNumber(item.qty_sold)"></span>
                                 </td>
                                 <!-- Harga Titip -->
                                 <td class="px-3 py-3 text-right text-slate-700 text-xs">
@@ -167,9 +167,9 @@
                     <tfoot class="border-t bg-slate-100 font-semibold text-sm">
                         <tr>
                             <td colspan="4" class="px-4 py-3 text-right uppercase text-xs text-slate-600">Total:</td>
-                            <td class="px-3 py-3 text-center font-bold text-amber-900" x-text="calcTotalReturned() + ' item'"></td>
-                            <td class="px-3 py-3 text-center font-bold text-red-900" x-text="calcTotalLoss() + ' item'"></td>
-                            <td class="px-3 py-3 text-center font-extrabold text-slate-900" x-text="calcTotalSold() + ' item'"></td>
+                            <td class="px-3 py-3 text-center font-bold text-amber-900" x-text="formatNumber(calcTotalReturned())"></td>
+                            <td class="px-3 py-3 text-center font-bold text-red-900" x-text="formatNumber(calcTotalLoss())"></td>
+                            <td class="px-3 py-3 text-center font-extrabold text-slate-900" x-text="formatNumber(calcTotalSold())"></td>
                             <td class="px-3 py-3 text-right uppercase text-xs text-emerald-800">Total Hak Penitip:</td>
                             <td class="px-3 py-3 text-right font-extrabold text-emerald-700 text-base" x-text="formatRupiah(calcGrandPayable())"></td>
                             <td class="px-3 py-3 text-right font-bold text-purple-700" x-text="formatRupiah(calcGrandMargin())"></td>
@@ -203,7 +203,7 @@
                     </div>
                     <div class="rounded-lg bg-slate-50 p-3 flex justify-between items-center text-xs text-slate-700">
                         <span>Total Sisa Barang Diretur:</span>
-                        <span class="font-bold text-amber-800" x-text="calcTotalReturned() + ' item'"></span>
+                        <span class="font-bold text-amber-800" x-text="formatNumber(calcTotalReturned())"></span>
                     </div>
                 </div>
             </div>
@@ -393,8 +393,19 @@ function consignmentSettlementApp() {
         },
 
         formatRupiah(num) {
-            const val = Math.round(num || 0);
-            return 'Rp ' + val.toLocaleString('id-ID');
+            const n = Number(num || 0);
+            if (n % 1 === 0) {
+                return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+            }
+            return 'Rp ' + n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        },
+
+        formatNumber(num) {
+            const n = Number(num || 0);
+            if (n % 1 === 0) {
+                return Math.round(n).toLocaleString('id-ID');
+            }
+            return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
         },
 
         confirmCancelBatch() {
@@ -414,7 +425,7 @@ function consignmentSettlementApp() {
 
             if (confirm(msg)) {
                 this.isSubmitting = true;
-                document.querySelector('form').submit();
+                document.getElementById('consignment-settle-form').submit();
             }
         }
     }

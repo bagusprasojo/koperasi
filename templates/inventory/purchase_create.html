@@ -198,7 +198,9 @@ function purchaseCreateForm() {
             return this.rows.reduce((acc, row) => acc + ((parseFloat(row.qty) || 0) * (parseFloat(row.unit_cost) || 0)), 0);
         },
         grandTotalLabel() {
-            return this.grandTotal().toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const tot = this.grandTotal();
+            if (tot % 1 === 0) return 'Rp ' + Math.round(tot).toLocaleString('id-ID');
+            return 'Rp ' + tot.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
         }
     }
 }

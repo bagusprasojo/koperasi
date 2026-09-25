@@ -22,7 +22,7 @@
     </div>
     <div class="rounded-xl bg-white p-5 shadow-sm">
         <p class="text-sm text-slate-500">Saldo Deposit</p>
-        <p class="mt-1 text-2xl font-bold">{{ member_dashboard.wallet.balance|floatformat:0 }}</p>
+        <p class="mt-1 text-2xl font-bold">{{ member_dashboard.wallet.balance|clean_number }}</p>
     </div>
     <div class="rounded-xl bg-white p-5 shadow-sm">
         <p class="text-sm text-slate-500">Topup Pending</p>
@@ -44,12 +44,12 @@
     </div>
     <div class="rounded-xl bg-white p-5 shadow-sm">
         <p class="text-sm text-slate-500">Total Belanja</p>
-        <p class="mt-1 text-2xl font-bold">{{ member_dashboard.summary.total_spent|floatformat:0 }}</p>
+        <p class="mt-1 text-2xl font-bold">{{ member_dashboard.summary.total_spent|clean_number }}</p>
     </div>
     <div class="rounded-xl bg-white p-5 shadow-sm">
         <p class="text-sm text-slate-500">Topup Approved</p>
         <p class="mt-1 text-lg font-semibold">{{ member_dashboard.summary.topup_count }} trx</p>
-        <p class="text-sm text-slate-600">Nominal: {{ member_dashboard.summary.topup_total|floatformat:0 }}</p>
+        <p class="text-sm text-slate-600">Nominal: {{ member_dashboard.summary.topup_total|clean_number }}</p>
     </div>
 </div>
 
@@ -65,8 +65,8 @@
                     {% for r in member_dashboard.top_products %}
                     <tr class="border-b">
                         <td class="px-3 py-2">{{ r.product__name }}</td>
-                        <td class="px-3 py-2">{{ r.total_qty }}</td>
-                        <td class="px-3 py-2">{{ r.total_amount|floatformat:0 }}</td>
+                        <td class="px-3 py-2">{{ r.total_qty|clean_qty }}</td>
+                        <td class="px-3 py-2">{{ r.total_amount|clean_number }}</td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="3" class="px-3 py-4 text-slate-500">Belum ada data.</td></tr>
@@ -87,7 +87,7 @@
                     <tr class="border-b">
                         <td class="px-3 py-2">{{ t.created_at|date:"Y-m-d H:i" }}</td>
                         <td class="px-3 py-2">{{ t.topup_number|default:'-' }}</td>
-                        <td class="px-3 py-2">{{ t.amount|floatformat:0 }}</td>
+                        <td class="px-3 py-2">{{ t.amount|clean_number }}</td>
                         <td class="px-3 py-2">{{ t.get_status_display }}</td>
                     </tr>
                     {% empty %}
@@ -127,8 +127,8 @@
 </div>
 
 <div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Transaksi POS Hari Ini</p><p class="mt-1 text-lg font-semibold">{{ admin_dashboard.kpi.sales_today_count }} trx</p><p class="text-sm text-slate-600">Omzet: {{ admin_dashboard.kpi.sales_today_total|floatformat:0 }}</p></div>
-    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Pembelian Hari Ini</p><p class="mt-1 text-lg font-semibold">{{ admin_dashboard.kpi.purchase_today_count }} trx</p><p class="text-sm text-slate-600">Nilai: {{ admin_dashboard.kpi.purchase_today_total|floatformat:0 }}</p></div>
+    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Transaksi POS Hari Ini</p><p class="mt-1 text-lg font-semibold">{{ admin_dashboard.kpi.sales_today_count }} trx</p><p class="text-sm text-slate-600">Omzet: Rp {{ admin_dashboard.kpi.sales_today_total|clean_number }}</p></div>
+    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Pembelian Hari Ini</p><p class="mt-1 text-lg font-semibold">{{ admin_dashboard.kpi.purchase_today_count }} trx</p><p class="text-sm text-slate-600">Nilai: Rp {{ admin_dashboard.kpi.purchase_today_total|clean_number }}</p></div>
     <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Topup Hari Ini</p><p class="mt-1 text-lg font-semibold">Approved {{ admin_dashboard.kpi.approved_topup_today }}</p><p class="text-sm text-slate-600">Rejected {{ admin_dashboard.kpi.rejected_topup_today }}</p></div>
     <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Master Data</p><p class="mt-1 text-sm font-semibold">Produk: {{ admin_dashboard.kpi.product_count }}</p><p class="text-sm text-slate-600">Supplier: {{ admin_dashboard.kpi.supplier_count }}</p><p class="text-sm text-slate-600">Member Aktif: {{ admin_dashboard.kpi.member_active_count }} / {{ admin_dashboard.kpi.member_total_count }}</p></div>
 </div>

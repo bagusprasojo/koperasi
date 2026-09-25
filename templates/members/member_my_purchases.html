@@ -14,9 +14,9 @@
     </div>
 
     <div class="grid gap-3 md:grid-cols-4">
-        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Transaksi</p><p class="text-lg font-semibold">{{ summary.total_transactions|intcomma }}</p></div>
-        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Item</p><p class="text-lg font-semibold">{{ summary.total_items|intcomma }}</p></div>
-        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Belanja</p><p class="text-lg font-semibold">{{ summary.total_spent|floatformat:2|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Transaksi</p><p class="text-lg font-semibold">{{ summary.total_transactions|clean_number }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Item</p><p class="text-lg font-semibold">{{ summary.total_items|clean_number }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Belanja</p><p class="text-lg font-semibold">{{ summary.total_spent|clean_number }}</p></div>
         <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Kategori Favorit</p><p class="text-lg font-semibold">{{ summary.favorite_category }}</p></div>
     </div>
 
@@ -35,8 +35,8 @@
                     {% for p in top_products %}
                     <tr class="border-b">
                         <td class="px-3 py-2">{{ p.product__name }}</td>
-                        <td class="px-3 py-2">{{ p.total_qty|intcomma }}</td>
-                        <td class="px-3 py-2">{{ p.total_omzet|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ p.total_qty|clean_qty }}</td>
+                        <td class="px-3 py-2">{{ p.total_omzet|clean_number }}</td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="3" class="px-3 py-4 text-slate-500">Belum ada data favorit.</td></tr>
@@ -67,9 +67,9 @@
                         <td class="px-3 py-2">{{ it.sale.created_at }}</td>
                         <td class="px-3 py-2">{{ it.sale.sale_number }}</td>
                         <td class="px-3 py-2">{{ it.product.name }}</td>
-                        <td class="px-3 py-2">{{ it.qty|intcomma }}</td>
-                        <td class="px-3 py-2">{{ it.unit_price|floatformat:2|intcomma }}</td>
-                        <td class="px-3 py-2">{{ it.line_total|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ it.qty|clean_qty }}</td>
+                        <td class="px-3 py-2">{{ it.unit_price|clean_number }}</td>
+                        <td class="px-3 py-2">{{ it.line_total|clean_number }}</td>
                         <td class="px-3 py-2">
                             <div class="flex justify-end">
                                 <a href="{% url 'sales_transaction_detail' it.sale.sale_number %}" class="rounded-md border px-3 py-1">Detail</a>

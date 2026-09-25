@@ -116,7 +116,7 @@
                 </div>
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
                     <h3 class="mb-2 text-sm font-semibold">Informasi Stok</h3>
-                    <p><span class="text-slate-500">Stok Produk:</span> {{ product.stock|intcomma }}</p>
+                    <p><span class="text-slate-500">Stok Produk:</span> {{ product.stock|clean_qty }}</p>
                 </div>
             </div>
         </div>

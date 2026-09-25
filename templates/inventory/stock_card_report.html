@@ -36,7 +36,7 @@
         <div><p class="text-slate-500">SKU</p><p class="font-semibold" x-text="selectedProduct.sku || '-'"></p></div>
         <div><p class="text-slate-500">Barcode</p><p class="font-semibold" x-text="selectedProduct.barcode || '-'"></p></div>
         <div><p class="text-slate-500">Satuan</p><p class="font-semibold" x-text="selectedProduct.unit || '-'"></p></div>
-        <div><p class="text-slate-500">Stok Saat Ini</p><p class="font-semibold" x-text="selectedProduct.stock"></p></div>
+        <div><p class="text-slate-500">Stok Saat Ini</p><p class="font-semibold" x-text="formatQty(selectedProduct.stock)"></p></div>
     </div>
     {% if selected_product %}
     <div class="overflow-x-auto">
@@ -50,10 +50,10 @@
                         <td class="px-3 py-2">{{ l.tx_date }}</td>
                         <td class="px-3 py-2">{{ l.tx.tx_number }}</td>
                         <td class="px-3 py-2">{{ l.tx.get_tx_type_display }}</td>
-                        <td class="px-3 py-2">{{ l.qty_in|intcomma }}</td>
-                        <td class="px-3 py-2">{{ l.qty_out|intcomma }}</td>
-                        <td class="px-3 py-2">{{ l.balance_after|intcomma }}</td>
-                        <td class="px-3 py-2">{{ l.unit_cost_at_txn|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ l.qty_in|clean_qty }}</td>
+                        <td class="px-3 py-2">{{ l.qty_out|clean_qty }}</td>
+                        <td class="px-3 py-2">{{ l.balance_after|clean_qty }}</td>
+                        <td class="px-3 py-2">{{ l.unit_cost_at_txn|clean_number }}</td>
                     </tr>
                 {% empty %}
                     <tr><td colspan="7" class="px-3 py-4 text-slate-500">Belum ada mutasi.</td></tr>
@@ -75,6 +75,11 @@ function stockCardForm() {
         productOpen: false,
         productWarning: '',
         filteredProducts: products,
+        formatQty(v) {
+            const n = parseFloat(v || 0) || 0;
+            if (n % 1 === 0) return Math.round(n).toLocaleString('id-ID');
+            return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+        },
         init() {
             const selectedId = '{{ selected_product.id|default:"" }}';
             if (selectedId) {

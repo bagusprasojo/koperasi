@@ -134,18 +134,18 @@
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 text-right font-medium text-slate-700">
-                                Rp {{ b.total_received_amount|floatformat:0 }}
+                                {{ b.total_received_amount|format_rupiah }}
                             </td>
                             <td class="px-4 py-3 text-right font-bold text-slate-900">
                                 {% if b.status == 'settled' %}
-                                    <span class="text-emerald-700">Rp {{ b.total_sold_cost|floatformat:0 }}</span>
+                                    <span class="text-emerald-700">{{ b.total_sold_cost|format_rupiah }}</span>
                                 {% else %}
                                     <span class="text-slate-400 italic text-xs">Menunggu Rekap</span>
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 text-right font-semibold text-purple-700 text-xs">
                                 {% if b.status == 'settled' %}
-                                    Rp {{ b.total_coop_margin|floatformat:0 }}
+                                    {{ b.total_coop_margin|format_rupiah }}
                                 {% else %}
                                     -
                                 {% endif %}

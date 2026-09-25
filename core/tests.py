@@ -1039,5 +1039,49 @@ def sale_uuid_helper():
     return str(uuid.uuid4())[:8]
 
 
+class CoreTemplateTagsTest(TestCase):
+    def test_clean_number_integer(self):
+        from core.templatetags.core_tags import clean_number
+        self.assertEqual(clean_number(20), '20')
+        self.assertEqual(clean_number('20.000'), '20')
+        self.assertEqual(clean_number(Decimal('20.000')), '20')
+        self.assertEqual(clean_number(1000), '1.000')
+        self.assertEqual(clean_number(1500000), '1.500.000')
+        self.assertEqual(clean_number(0), '0')
+        self.assertEqual(clean_number('0.000'), '0')
+        self.assertEqual(clean_number(None), '0')
+        self.assertEqual(clean_number(''), '0')
+
+    def test_clean_number_fractional(self):
+        from core.templatetags.core_tags import clean_number
+        self.assertEqual(clean_number('0.500'), '0,5')
+        self.assertEqual(clean_number(Decimal('12.500')), '12,5')
+        self.assertEqual(clean_number('1500.75'), '1.500,75')
+        self.assertEqual(clean_number(Decimal('0.125')), '0,125')
+
+    def test_clean_number_negative(self):
+        from core.templatetags.core_tags import clean_number
+        self.assertEqual(clean_number(-5000), '-5.000')
+        self.assertEqual(clean_number(Decimal('-2.50')), '-2,5')
+
+    def test_clean_qty(self):
+        from core.templatetags.core_tags import clean_qty
+        self.assertEqual(clean_qty(Decimal('20.000')), '20')
+        self.assertEqual(clean_qty('5.000'), '5')
+        self.assertEqual(clean_qty(Decimal('1.250')), '1,25')
+
+    def test_format_rupiah(self):
+        from core.templatetags.core_tags import format_rupiah, multiply_qty
+        self.assertEqual(format_rupiah(20000), 'Rp 20.000')
+        self.assertEqual(format_rupiah('25000.00'), 'Rp 25.000')
+        self.assertEqual(format_rupiah(Decimal('25000.50')), 'Rp 25.000,5')
+        self.assertEqual(format_rupiah(0), 'Rp 0')
+        self.assertEqual(format_rupiah(None), 'Rp 0')
+        self.assertEqual(format_rupiah(-10000), '-Rp 10.000')
+
+        self.assertEqual(multiply_qty(10000, 2), 'Rp 20.000')
+        self.assertEqual(multiply_qty(10000, Decimal('0.5')), 'Rp 5.000')
+
+
 
 

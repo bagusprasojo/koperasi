@@ -18,15 +18,15 @@
 
     {% if kpi %}
     <div class="grid gap-3 md:grid-cols-4">
-        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Hari</p><p class="text-lg font-semibold">{{ kpi.total_days|intcomma }}</p></div>
-        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Transaksi</p><p class="text-lg font-semibold">{{ kpi.total_transactions|intcomma }}</p></div>
-        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Omzet</p><p class="text-lg font-semibold">{{ kpi.total_omzet|floatformat:2|intcomma }}</p></div>
-        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Rata-rata / Transaksi</p><p class="text-lg font-semibold">{{ kpi.avg_transaction_value|floatformat:2|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Hari</p><p class="text-lg font-semibold">{{ kpi.total_days|clean_number }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Transaksi</p><p class="text-lg font-semibold">{{ kpi.total_transactions|clean_number }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Omzet</p><p class="text-lg font-semibold">{{ kpi.total_omzet|clean_number }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Rata-rata / Transaksi</p><p class="text-lg font-semibold">{{ kpi.avg_transaction_value|clean_number }}</p></div>
     </div>
     <div class="grid gap-3 md:grid-cols-3">
-        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Tunai</p><p class="text-lg font-semibold">{{ kpi.total_cash|floatformat:2|intcomma }}</p></div>
-        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Deposit</p><p class="text-lg font-semibold">{{ kpi.total_deposit|floatformat:2|intcomma }}</p></div>
-        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Rata-rata Omzet / Hari</p><p class="text-lg font-semibold">{{ kpi.avg_omzet_per_day|floatformat:2|intcomma }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Tunai</p><p class="text-lg font-semibold">{{ kpi.total_cash|clean_number }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Total Deposit</p><p class="text-lg font-semibold">{{ kpi.total_deposit|clean_number }}</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><p class="text-xs text-slate-500">Rata-rata Omzet / Hari</p><p class="text-lg font-semibold">{{ kpi.avg_omzet_per_day|clean_number }}</p></div>
     </div>
     {% endif %}
 
@@ -50,13 +50,13 @@
                     {% for r in rows %}
                     <tr class="border-b">
                         <td class="px-3 py-2">{{ r.tx_date }}</td>
-                        <td class="px-3 py-2">{{ r.total_transactions|intcomma }}</td>
-                        <td class="px-3 py-2">{{ r.item_qty|intcomma }}</td>
-                        <td class="px-3 py-2">{{ r.omzet|floatformat:2|intcomma }}</td>
-                        <td class="px-3 py-2">{{ r.cash_amount|floatformat:2|intcomma }}</td>
-                        <td class="px-3 py-2">{{ r.deposit_amount|floatformat:2|intcomma }}</td>
-                        <td class="px-3 py-2">{{ r.split_count|intcomma }}</td>
-                        <td class="px-3 py-2">{{ r.member_transactions|intcomma }}/{{ r.non_member_transactions|intcomma }}</td>
+                        <td class="px-3 py-2">{{ r.total_transactions|clean_number }}</td>
+                        <td class="px-3 py-2">{{ r.item_qty|clean_qty }}</td>
+                        <td class="px-3 py-2">{{ r.omzet|clean_number }}</td>
+                        <td class="px-3 py-2">{{ r.cash_amount|clean_number }}</td>
+                        <td class="px-3 py-2">{{ r.deposit_amount|clean_number }}</td>
+                        <td class="px-3 py-2">{{ r.split_count|clean_number }}</td>
+                        <td class="px-3 py-2">{{ r.member_transactions|clean_number }}/{{ r.non_member_transactions|clean_number }}</td>
                         <td class="px-3 py-2">
                             <div class="flex justify-end">
                                 <a href="{% url 'sales_daily_summary_detail' r.tx_date|date:'Y-m-d' %}" class="rounded-md border px-3 py-1">Detail</a>

@@ -9,7 +9,7 @@
         <div><p class="text-slate-500">Nama</p><p class="font-medium">{{ member.full_name }}</p></div>
         <div><p class="text-slate-500">Telepon</p><p class="font-medium">{{ member.phone }}</p></div>
         <div><p class="text-slate-500">Email</p><p class="font-medium">{{ member.email|default:'-' }}</p></div>
-        <div><p class="text-slate-500">Saldo Deposit</p><p class="font-medium">{{ wallet.balance|floatformat:2|intcomma }}</p></div>
+        <div><p class="text-slate-500">Saldo Deposit</p><p class="font-medium">{{ wallet.balance|clean_number }}</p></div>
         <div><p class="text-slate-500">Status</p><p class="font-medium">{% if member.is_active %}Aktif{% else %}Nonaktif{% endif %}</p></div>
         <div class="md:col-span-2"><p class="text-slate-500">Kartu</p><p class="font-medium">{% if member.card %}{{ member.card.card_number }}{% else %}-{% endif %}</p></div>
     </div>

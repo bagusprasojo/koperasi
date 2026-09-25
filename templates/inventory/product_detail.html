@@ -13,10 +13,10 @@
             <div><p class="text-slate-500">Satuan</p><p class="font-medium">{% if product.unit %}{{ product.unit.name }} ({{ product.unit.code }}){% else %}-{% endif %}</p></div>
             <div><p class="text-slate-500">SKU</p><p class="font-medium">{{ product.sku }}</p></div>
             <div><p class="text-slate-500">Barcode</p><p class="font-medium">{{ product.barcode|default:'-' }}</p></div>
-            <div><p class="text-slate-500">Harga Beli</p><p class="font-medium">{{ product.last_purchase_price|floatformat:2|intcomma }}</p></div>
-            <div><p class="text-slate-500">HPP</p><p class="font-medium">{{ product.cost_of_goods_sold|floatformat:2|intcomma }}</p></div>
-            <div><p class="text-slate-500">Stok</p><p class="font-medium">{{ product.stock|floatformat:"-3"|intcomma }}</p></div>
-            <div><p class="text-slate-500">Reorder Point</p><p class="font-medium">{{ product.reorder_point|floatformat:"-3"|intcomma }}</p></div>
+            <div><p class="text-slate-500">Harga Beli</p><p class="font-medium">{{ product.last_purchase_price|clean_number }}</p></div>
+            <div><p class="text-slate-500">HPP</p><p class="font-medium">{{ product.cost_of_goods_sold|clean_number }}</p></div>
+            <div><p class="text-slate-500">Stok</p><p class="font-medium">{{ product.stock|clean_qty }}</p></div>
+            <div><p class="text-slate-500">Reorder Point</p><p class="font-medium">{{ product.reorder_point|clean_qty }}</p></div>
             <div><p class="text-slate-500">Tipe Penjualan</p><p class="font-medium">{% if product.allow_decimal_qty %}<span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">Barang Curah / Timbangan (Bisa Desimal)</span>{% else %}<span class="text-slate-700">Barang Standar (Bilangan Bulat)</span>{% endif %}</p></div>
             <div><p class="text-slate-500">Dibuat</p><p class="font-medium">{{ product.created_at }}</p></div>
             <div><p class="text-slate-500">Diubah</p><p class="font-medium">{{ product.updated_at }}</p></div>
@@ -38,20 +38,20 @@
                         {% for tier in product.price_tiers.all %}
                             <tr class="border-b">
                                 <td class="px-3 py-2">{{ tier.level }}</td>
-                                <td class="px-3 py-2">{{ tier.min_qty|intcomma }}</td>
-                                <td class="px-3 py-2">{{ tier.max_qty|intcomma }}</td>
+                                <td class="px-3 py-2">{{ tier.min_qty|clean_qty }}</td>
+                                <td class="px-3 py-2">{% if tier.max_qty %}{{ tier.max_qty|clean_qty }}{% else %}-{% endif %}</td>
                                 <td class="px-3 py-2">
                                     {% if tier.source_mode == 'discount' %}
                                         {% if tier.discount_type == 'percent' %}
-                                            Diskon {{ tier.discount_value|floatformat:2|intcomma }}%
+                                            Diskon {{ tier.discount_value|clean_number }}%
                                         {% else %}
-                                            Diskon nominal {{ tier.discount_value|floatformat:2|intcomma }}
+                                            Diskon nominal {{ tier.discount_value|clean_number }}
                                         {% endif %}
                                     {% else %}
                                         Harga jadi
                                     {% endif %}
                                 </td>
-                                <td class="px-3 py-2">{{ tier.price|floatformat:2|intcomma }}</td>
+                                <td class="px-3 py-2">{{ tier.price|clean_number }}</td>
                             </tr>
                         {% empty %}
                             <tr><td colspan="5" class="px-3 py-3 text-slate-500">Belum ada level harga.</td></tr>

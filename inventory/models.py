@@ -124,6 +124,13 @@ class Product(BaseModel):
         related_name='products',
     )
 
+    @property
+    def clean_stock(self):
+        d = Decimal(str(self.stock or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
+
     def __str__(self):
         return self.name
 
@@ -415,6 +422,38 @@ class ConsignmentBatchItem(BaseModel):
     payable_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     coop_margin = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     notes = models.CharField(max_length=255, blank=True, default='')
+
+    @property
+    def subtotal_received(self):
+        return (self.qty_received * self.cost_price).quantize(Decimal('0.01'))
+
+    @property
+    def clean_qty_received(self):
+        d = Decimal(str(self.qty_received or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
+
+    @property
+    def clean_qty_sold(self):
+        d = Decimal(str(self.qty_sold or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
+
+    @property
+    def clean_qty_returned(self):
+        d = Decimal(str(self.qty_returned or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
+
+    @property
+    def clean_qty_loss(self):
+        d = Decimal(str(self.qty_loss or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
 
     def __str__(self):
         return f"{self.batch.batch_number} - {self.product.name}"

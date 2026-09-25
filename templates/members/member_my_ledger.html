@@ -25,19 +25,19 @@
         </div>
         <div class="rounded-lg border bg-slate-50 p-3">
             <p class="text-xs text-slate-500">Saldo Awal</p>
-            <p class="font-semibold">{{ summary.saldo_awal|floatformat:2|intcomma }}</p>
+            <p class="font-semibold">{{ summary.saldo_awal|clean_number }}</p>
         </div>
         <div class="rounded-lg border bg-emerald-50 p-3">
             <p class="text-xs text-emerald-700">Mutasi In</p>
-            <p class="font-semibold text-emerald-800">{{ summary.mutasi_in|floatformat:2|intcomma }}</p>
+            <p class="font-semibold text-emerald-800">{{ summary.mutasi_in|clean_number }}</p>
         </div>
         <div class="rounded-lg border bg-red-50 p-3">
             <p class="text-xs text-red-700">Mutasi Out</p>
-            <p class="font-semibold text-red-800">{{ summary.mutasi_out|floatformat:2|intcomma }}</p>
+            <p class="font-semibold text-red-800">{{ summary.mutasi_out|clean_number }}</p>
         </div>
         <div class="rounded-lg border border-sky-200 bg-sky-50 p-3">
             <p class="text-xs text-sky-700">Saldo Akhir</p>
-            <p class="font-semibold text-sky-900">{{ summary.saldo_akhir|floatformat:2|intcomma }}</p>
+            <p class="font-semibold text-sky-900">{{ summary.saldo_akhir|clean_number }}</p>
         </div>
     </div>
     <div class="overflow-x-auto">
@@ -51,10 +51,10 @@
                         <td class="px-3 py-2">{% if l.topup %}{{ l.topup.topup_number }}{% elif l.withdrawal %}{{ l.withdrawal.withdrawal_number }}{% else %}-{% endif %}</td>
                         <td class="px-3 py-2">{% if l.topup %}{{ l.topup.get_topup_type_display }}{% elif l.withdrawal %}Admin{% else %}-{% endif %}</td>
                         <td class="px-3 py-2">{{ l.get_txn_type_display }}</td>
-                        <td class="px-3 py-2 text-right">{{ l.balance_before|floatformat:2|intcomma }}</td>
-                        <td class="px-3 py-2 text-right text-emerald-700">{% if row.amount_in %}{{ row.amount_in|floatformat:2|intcomma }}{% else %}-{% endif %}</td>
-                        <td class="px-3 py-2 text-right text-red-700">{% if row.amount_out %}{{ row.amount_out|floatformat:2|intcomma }}{% else %}-{% endif %}</td>
-                        <td class="px-3 py-2 text-right">{{ l.balance_after|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2 text-right">{{ l.balance_before|clean_number }}</td>
+                        <td class="px-3 py-2 text-right text-emerald-700">{% if row.amount_in %}{{ row.amount_in|clean_number }}{% else %}-{% endif %}</td>
+                        <td class="px-3 py-2 text-right text-red-700">{% if row.amount_out %}{{ row.amount_out|clean_number }}{% else %}-{% endif %}</td>
+                        <td class="px-3 py-2 text-right">{{ l.balance_after|clean_number }}</td>
                         <td class="px-3 py-2">{{ l.description|default:'-' }}</td>
                     </tr>
                     {% endwith %}

@@ -7,7 +7,7 @@
     <div class="grid gap-3 text-sm">
         <div><p class="text-slate-500">Nama Member</p><p class="font-medium">{{ member.full_name }}</p></div>
         <div><p class="text-slate-500">Nomor Kartu</p><p class="font-medium">{% if member.card %}{{ member.card.card_number }}{% else %}-{% endif %}</p></div>
-        <div><p class="text-slate-500">Saldo Saat Ini</p><p class="font-semibold text-lg">{{ wallet.balance|floatformat:2|intcomma }}</p></div>
+        <div><p class="text-slate-500">Saldo Saat Ini</p><p class="font-semibold text-lg">{{ wallet.balance|clean_number }}</p></div>
     </div>
     <div class="mt-6 flex gap-2">
         <a href="{% url 'member_topup_request' %}" class="rounded-md border px-3 py-2 text-sm">Topup Saya</a>

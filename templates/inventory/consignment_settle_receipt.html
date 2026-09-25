@@ -74,20 +74,20 @@
                                 <div class="text-[10px] text-slate-400 font-mono">{{ item.product.sku }}</div>
                             </td>
                             <td class="py-2 text-center text-slate-600">
-                                {{ item.qty_received }}
+                                {{ item.qty_received|clean_qty }}
                             </td>
                             <td class="py-2 text-center font-bold text-slate-900 text-sm">
-                                {{ item.qty_sold }}
+                                {{ item.qty_sold|clean_qty }}
                             </td>
                             <td class="py-2 text-center font-semibold text-amber-800">
-                                {{ item.qty_returned }}
+                                {{ item.qty_returned|clean_qty }}
                                 {% if item.qty_loss > 0 %}
-                                    <span class="text-[10px] text-red-600 block">(Rusak: {{ item.qty_loss }})</span>
+                                    <span class="text-[10px] text-red-600 block">(Rusak: {{ item.qty_loss|clean_qty }})</span>
                                 {% endif %}
                             </td>
-                            <td class="py-2 text-right text-slate-600">Rp {{ item.cost_price|floatformat:0 }}</td>
+                            <td class="py-2 text-right text-slate-600">{{ item.cost_price|format_rupiah }}</td>
                             <td class="py-2 text-right font-bold text-slate-900">
-                                Rp {{ item.payable_amount|floatformat:0 }}
+                                {{ item.payable_amount|format_rupiah }}
                             </td>
                         </tr>
                     {% endfor %}
@@ -99,7 +99,7 @@
         <div class="border-t-2 border-slate-800 pt-3 space-y-1.5 text-xs">
             <div class="flex justify-between items-center text-base font-black text-slate-900">
                 <span>TOTAL HAK PENITIP DIBAYARKAN:</span>
-                <span class="text-emerald-700">Rp {{ batch.total_sold_cost|floatformat:0 }}</span>
+                <span class="text-emerald-700">{{ batch.total_sold_cost|format_rupiah }}</span>
             </div>
             <div class="flex justify-between items-center text-slate-600">
                 <span>Metode Pembayaran:</span>

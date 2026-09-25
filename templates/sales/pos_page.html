@@ -21,7 +21,7 @@
                                     </div>
                                     <span class="rounded px-1.5 py-0.5 text-xs font-semibold"
                                           :class="p.stock > 0 ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'">
-                                        Stok: <span x-text="p.stock"></span> <span x-text="p.unit"></span>
+                                        Stok: <span x-text="formatQty(p.stock)"></span> <span x-text="p.unit"></span>
                                     </span>
                                 </div>
                                 <p class="text-xs text-slate-500" x-text="'SKU: ' + p.sku + (p.barcode ? ' | BC: ' + p.barcode : '')"></p>
@@ -96,7 +96,7 @@
                                     <span x-show="line.is_consignment" class="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold text-purple-800">Titipan</span>
                                 </div>
                                 <div x-show="line.stock !== undefined && toNum(line.qty) > toNum(line.stock)" class="text-xs font-medium text-red-600">
-                                    ⚠️ Melebihi stok (sisa: <span x-text="line.stock"></span> <span x-text="line.unit"></span>)
+                                    ⚠️ Melebihi stok (sisa: <span x-text="formatQty(line.stock)"></span> <span x-text="line.unit"></span>)
                                 </div>
                                 <div x-show="!line.allow_decimal_qty && (toNum(line.qty) % 1 !== 0)" class="text-xs font-semibold text-rose-600">
                                     ⚠️ Bukan barang curah (harus bilangan bulat)
@@ -273,7 +273,7 @@
                     <thead class="border-b bg-slate-50"><tr><th class="px-2 py-1">Item</th><th class="px-2 py-1">Qty</th><th class="px-2 py-1">Subtotal</th></tr></thead>
                     <tbody>
                         <template x-for="it in (receipt.items || [])" :key="it.product_name + '-' + it.qty">
-                            <tr class="border-b"><td class="px-2 py-1" x-text="it.product_name"></td><td class="px-2 py-1" x-text="it.qty"></td><td class="px-2 py-1" x-text="formatMoney(it.line_total)"></td></tr>
+                            <tr class="border-b"><td class="px-2 py-1" x-text="it.product_name"></td><td class="px-2 py-1" x-text="formatQty(it.qty)"></td><td class="px-2 py-1" x-text="formatMoney(it.line_total)"></td></tr>
                         </template>
                     </tbody>
                 </table>
@@ -329,7 +329,17 @@ function posApp() {
         toNum(v) { return parseFloat(v || 0) || 0; },
         formatMoney(v) {
             const n = this.toNum(v);
-            return n.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (n % 1 === 0) {
+                return Math.round(n).toLocaleString('id-ID');
+            }
+            return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        },
+        formatQty(v) {
+            const n = this.toNum(v);
+            if (n % 1 === 0) {
+                return Math.round(n).toLocaleString('id-ID');
+            }
+            return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
         },
         handleShortcut(e) {
             if (e.key === 'F2') { e.preventDefault(); this.$refs.scanInput.focus(); }

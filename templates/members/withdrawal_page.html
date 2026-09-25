@@ -29,7 +29,7 @@
                         <td class="px-3 py-2">{{ w.withdrawal_number }}</td>
                         <td class="px-3 py-2">{{ w.created_at }}</td>
                         <td class="px-3 py-2">{{ w.member.full_name }}</td>
-                        <td class="px-3 py-2">{{ w.amount|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2">{{ w.amount|clean_number }}</td>
                         <td class="px-3 py-2">{{ w.get_status_display }}</td>
                         <td class="px-3 py-2">
                             <div class="flex justify-end gap-2">
@@ -75,9 +75,9 @@
                 <p><span class="text-slate-600">Kode Member:</span> {{ confirm_data.member_code }}</p>
                 <p><span class="text-slate-600">Nama Member:</span> {{ confirm_data.member_name }}</p>
                 <p><span class="text-slate-600">Telepon:</span> {{ confirm_data.member_phone }}</p>
-                <p><span class="text-slate-600">Saldo Sebelum:</span> {{ confirm_data.member_balance_before|floatformat:2|intcomma }}</p>
-                <p><span class="text-slate-600">Nominal Tarik:</span> {{ confirm_data.amount|floatformat:2|intcomma }}</p>
-                <p><span class="text-slate-600">Saldo Akhir:</span> {{ confirm_data.member_balance_after|floatformat:2|intcomma }}</p>
+                <p><span class="text-slate-600">Saldo Sebelum:</span> {{ confirm_data.member_balance_before|clean_number }}</p>
+                <p><span class="text-slate-600">Nominal Tarik:</span> {{ confirm_data.amount|clean_number }}</p>
+                <p><span class="text-slate-600">Saldo Akhir:</span> {{ confirm_data.member_balance_after|clean_number }}</p>
                 <p><span class="text-slate-600">Catatan:</span> {{ confirm_data.note|default:'-' }}</p>
             </div>
             <form method="post" class="mt-4 grid gap-3">{% csrf_token %}

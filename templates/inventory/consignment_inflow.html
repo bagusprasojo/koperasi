@@ -21,7 +21,7 @@
     </div>
 
     <!-- Main Inflow Form -->
-    <form method="post" @submit.prevent="submitInflow()" class="space-y-6">
+    <form id="consignment-inflow-form" method="post" @submit.prevent="submitInflow()" class="space-y-6">
         {% csrf_token %}
         <input type="hidden" name="items_json" :value="JSON.stringify(items)">
 
@@ -110,24 +110,24 @@
                                         </template>
                                     </select>
                                     <div x-show="item.product_id" class="mt-0.5 text-[11px] text-slate-400">
-                                        Stok saat ini di rak: <span class="font-medium text-slate-700" x-text="item.current_stock || 0"></span> <span x-text="item.unit"></span>
+                                        Stok saat ini di rak: <span class="font-medium text-slate-700" x-text="formatNumber(item.current_stock || 0)"></span> <span x-text="item.unit"></span>
                                     </div>
                                 </td>
                                 <td class="px-3 py-2.5 text-center">
-                                    <input type="number" :step="item.allow_decimal_qty ? '0.001' : '1'" min="0.001" x-model.number="item.qty" required
+                                    <input type="number" :step="item.allow_decimal_qty ? 'any' : '1'" :min="item.allow_decimal_qty ? '0.001' : '1'" x-model.number="item.qty" required
                                         class="w-24 rounded-md border border-slate-300 px-2 py-1 text-center font-bold text-slate-800 focus:border-indigo-500 focus:outline-none">
                                 </td>
                                 <td class="px-3 py-2.5 text-right">
                                     <div class="relative">
                                         <span class="absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-slate-400">Rp</span>
-                                        <input type="number" step="0.01" min="1" x-model.number="item.cost_price" required
+                                        <input type="number" step="any" min="0" x-model.number="item.cost_price" required
                                             class="w-full rounded-md border border-slate-300 pl-7 pr-2 py-1 text-right text-sm font-medium text-slate-800 focus:border-indigo-500 focus:outline-none">
                                     </div>
                                 </td>
                                 <td class="px-3 py-2.5 text-right">
                                     <div class="relative">
                                         <span class="absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-slate-400">Rp</span>
-                                        <input type="number" step="0.01" min="1" x-model.number="item.sale_price" required
+                                        <input type="number" step="any" min="0" x-model.number="item.sale_price" required
                                             class="w-full rounded-md border border-slate-300 pl-7 pr-2 py-1 text-right text-sm font-semibold text-slate-900 focus:border-indigo-500 focus:outline-none">
                                     </div>
                                 </td>
@@ -218,12 +218,12 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-semibold uppercase text-slate-700">Harga Titip (HPP) *</label>
-                        <input type="number" step="0.01" x-model.number="newProd.cost_price" required placeholder="2000"
+                        <input type="number" step="any" min="0" x-model.number="newProd.cost_price" required placeholder="2000"
                             class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold uppercase text-slate-700">Harga Jual POS *</label>
-                        <input type="number" step="0.01" x-model.number="newProd.sale_price" required placeholder="2500"
+                        <input type="number" step="any" min="0" x-model.number="newProd.sale_price" required placeholder="2500"
                             class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
                     </div>
                 </div>
@@ -332,8 +332,19 @@ function consignmentInflowApp() {
         },
 
         formatRupiah(num) {
-            const val = Math.round(num || 0);
-            return 'Rp ' + val.toLocaleString('id-ID');
+            const n = Number(num || 0);
+            if (n % 1 === 0) {
+                return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+            }
+            return 'Rp ' + n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        },
+
+        formatNumber(num) {
+            const n = Number(num || 0);
+            if (n % 1 === 0) {
+                return Math.round(n).toLocaleString('id-ID');
+            }
+            return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
         },
 
         async submitNewProduct() {
@@ -398,7 +409,7 @@ function consignmentInflowApp() {
                 }
             }
             this.isSubmitting = true;
-            document.querySelector('form').submit();
+            document.getElementById('consignment-inflow-form').submit();
         }
     }
 }

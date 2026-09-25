@@ -6,7 +6,7 @@
     <div class="rounded-xl bg-white p-6 shadow-sm lg:col-span-2">
         <h1 class="mb-4 text-xl font-semibold">Sampul Member (Topup)</h1>
         <form method="get" class="mb-4 flex gap-2"><input name="q" value="{{ query }}" placeholder="Cari nama / telepon..." class="w-72 rounded-md border border-slate-300 px-3 py-2 text-sm"><button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Cari</button></form>
-        <div class="overflow-x-auto"><table class="min-w-full text-left text-sm"><thead class="border-b bg-slate-50"><tr><th class="px-3 py-2">Nama</th><th class="px-3 py-2">Telepon</th><th class="px-3 py-2">Saldo</th><th class="px-3 py-2">Kartu</th></tr></thead><tbody>{% for m in page_obj %}<tr class="border-b"><td class="px-3 py-2">{{ m.full_name }}</td><td class="px-3 py-2">{{ m.phone }}</td><td class="px-3 py-2">{{ m.wallet.balance|default:0|floatformat:2|intcomma }}</td><td class="px-3 py-2">{% if m.card %}{{ m.card.card_number }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="px-3 py-4 text-slate-500">Belum ada member.</td></tr>{% endfor %}</tbody></table></div>
+        <div class="overflow-x-auto"><table class="min-w-full text-left text-sm"><thead class="border-b bg-slate-50"><tr><th class="px-3 py-2">Nama</th><th class="px-3 py-2">Telepon</th><th class="px-3 py-2">Saldo</th><th class="px-3 py-2">Kartu</th></tr></thead><tbody>{% for m in page_obj %}<tr class="border-b"><td class="px-3 py-2">{{ m.full_name }}</td><td class="px-3 py-2">{{ m.phone }}</td><td class="px-3 py-2">{{ m.wallet.balance|default:0|clean_number }}</td><td class="px-3 py-2">{% if m.card %}{{ m.card.card_number }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="px-3 py-4 text-slate-500">Belum ada member.</td></tr>{% endfor %}</tbody></table></div>
         <div class="mt-4 flex items-center justify-between text-sm"><p>Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}</p><div class="flex gap-2">{% if page_obj.has_previous %}<a href="?q={{ query }}&page={{ page_obj.previous_page_number }}" class="rounded-md border px-3 py-1">Sebelumnya</a>{% endif %}{% if page_obj.has_next %}<a href="?q={{ query }}&page={{ page_obj.next_page_number }}" class="rounded-md border px-3 py-1">Berikutnya</a>{% endif %}</div></div>
     </div>
     <div class="rounded-xl bg-white p-6 shadow-sm">
@@ -38,7 +38,7 @@
                 <p><span class="text-slate-600">Kode Member:</span> {{ confirm_data.member_code }}</p>
                 <p><span class="text-slate-600">Nama Member:</span> {{ confirm_data.member_name }}</p>
                 <p><span class="text-slate-600">Telepon:</span> {{ confirm_data.member_phone }}</p>
-                <p><span class="text-slate-600">Nominal:</span> {{ confirm_data.amount|floatformat:2|intcomma }}</p>
+                <p><span class="text-slate-600">Nominal:</span> {{ confirm_data.amount|clean_number }}</p>
                 <p><span class="text-slate-600">Catatan:</span> {{ confirm_data.note|default:'-' }}</p>
             </div>
             <form method="post" class="mt-4 flex justify-end gap-2">{% csrf_token %}

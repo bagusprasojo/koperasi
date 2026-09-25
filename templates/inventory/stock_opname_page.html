@@ -9,7 +9,7 @@
         <select name="product_id" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
             <option value="">Pilih produk</option>
             {% for p in products %}
-                <option value="{{ p.id }}">{{ p.name }} (Stok sistem: {{ p.stock|intcomma }})</option>
+                <option value="{{ p.id }}">{{ p.name }} (Stok sistem: {{ p.stock|clean_qty }})</option>
             {% endfor %}
         </select>
         <input type="number" name="actual_stock" min="0" placeholder="Stok aktual" class="rounded-md border border-slate-300 px-3 py-2 text-sm">

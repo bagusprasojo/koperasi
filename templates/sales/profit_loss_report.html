@@ -28,15 +28,15 @@
         </div>
         <div class="rounded-xl bg-white p-4 shadow-sm">
             <p class="text-xs text-slate-500">Total Omzet POS</p>
-            <p class="text-lg font-semibold">{{ summary.sales_total|floatformat:2|intcomma }}</p>
+            <p class="text-lg font-semibold">{{ summary.sales_total|clean_number }}</p>
         </div>
         <div class="rounded-xl bg-white p-4 shadow-sm">
             <p class="text-xs text-slate-500">Laba Kotor</p>
-            <p class="text-lg font-semibold">{{ summary.gross_profit|floatformat:2|intcomma }}</p>
+            <p class="text-lg font-semibold">{{ summary.gross_profit|clean_number }}</p>
         </div>
         <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
             <p class="text-xs text-sky-700">Laba Operasional Sementara</p>
-            <p class="text-lg font-semibold text-sky-900">{{ summary.temporary_operating_profit|floatformat:2|intcomma }}</p>
+            <p class="text-lg font-semibold text-sky-900">{{ summary.temporary_operating_profit|clean_number }}</p>
         </div>
     </div>
 
@@ -53,33 +53,33 @@
                     </tr>
                     <tr class="border-b">
                         <td class="px-3 py-2">Total Omzet POS</td>
-                        <td class="px-3 py-2 text-right">{{ summary.sales_total|floatformat:2|intcomma }}</td>
+                        <td class="px-3 py-2 text-right">{{ summary.sales_total|clean_number }}</td>
                     </tr>
                     <tr class="border-b bg-slate-50">
                         <td colspan="2" class="py-2 font-semibold">HPP</td>
                     </tr>
                     <tr class="border-b">
                         <td class="px-3 py-2">HPP Barang Terjual</td>
-                        <td class="px-3 py-2 text-right text-red-700">({{ summary.cogs_sold|floatformat:2|intcomma }})</td>
+                        <td class="px-3 py-2 text-right text-red-700">({{ summary.cogs_sold|clean_number }})</td>
                     </tr>
                     <tr class="border-b bg-slate-50">
                         <td class="py-2 font-semibold">Laba Kotor</td>
-                        <td class="py-2 text-right font-semibold">{{ summary.gross_profit|floatformat:2|intcomma }}</td>
+                        <td class="py-2 text-right font-semibold">{{ summary.gross_profit|clean_number }}</td>
                     </tr>
                     <tr class="border-b bg-slate-50">
                         <td colspan="2" class="py-2 font-semibold">Penyesuaian Operasional</td>
                     </tr>
                     <tr class="border-b">
                         <td class="px-3 py-2">Internal Used</td>
-                        <td class="px-3 py-2 text-right text-red-700">({{ summary.internal_used|floatformat:2|intcomma }})</td>
+                        <td class="px-3 py-2 text-right text-red-700">({{ summary.internal_used|clean_number }})</td>
                     </tr>
                     <tr class="border-b">
                         <td class="px-3 py-2">Selisih Stock Opname Minus</td>
-                        <td class="px-3 py-2 text-right text-red-700">({{ summary.stock_opname_minus|floatformat:2|intcomma }})</td>
+                        <td class="px-3 py-2 text-right text-red-700">({{ summary.stock_opname_minus|clean_number }})</td>
                     </tr>
                     <tr class="border-b bg-slate-50">
                         <td class="py-2 font-semibold">Laba Operasional Sementara</td>
-                        <td class="py-2 text-right font-semibold">{{ summary.temporary_operating_profit|floatformat:2|intcomma }}</td>
+                        <td class="py-2 text-right font-semibold">{{ summary.temporary_operating_profit|clean_number }}</td>
                     </tr>
                 </tbody>
             </table>

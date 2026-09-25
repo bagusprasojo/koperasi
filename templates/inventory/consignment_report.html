@@ -64,17 +64,17 @@
         </div>
         <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm">
             <p class="text-xs font-medium text-blue-800">Total Omzet Kasir (POS)</p>
-            <p class="mt-1 text-2xl font-black text-blue-900">Rp {{ total_omzet|floatformat:0 }}</p>
+            <p class="mt-1 text-2xl font-black text-blue-900">{{ total_omzet|format_rupiah }}</p>
             <p class="text-[11px] text-blue-600">Total penjualan titipan</p>
         </div>
         <div class="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
             <p class="text-xs font-medium text-emerald-800">Total Hak Penitip (Lunas)</p>
-            <p class="mt-1 text-2xl font-black text-emerald-900">Rp {{ total_payout|floatformat:0 }}</p>
+            <p class="mt-1 text-2xl font-black text-emerald-900">{{ total_payout|format_rupiah }}</p>
             <p class="text-[11px] text-emerald-600">Diserahkan ke mitra</p>
         </div>
         <div class="rounded-xl border border-purple-200 bg-purple-50/40 p-4 shadow-sm">
             <p class="text-xs font-medium text-purple-800">Keuntungan Toko (Margin)</p>
-            <p class="mt-1 text-2xl font-black text-purple-900">Rp {{ total_margin|floatformat:0 }}</p>
+            <p class="mt-1 text-2xl font-black text-purple-900">{{ total_margin|format_rupiah }}</p>
             <p class="text-[11px] text-purple-600">Laba bersih koperasi</p>
         </div>
     </div>
@@ -112,10 +112,10 @@
                                 {{ b.consignor.name }}
                                 <span class="font-mono text-xs text-purple-700">({{ b.consignor.code }})</span>
                             </td>
-                            <td class="px-4 py-3 text-right text-slate-600">Rp {{ b.total_received_amount|floatformat:0 }}</td>
-                            <td class="px-4 py-3 text-right font-bold text-emerald-700">Rp {{ b.total_sold_cost|floatformat:0 }}</td>
-                            <td class="px-4 py-3 text-right font-medium text-slate-900">Rp {{ b.total_sold_retail|floatformat:0 }}</td>
-                            <td class="px-4 py-3 text-right font-bold text-purple-700">Rp {{ b.total_coop_margin|floatformat:0 }}</td>
+                            <td class="px-4 py-3 text-right text-slate-600">{{ b.total_received_amount|format_rupiah }}</td>
+                            <td class="px-4 py-3 text-right font-bold text-emerald-700">{{ b.total_sold_cost|format_rupiah }}</td>
+                            <td class="px-4 py-3 text-right font-medium text-slate-900">{{ b.total_sold_retail|format_rupiah }}</td>
+                            <td class="px-4 py-3 text-right font-bold text-purple-700">{{ b.total_coop_margin|format_rupiah }}</td>
                             <td class="px-4 py-3 text-center">
                                 <span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
                                     {{ b.get_payout_method_display }}
@@ -138,9 +138,9 @@
                 <tfoot class="border-t-2 border-slate-800 bg-slate-50 font-bold text-sm">
                     <tr>
                         <td colspan="4" class="px-4 py-3 text-right uppercase text-xs text-slate-600">Total Keseluruhan:</td>
-                        <td class="px-4 py-3 text-right text-emerald-700">Rp {{ total_payout|floatformat:0 }}</td>
-                        <td class="px-4 py-3 text-right text-slate-900">Rp {{ total_omzet|floatformat:0 }}</td>
-                        <td class="px-4 py-3 text-right text-purple-700">Rp {{ total_margin|floatformat:0 }}</td>
+                        <td class="px-4 py-3 text-right text-emerald-700">{{ total_payout|format_rupiah }}</td>
+                        <td class="px-4 py-3 text-right text-slate-900">{{ total_omzet|format_rupiah }}</td>
+                        <td class="px-4 py-3 text-right text-purple-700">{{ total_margin|format_rupiah }}</td>
                         <td colspan="2"></td>
                     </tr>
                 </tfoot>

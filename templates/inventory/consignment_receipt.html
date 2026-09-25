@@ -79,14 +79,12 @@
                                 <div class="text-[10px] text-slate-400 font-mono">{{ item.product.sku }}</div>
                             </td>
                             <td class="py-2 text-center font-bold text-slate-800">
-                                {{ item.qty_received }} <span class="text-[10px] font-normal text-slate-500">{{ item.product.unit.name|default:'pcs' }}</span>
+                                {{ item.qty_received|clean_qty }} <span class="text-[10px] font-normal text-slate-500">{{ item.product.unit.name|default:'pcs' }}</span>
                             </td>
-                            <td class="py-2 text-right text-slate-700">Rp {{ item.cost_price|floatformat:0 }}</td>
-                            <td class="py-2 text-right font-medium text-slate-900">Rp {{ item.sale_price|floatformat:0 }}</td>
+                            <td class="py-2 text-right text-slate-700">{{ item.cost_price|format_rupiah }}</td>
+                            <td class="py-2 text-right font-medium text-slate-900">{{ item.sale_price|format_rupiah }}</td>
                             <td class="py-2 text-right font-bold text-slate-900">
-                                Rp {{ item.qty_received|floatformat:0|add:"" }}
-                                {% widthratio item.cost_price 1 item.qty_received as sub_h %}
-                                Rp {{ sub_h }}
+                                {{ item.subtotal_received|format_rupiah }}
                             </td>
                         </tr>
                     {% endfor %}
@@ -98,7 +96,7 @@
         <div class="border-t-2 border-slate-800 pt-3 space-y-1 text-xs">
             <div class="flex justify-between items-center text-sm font-extrabold text-slate-900">
                 <span>Total Nilai Masuk (HPP):</span>
-                <span>Rp {{ batch.total_received_amount|floatformat:0 }}</span>
+                <span>{{ batch.total_received_amount|format_rupiah }}</span>
             </div>
             <p class="text-[11px] text-slate-500 italic">
                 * Barang diterima dalam kondisi baik. Rekapitulasi penjualan dan pelunasan pembayaran akan dilakukan sore hari saat pengambilan sisa barang.

@@ -78,6 +78,9 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.role_flags',
             ],
+            'builtins': [
+                'core.templatetags.core_tags',
+            ],
         },
     },
 ]
