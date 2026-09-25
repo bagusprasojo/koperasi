@@ -56,6 +56,46 @@ class Supplier(BaseModel):
         return self.name
 
 
+class Consignor(BaseModel):
+    code = models.CharField(max_length=30, unique=True, db_index=True, help_text="Kode unik penitip, misal: P01, IBU-SITI")
+    name = models.CharField(max_length=150)
+    phone = models.CharField(max_length=30, blank=True, default='')
+    address = models.CharField(max_length=255, blank=True, default='')
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='consignors',
+        help_text="Tautkan jika penitip adalah anggota koperasi",
+    )
+    bank_name = models.CharField(max_length=50, blank=True, default='')
+    bank_account = models.CharField(max_length=50, blank=True, default='')
+    bank_account_holder = models.CharField(max_length=100, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='consignors_created',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='consignors_updated',
+    )
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
 class Product(BaseModel):
     category = models.ForeignKey(
         Category,
@@ -75,6 +115,14 @@ class Product(BaseModel):
     cost_of_goods_sold = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     reorder_point = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     allow_decimal_qty = models.BooleanField(default=False, verbose_name="Bisa Dijual Pecahan / Curah")
+    is_consignment = models.BooleanField(default=False, verbose_name="Barang Titipan / Konsinyasi")
+    consignor = models.ForeignKey(
+        Consignor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='products',
+    )
 
     def __str__(self):
         return self.name
@@ -177,12 +225,16 @@ class InventoryTransaction(BaseModel):
     TYPE_POS_SALE = 'pos_sale'
     TYPE_STOCK_OPNAME = 'stock_opname'
     TYPE_DAILY_CLOSING = 'daily_closing'
+    TYPE_CONSIGNMENT_IN = 'consignment_in'
+    TYPE_CONSIGNMENT_RETURN = 'consignment_return'
     TYPE_CHOICES = (
         (TYPE_PURCHASE, 'Purchase'),
         (TYPE_INTERNAL_USED, 'Internal Used'),
         (TYPE_POS_SALE, 'POS Sale'),
         (TYPE_STOCK_OPNAME, 'Stock Opname'),
         (TYPE_DAILY_CLOSING, 'Daily Closing'),
+        (TYPE_CONSIGNMENT_IN, 'Consignment Inflow (Titipan Pagi)'),
+        (TYPE_CONSIGNMENT_RETURN, 'Consignment Return (Retur Sore)'),
     )
 
     tx_number = models.CharField(max_length=40, unique=True, db_index=True)
@@ -190,6 +242,13 @@ class InventoryTransaction(BaseModel):
     tx_date = models.DateField()
     supplier = models.ForeignKey(
         Supplier,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='inventory_transactions',
+    )
+    consignor = models.ForeignKey(
+        Consignor,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -253,10 +312,10 @@ class DailyClosing(BaseModel):
 class ProductDailySnapshot(BaseModel):
     closing = models.ForeignKey(DailyClosing, on_delete=models.CASCADE, related_name='product_snapshots')
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='daily_snapshots')
-    opening_stock = models.IntegerField(default=0)
-    mutation_in = models.IntegerField(default=0)
-    mutation_out = models.IntegerField(default=0)
-    closing_stock = models.IntegerField(default=0)
+    opening_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    mutation_in = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    mutation_out = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    closing_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0)
 
     class Meta:
         unique_together = ('closing', 'product')
@@ -272,3 +331,90 @@ class MemberDailySnapshot(BaseModel):
 
     class Meta:
         unique_together = ('closing', 'member')
+
+
+class ConsignmentBatch(BaseModel):
+    STATUS_OPEN = 'open'
+    STATUS_SETTLED = 'settled'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = (
+        (STATUS_OPEN, 'Aktif (Sedang Berjalan)'),
+        (STATUS_SETTLED, 'Selesai (Sudah Rekap & Bayar)'),
+        (STATUS_CANCELLED, 'Dibatalkan'),
+    )
+
+    PAYOUT_METHOD_CASH = 'cash'
+    PAYOUT_METHOD_MEMBER_DEPOSIT = 'member_deposit'
+    PAYOUT_METHOD_TRANSFER = 'transfer'
+    PAYOUT_METHOD_CHOICES = (
+        (PAYOUT_METHOD_CASH, 'Tunai (Kas Toko)'),
+        (PAYOUT_METHOD_MEMBER_DEPOSIT, 'Deposit Dompet Anggota'),
+        (PAYOUT_METHOD_TRANSFER, 'Transfer Bank'),
+    )
+
+    batch_number = models.CharField(max_length=40, unique=True, db_index=True)
+    consignor = models.ForeignKey(Consignor, on_delete=models.PROTECT, related_name='batches')
+    batch_date = models.DateField(db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN, db_index=True)
+
+    # Financial & Stock summaries
+    total_received_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # Total HPP titipan masuk
+    total_sold_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0)        # Total hak bayar penitip (HPP * qty_sold)
+    total_sold_retail = models.DecimalField(max_digits=14, decimal_places=2, default=0)      # Total omzet kasir (Jual * qty_sold)
+    total_coop_margin = models.DecimalField(max_digits=14, decimal_places=2, default=0)      # Total margin koperasi
+
+    payout_method = models.CharField(max_length=20, choices=PAYOUT_METHOD_CHOICES, blank=True, default='')
+    payout_reference = models.CharField(max_length=100, blank=True, default='')
+    settled_at = models.DateTimeField(null=True, blank=True)
+    settled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='settled_consignments',
+    )
+    inflow_transaction = models.ForeignKey(
+        InventoryTransaction,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='consignment_inflows',
+    )
+    return_transaction = models.ForeignKey(
+        InventoryTransaction,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='consignment_returns',
+    )
+    notes = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_consignments',
+    )
+
+    class Meta:
+        ordering = ['-batch_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.batch_number} - {self.consignor.name} ({self.batch_date})"
+
+
+class ConsignmentBatchItem(BaseModel):
+    batch = models.ForeignKey(ConsignmentBatch, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='consignment_batch_items')
+    cost_price = models.DecimalField(max_digits=14, decimal_places=2)  # Harga penitip (HPP)
+    sale_price = models.DecimalField(max_digits=14, decimal_places=2)  # Harga jual toko
+    qty_received = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    qty_sold = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    qty_returned = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    qty_loss = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    payable_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    coop_margin = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    notes = models.CharField(max_length=255, blank=True, default='')
+
+    def __str__(self):
+        return f"{self.batch.batch_number} - {self.product.name}"

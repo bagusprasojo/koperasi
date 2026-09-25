@@ -113,6 +113,7 @@ def build_price_preview(items: list):
                 'stock': product.stock,
                 'qty': qty,
                 'allow_decimal_qty': product.allow_decimal_qty,
+                'is_consignment': product.is_consignment,
                 'price_level': selected_tier.level,
                 'unit_price': unit_price,
                 'line_total': line_total,

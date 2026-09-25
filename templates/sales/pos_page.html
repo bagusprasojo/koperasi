@@ -17,6 +17,7 @@
                                     <div class="flex items-center gap-1.5">
                                         <span class="font-medium" x-text="p.name"></span>
                                         <span x-show="p.allow_decimal_qty" class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">Curah</span>
+                                        <span x-show="p.is_consignment" class="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold text-purple-800">Titipan</span>
                                     </div>
                                     <span class="rounded px-1.5 py-0.5 text-xs font-semibold"
                                           :class="p.stock > 0 ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'">
@@ -92,6 +93,7 @@
                                 <div class="flex items-center gap-1.5">
                                     <span class="font-medium" x-text="line.product_name"></span>
                                     <span x-show="line.allow_decimal_qty" class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">Curah</span>
+                                    <span x-show="line.is_consignment" class="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold text-purple-800">Titipan</span>
                                 </div>
                                 <div x-show="line.stock !== undefined && toNum(line.qty) > toNum(line.stock)" class="text-xs font-medium text-red-600">
                                     ⚠️ Melebihi stok (sisa: <span x-text="line.stock"></span> <span x-text="line.unit"></span>)
@@ -463,7 +465,7 @@ function posApp() {
         async addProductDirect(product) {
             const existing = this.lines.find(l => String(l.product_id) === String(product.id));
             if (existing) existing.qty = this.toNum(existing.qty) + 1;
-            else this.lines.push({ product_id: product.id, product_name: product.name, unit: product.unit, stock: product.stock, allow_decimal_qty: !!product.allow_decimal_qty, qty: 1, unit_price: 0, line_total: 0 });
+            else this.lines.push({ product_id: product.id, product_name: product.name, unit: product.unit, stock: product.stock, allow_decimal_qty: !!product.allow_decimal_qty, is_consignment: !!product.is_consignment, qty: 1, unit_price: 0, line_total: 0 });
             this.scanQuery = '';
             this.productSuggestions = [];
             this.productSuggestOpen = false;
@@ -558,6 +560,7 @@ function posApp() {
                     stock: latest.stock !== undefined ? latest.stock : old.stock,
                     unit: latest.unit || old.unit,
                     allow_decimal_qty: latest.allow_decimal_qty !== undefined ? latest.allow_decimal_qty : old.allow_decimal_qty,
+                    is_consignment: latest.is_consignment !== undefined ? latest.is_consignment : old.is_consignment,
                 };
             });
             this.syncPayment();

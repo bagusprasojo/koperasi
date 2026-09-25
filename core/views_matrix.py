@@ -24,6 +24,7 @@ PERMISSION_MODULES = [
             ('view_inventory', 'Lihat Master Produk & Stok', 'Melihat katalog produk, satuan, kategori, dan kartu stok'),
             ('manage_products', 'Kelola Produk & Harga Tier', 'Menambah/mengedit produk, supplier, dan aturan harga bertingkat'),
             ('manage_purchases', 'Kelola Kulakan / Pembelian', 'Membuat, mengubah, dan menghapus transaksi pembelian/supplier'),
+            ('manage_consignments', 'Kelola Barang Titipan', 'Mencatat titipan masuk pagi, cek penjualan sore, dan pembayaran ke penitip'),
             ('perform_stock_opname', 'Melakukan Stock Opname', 'Menyesuaikan fisik stok riil dengan saldo sistem'),
             ('perform_daily_closing', 'Melakukan Tutup Harian', 'Menutup buku kas & stok harian toko (EOD closing)'),
             ('reopen_daily_closing', 'Buka Kembali Tutup Harian', 'Wewenang membuka kembali closing yang terkunci'),

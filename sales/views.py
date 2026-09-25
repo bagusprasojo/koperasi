@@ -197,6 +197,7 @@ def pos_page(request):
             'unit': p.unit.name if p.unit else '-',
             'stock': float(p.stock),
             'allow_decimal_qty': p.allow_decimal_qty,
+            'is_consignment': p.is_consignment,
         }
         for p in products
     ]
@@ -244,6 +245,7 @@ def pos_price_preview_api(request):
                 'stock': str(l['stock']),
                 'qty': _format_qty(l['qty']),
                 'allow_decimal_qty': l.get('allow_decimal_qty', False),
+                'is_consignment': l.get('is_consignment', False),
                 'unit_price': str(l['unit_price']),
                 'line_total': str(l['line_total']),
             }

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Tanda Terima Titipan Pagi {{ batch.batch_number }} | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+    <!-- Non-printable Toolbar -->
+    <div class="flex items-center justify-between no-print">
+        <div>
+            <a href="{% url 'consignment_settlement_list' %}" class="text-xs font-semibold text-indigo-600 hover:underline">&larr; Ke Rekapitulasi Titipan</a>
+            <h1 class="mt-1 text-2xl font-bold text-slate-900">Tanda Terima Titipan Pagi</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="window.print()" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700 transition">
+                <span>🖨️</span>
+                <span>Cetak Tanda Terima</span>
+            </button>
+            <a href="{% url 'consignment_inflow' %}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                + Titipan Baru
+            </a>
+        </div>
+    </div>
+
+    <!-- Printable Receipt Card -->
+    <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-sm print:border-none print:shadow-none print:p-0 text-slate-800" id="printable-receipt">
+        <!-- Receipt Header -->
+        <div class="text-center border-b border-dashed border-slate-300 pb-4">
+            <h2 class="text-lg font-bold tracking-tight uppercase">Koperasi Konsumen</h2>
+            <p class="text-xs text-slate-500">Unit Usaha Pertokoan & Konsinyasi</p>
+            <div class="mt-2 inline-block rounded bg-amber-50 px-3 py-1 border border-amber-200">
+                <span class="text-xs font-bold uppercase text-amber-900">Tanda Terima Barang Titipan (Pagi)</span>
+            </div>
+        </div>
+
+        <!-- Meta Info -->
+        <div class="grid grid-cols-2 gap-2 text-xs py-3 border-b border-dashed border-slate-300">
+            <div>
+                <span class="text-slate-400 block">No. Batch:</span>
+                <span class="font-mono font-bold text-slate-900 text-sm">{{ batch.batch_number }}</span>
+            </div>
+            <div class="text-right">
+                <span class="text-slate-400 block">Tanggal & Waktu:</span>
+                <span class="font-medium text-slate-800">{{ batch.created_at|date:"d M Y, H:i" }}</span>
+            </div>
+            <div>
+                <span class="text-slate-400 block">Mitra Penitip:</span>
+                <span class="font-bold text-slate-900 text-sm">{{ batch.consignor.name }}</span>
+                <span class="font-mono text-purple-700 font-semibold">({{ batch.consignor.code }})</span>
+            </div>
+            <div class="text-right">
+                <span class="text-slate-400 block">Penerima Toko:</span>
+                <span class="font-medium text-slate-800">{{ batch.created_by.get_full_name|default:batch.created_by.username }}</span>
+            </div>
+        </div>
+
+        {% if batch.notes %}
+            <div class="py-2 text-xs text-slate-600 border-b border-dashed border-slate-300">
+                <span class="font-semibold text-slate-700">Catatan:</span> {{ batch.notes }}
+            </div>
+        {% endif %}
+
+        <!-- Items Table -->
+        <div class="py-3">
+            <table class="w-full text-left text-xs">
+                <thead>
+                    <tr class="border-b border-slate-200 text-slate-500 font-semibold uppercase">
+                        <th class="py-1.5">Barang</th>
+                        <th class="py-1.5 text-center">Masuk</th>
+                        <th class="py-1.5 text-right">Harga Titip</th>
+                        <th class="py-1.5 text-right">Harga Jual</th>
+                        <th class="py-1.5 text-right">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for item in items %}
+                        <tr>
+                            <td class="py-2">
+                                <div class="font-semibold text-slate-900">{{ item.product.name }}</div>
+                                <div class="text-[10px] text-slate-400 font-mono">{{ item.product.sku }}</div>
+                            </td>
+                            <td class="py-2 text-center font-bold text-slate-800">
+                                {{ item.qty_received }} <span class="text-[10px] font-normal text-slate-500">{{ item.product.unit.name|default:'pcs' }}</span>
+                            </td>
+                            <td class="py-2 text-right text-slate-700">Rp {{ item.cost_price|floatformat:0 }}</td>
+                            <td class="py-2 text-right font-medium text-slate-900">Rp {{ item.sale_price|floatformat:0 }}</td>
+                            <td class="py-2 text-right font-bold text-slate-900">
+                                Rp {{ item.qty_received|floatformat:0|add:"" }}
+                                {% widthratio item.cost_price 1 item.qty_received as sub_h %}
+                                Rp {{ sub_h }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Total Summary -->
+        <div class="border-t-2 border-slate-800 pt-3 space-y-1 text-xs">
+            <div class="flex justify-between items-center text-sm font-extrabold text-slate-900">
+                <span>Total Nilai Masuk (HPP):</span>
+                <span>Rp {{ batch.total_received_amount|floatformat:0 }}</span>
+            </div>
+            <p class="text-[11px] text-slate-500 italic">
+                * Barang diterima dalam kondisi baik. Rekapitulasi penjualan dan pelunasan pembayaran akan dilakukan sore hari saat pengambilan sisa barang.
+            </p>
+        </div>
+
+        <!-- Dual Signature Box -->
+        <div class="grid grid-cols-2 gap-8 text-center text-xs pt-12">
+            <div>
+                <p class="text-slate-500">Mitra Penitip,</p>
+                <div class="h-16"></div>
+                <p class="font-bold border-t border-slate-400 pt-1 text-slate-900">
+                    ( {{ batch.consignor.name }} )
+                </p>
+            </div>
+            <div>
+                <p class="text-slate-500">Penerima (Kasir / Staf),</p>
+                <div class="h-16"></div>
+                <p class="font-bold border-t border-slate-400 pt-1 text-slate-900">
+                    ( {{ batch.created_by.get_full_name|default:batch.created_by.username }} )
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .no-print, header, nav, footer {
+        display: none !important;
+    }
+    body {
+        background-color: white !important;
+        color: black !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    #printable-receipt {
+        border: none !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 10px !important;
+    }
+}
+</style>
+{% endblock %}

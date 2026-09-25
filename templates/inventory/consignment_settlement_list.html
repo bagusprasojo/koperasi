@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Rekapitulasi & Pelunasan Titipan Sore | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🌙</span>
+                <h1 class="text-2xl font-bold text-slate-900">Rekapitulasi & Pelunasan Titipan (Sore Hari)</h1>
+            </div>
+            <p class="mt-1 text-sm text-slate-500">
+                Penyelesaian batch titipan harian: hitung barang laku dari kasir, serahkan sisa barang retur ke penitip, dan bayarkan hak penitip secara tunai/transfer/deposit.
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'consignment_inflow' %}" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 transition">
+                <span>☀️</span>
+                <span>Terima Titipan Pagi</span>
+            </a>
+            <a href="{% url 'consignment_report' %}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Laporan Titipan &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- Quick Stat Cards -->
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div class="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm flex items-center justify-between">
+            <div>
+                <p class="text-xs font-semibold uppercase text-amber-800">Menunggu Rekap Sore</p>
+                <p class="mt-1 text-2xl font-black text-amber-900">{{ open_count }}</p>
+                <p class="text-[11px] text-amber-700">Batch aktif belum diselesaikan</p>
+            </div>
+            <span class="text-3xl">⏳</span>
+        </div>
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm flex items-center justify-between">
+            <div>
+                <p class="text-xs font-semibold uppercase text-emerald-800">Selesai & Lunas Hari Ini</p>
+                <p class="mt-1 text-2xl font-black text-emerald-900">{{ settled_today_count }}</p>
+                <p class="text-[11px] text-emerald-700">Batch telah dibayarkan hari ini</p>
+            </div>
+            <span class="text-3xl">✓</span>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center justify-between col-span-2 sm:col-span-1">
+            <div>
+                <p class="text-xs font-semibold uppercase text-slate-500">Tanggal Operasional</p>
+                <p class="mt-1 text-lg font-bold text-slate-800">{{ today|date:"l, d F Y" }}</p>
+                <p class="text-[11px] text-slate-400">Jam Toko: Buka Pagi - Tutup Sore</p>
+            </div>
+            <span class="text-3xl">🏪</span>
+        </div>
+    </div>
+
+    <!-- Filter & Table Card -->
+    <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div class="flex flex-col justify-between gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center bg-slate-50">
+            <!-- Filter Tabs -->
+            <div class="flex items-center gap-1.5">
+                <a href="?status=open{% if query %}&q={{ query }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}"
+                    class="rounded-lg px-3 py-1.5 text-xs font-semibold {% if status_filter == 'open' %}bg-indigo-600 text-white shadow-sm{% else %}bg-white border text-slate-600 hover:bg-slate-100{% endif %}">
+                    Perlu Rekap Sore ({{ open_count }})
+                </a>
+                <a href="?status=settled{% if query %}&q={{ query }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}"
+                    class="rounded-lg px-3 py-1.5 text-xs font-semibold {% if status_filter == 'settled' %}bg-indigo-600 text-white shadow-sm{% else %}bg-white border text-slate-600 hover:bg-slate-100{% endif %}">
+                    Riwayat Selesai
+                </a>
+                <a href="?status=all{% if query %}&q={{ query }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}"
+                    class="rounded-lg px-3 py-1.5 text-xs font-semibold {% if status_filter == 'all' %}bg-indigo-600 text-white shadow-sm{% else %}bg-white border text-slate-600 hover:bg-slate-100{% endif %}">
+                    Semua
+                </a>
+            </div>
+
+            <!-- Search & Date Filter -->
+            <form method="get" class="flex flex-wrap items-center gap-2">
+                <input type="hidden" name="status" value="{{ status_filter }}">
+                <input type="date" name="date" value="{{ date_filter }}" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs focus:border-indigo-500 focus:outline-none">
+                <input name="q" value="{{ query }}" placeholder="Cari No. Batch / Penitip..." class="w-48 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none">
+                <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800">Filter</button>
+                {% if query or date_filter %}
+                    <a href="?status={{ status_filter }}" class="rounded-lg border bg-white px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-100">Reset</a>
+                {% endif %}
+            </form>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-100 text-xs font-semibold uppercase text-slate-600">
+                    <tr>
+                        <th class="px-4 py-3">No. Batch</th>
+                        <th class="px-4 py-3">Tanggal Titip</th>
+                        <th class="px-4 py-3">Mitra Penitip</th>
+                        <th class="px-4 py-3 text-center">Status</th>
+                        <th class="px-4 py-3 text-right">Nilai Masuk Pagi</th>
+                        <th class="px-4 py-3 text-right">Hak Bayar Penitip</th>
+                        <th class="px-4 py-3 text-right">Margin Toko</th>
+                        <th class="px-4 py-3 text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for b in page_obj %}
+                        <tr class="hover:bg-slate-50 transition {% if b.status == 'open' %}bg-amber-50/20{% endif %}">
+                            <td class="px-4 py-3 font-mono text-xs font-bold text-slate-900">
+                                {{ b.batch_number }}
+                            </td>
+                            <td class="px-4 py-3 text-slate-600">
+                                <div>{{ b.batch_date|date:"d M Y" }}</div>
+                                <span class="text-[11px] text-slate-400">{{ b.created_at|date:"H:i" }} WIB</span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <a href="{% url 'consignor_detail' b.consignor.uuid %}" class="font-semibold text-slate-900 hover:text-indigo-600 hover:underline">
+                                    {{ b.consignor.name }}
+                                </a>
+                                <div class="text-xs text-slate-400">
+                                    <span class="font-mono text-purple-700">{{ b.consignor.code }}</span>
+                                    {% if b.consignor.member %}
+                                        &bull; <span class="text-emerald-700 font-medium">Anggota</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                {% if b.status == 'open' %}
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800 animate-pulse">
+                                        <span>⏳</span> Perlu Rekap Sore
+                                    </span>
+                                {% elif b.status == 'settled' %}
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                                        <span>✓</span> Lunas ({{ b.get_payout_method_display|default:'Selesai' }})
+                                    </span>
+                                {% else %}
+                                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">Dibatalkan</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right font-medium text-slate-700">
+                                Rp {{ b.total_received_amount|floatformat:0 }}
+                            </td>
+                            <td class="px-4 py-3 text-right font-bold text-slate-900">
+                                {% if b.status == 'settled' %}
+                                    <span class="text-emerald-700">Rp {{ b.total_sold_cost|floatformat:0 }}</span>
+                                {% else %}
+                                    <span class="text-slate-400 italic text-xs">Menunggu Rekap</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right font-semibold text-purple-700 text-xs">
+                                {% if b.status == 'settled' %}
+                                    Rp {{ b.total_coop_margin|floatformat:0 }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <div class="flex items-center justify-end gap-1.5">
+                                    {% if b.status == 'open' %}
+                                        <a href="{% url 'consignment_settle_detail' b.uuid %}" class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700">
+                                            <span>Rekap Sore & Pelunasan</span>
+                                            <span>&rarr;</span>
+                                        </a>
+                                        <a href="{% url 'consignment_batch_receipt' b.uuid %}" class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100" title="Cetak Tanda Terima Pagi">
+                                            Struk Pagi
+                                        </a>
+                                    {% elif b.status == 'settled' %}
+                                        <a href="{% url 'consignment_settle_receipt' b.uuid %}" class="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
+                                            <span>🖨️ Struk Pelunasan</span>
+                                        </a>
+                                        <a href="{% url 'consignment_settle_detail' b.uuid %}" class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                                            Rincian
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="8" class="px-4 py-8 text-center text-slate-500">
+                                {% if status_filter == 'open' %}
+                                    <p class="font-medium text-base text-slate-700">Tidak ada batch titipan yang perlu diselesaikan.</p>
+                                    <p class="mt-1 text-xs text-slate-400">Semua titipan hari ini sudah lunas atau belum ada titipan masuk pagi ini.</p>
+                                    <a href="{% url 'consignment_inflow' %}" class="mt-3 inline-block rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow">
+                                        + Terima Titipan Baru
+                                    </a>
+                                {% else %}
+                                    <p class="text-slate-400">Tidak ada data batch titipan yang cocok dengan filter.</p>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+            <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm">
+                <p class="text-xs text-slate-500">Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}</p>
+                <div class="flex gap-2">
+                    {% if page_obj.has_previous %}
+                        <a href="?status={{ status_filter }}&q={{ query }}&date={{ date_filter }}&page={{ page_obj.previous_page_number }}" class="rounded border px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100">Sebelumnya</a>
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                        <a href="?status={{ status_filter }}&q={{ query }}&date={{ date_filter }}&page={{ page_obj.next_page_number }}" class="rounded border px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100">Berikutnya</a>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

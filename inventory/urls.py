@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from . import views_consignment
 
 urlpatterns = [
     path('products/', views.product_list, name='product_list'),
@@ -36,4 +37,20 @@ urlpatterns = [
     path('categories/<uuid:uuid>/', views.category_detail, name='category_detail'),
     path('categories/<uuid:uuid>/edit/', views.category_edit, name='category_edit'),
     path('categories/<uuid:uuid>/delete/', views.category_delete, name='category_delete'),
+
+    # Barang Titipan (Konsinyasi)
+    path('consignors/', views_consignment.consignor_list, name='consignor_list'),
+    path('consignors/create/', views_consignment.consignor_create, name='consignor_create'),
+    path('consignors/<uuid:uuid>/', views_consignment.consignor_detail, name='consignor_detail'),
+    path('consignors/<uuid:uuid>/edit/', views_consignment.consignor_edit, name='consignor_edit'),
+    path('consignors/<uuid:uuid>/products/create/', views_consignment.consignor_product_create, name='consignor_product_create'),
+    path('consignors/<int:consignor_id>/products/create-api/', views_consignment.consignor_product_create_api, name='consignor_product_create_api'),
+    path('consignors/<int:consignor_id>/products/json/', views_consignment.consignor_products_json, name='consignor_products_json'),
+    path('consignments/inflow/', views_consignment.consignment_inflow, name='consignment_inflow'),
+    path('consignments/batches/<uuid:uuid>/receipt/', views_consignment.consignment_batch_receipt, name='consignment_batch_receipt'),
+    path('consignments/settlement/', views_consignment.consignment_settlement_list, name='consignment_settlement_list'),
+    path('consignments/batches/<uuid:uuid>/settle/', views_consignment.consignment_settle_detail, name='consignment_settle_detail'),
+    path('consignments/batches/<uuid:uuid>/settle-receipt/', views_consignment.consignment_settle_receipt, name='consignment_settle_receipt'),
+    path('consignments/batches/<uuid:uuid>/cancel/', views_consignment.consignment_batch_cancel, name='consignment_batch_cancel'),
+    path('consignments/reports/', views_consignment.consignment_report, name='consignment_report'),
 ]

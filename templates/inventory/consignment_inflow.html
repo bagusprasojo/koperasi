@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% block title %}Penerimaan Barang Titipan (Pagi) | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="consignmentInflowApp()">
+    <!-- Header -->
+    <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">☀️</span>
+                <h1 class="text-2xl font-bold text-slate-900">Penerimaan Barang Titipan (Pagi Hari)</h1>
+            </div>
+            <p class="mt-1 text-sm text-slate-500">Catat barang titipan baru yang diantar mitra setiap pagi. Stok otomatis aktif dan siap dijual di kasir POS.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'consignment_settlement_list' %}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Lihat Rekap Sore &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Inflow Form -->
+    <form method="post" @submit.prevent="submitInflow()" class="space-y-6">
+        {% csrf_token %}
+        <input type="hidden" name="items_json" :value="JSON.stringify(items)">
+
+        <!-- Consignor Selector Card -->
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">1. Identitas Penitip & Tanggal Titipan</h2>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-700">Pilih Mitra Penitip *</label>
+                    <select name="consignor_id" x-model="selectedConsignorId" @change="onConsignorChange()" required
+                        class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        <option value="">-- Pilih Penitip --</option>
+                        {% for c in consignors %}
+                            <option value="{{ c.id }}" {% if selected_consignor_id|stringformat:"s" == c.id|stringformat:"s" %}selected{% endif %}>
+                                {{ c.name }} ({{ c.code }}) {% if c.member %}&bull; Anggota{% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-700">Tanggal Titip *</label>
+                    <input type="date" name="batch_date" x-model="batchDate" required
+                        class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-700">Catatan Titipan</label>
+                    <input type="text" name="notes" x-model="notes" placeholder="Misal: Kue basah pesanan pagi, titip di etalase depan..."
+                        class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Penitip Status Alert -->
+            <template x-if="selectedConsignor">
+                <div class="mt-3 flex items-center justify-between rounded-lg bg-purple-50 p-2.5 text-xs text-purple-800 border border-purple-200">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold">Info Mitra:</span>
+                        <span x-text="selectedConsignor.name + ' (' + selectedConsignor.code + ')'"></span>
+                        <span x-text="'&bull; Telp: ' + (selectedConsignor.phone || '-')"></span>
+                    </div>
+                    <a :href="'/inventory/consignors/' + selectedConsignor.uuid + '/'" target="_blank" class="font-semibold text-purple-900 underline">
+                        Profil & Katalog &rarr;
+                    </a>
+                </div>
+            </template>
+        </div>
+
+        <!-- Items Table Card -->
+        <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden" x-show="selectedConsignorId">
+            <div class="flex flex-col justify-between gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center bg-slate-50">
+                <div>
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">2. Rincian Barang yang Dititipkan Pagi Ini</h2>
+                    <p class="text-xs text-slate-500">Pilih dari katalog penitip atau tambahkan produk baru.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="showAddProductModal = true" class="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">
+                        + Daftarkan Barang Baru
+                    </button>
+                    <button type="button" @click="addNewRow()" class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm">
+                        + Tambah Baris
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-left text-sm">
+                    <thead class="border-b bg-slate-100 text-xs font-semibold uppercase text-slate-600">
+                        <tr>
+                            <th class="px-4 py-3 w-72">Pilih Barang Titipan</th>
+                            <th class="px-3 py-3 w-28 text-center">Qty Masuk</th>
+                            <th class="px-3 py-3 w-36 text-right">Harga Titip (HPP)</th>
+                            <th class="px-3 py-3 w-36 text-right">Harga Jual POS</th>
+                            <th class="px-3 py-3 w-32 text-right">Margin / pcs</th>
+                            <th class="px-3 py-3 w-36 text-right">Subtotal HPP</th>
+                            <th class="px-3 py-3 w-16 text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <template x-for="(item, idx) in items" :key="idx">
+                            <tr class="hover:bg-slate-50">
+                                <td class="px-4 py-2.5">
+                                    <select x-model="item.product_id" @change="onProductSelect(item)" required
+                                        class="block w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:outline-none">
+                                        <option value="">-- Pilih Barang --</option>
+                                        <template x-for="p in availableProducts" :key="p.id">
+                                            <option :value="p.id" x-text="p.name + ' (' + p.sku + ') - ' + p.unit"></option>
+                                        </template>
+                                    </select>
+                                    <div x-show="item.product_id" class="mt-0.5 text-[11px] text-slate-400">
+                                        Stok saat ini di rak: <span class="font-medium text-slate-700" x-text="item.current_stock || 0"></span> <span x-text="item.unit"></span>
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2.5 text-center">
+                                    <input type="number" :step="item.allow_decimal_qty ? '0.001' : '1'" min="0.001" x-model.number="item.qty" required
+                                        class="w-24 rounded-md border border-slate-300 px-2 py-1 text-center font-bold text-slate-800 focus:border-indigo-500 focus:outline-none">
+                                </td>
+                                <td class="px-3 py-2.5 text-right">
+                                    <div class="relative">
+                                        <span class="absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-slate-400">Rp</span>
+                                        <input type="number" step="0.01" min="1" x-model.number="item.cost_price" required
+                                            class="w-full rounded-md border border-slate-300 pl-7 pr-2 py-1 text-right text-sm font-medium text-slate-800 focus:border-indigo-500 focus:outline-none">
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2.5 text-right">
+                                    <div class="relative">
+                                        <span class="absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-slate-400">Rp</span>
+                                        <input type="number" step="0.01" min="1" x-model.number="item.sale_price" required
+                                            class="w-full rounded-md border border-slate-300 pl-7 pr-2 py-1 text-right text-sm font-semibold text-slate-900 focus:border-indigo-500 focus:outline-none">
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2.5 text-right text-xs font-semibold"
+                                    :class="(item.sale_price - item.cost_price) >= 0 ? 'text-emerald-700' : 'text-rose-600'">
+                                    <span x-text="formatRupiah(item.sale_price - item.cost_price)"></span>
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-bold text-slate-800">
+                                    <span x-text="formatRupiah(item.qty * item.cost_price)"></span>
+                                </td>
+                                <td class="px-3 py-2.5 text-center">
+                                    <button type="button" @click="removeItem(idx)" class="text-rose-500 hover:text-rose-700 font-bold text-lg" title="Hapus baris">&times;</button>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="items.length === 0">
+                            <td colspan="7" class="px-4 py-8 text-center text-slate-400">
+                                Belum ada barang yang ditambahkan. Klik <strong>+ Tambah Baris</strong> untuk mulai menginput.
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="border-t bg-slate-50 font-semibold text-sm">
+                        <tr>
+                            <td colspan="5" class="px-4 py-3 text-right text-slate-600 uppercase text-xs">Total Nilai HPP Masuk (Hak Penitip Pagi):</td>
+                            <td class="px-3 py-3 text-right font-extrabold text-slate-900 text-base" x-text="formatRupiah(calcTotalReceived())"></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="5" class="px-4 py-2 text-right text-slate-500 uppercase text-xs">Potensi Omzet Penjualan Toko:</td>
+                            <td class="px-3 py-2 text-right font-bold text-slate-700 text-sm" x-text="formatRupiah(calcTotalRetail())"></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td colspan="5" class="px-4 py-2 text-right text-purple-700 uppercase text-xs">Potensi Keuntungan Koperasi (Margin):</td>
+                            <td class="px-3 py-2 text-right font-bold text-purple-700 text-sm" x-text="formatRupiah(calcTotalMargin())"></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Submit Action Bar -->
+            <div class="flex items-center justify-between border-t border-slate-200 bg-white p-4">
+                <div class="text-xs text-slate-500">
+                    Setelah disimpan, sistem akan otomatis mencetak / menampilkan tanda terima tanda tangan pagi.
+                </div>
+                <button type="submit" :disabled="items.length === 0 || isSubmitting"
+                    class="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 disabled:opacity-50 transition flex items-center gap-2">
+                    <span x-show="isSubmitting" class="animate-spin text-sm">⌛</span>
+                    <span>✓ Catat Titipan Pagi & Terbitkan Tanda Terima</span>
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Modal: Register Consignment Product Inline -->
+    <div x-show="showAddProductModal" x-cloak
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div @click.outside="showAddProductModal = false" class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-base font-bold text-slate-900">Daftarkan Produk Titipan Baru</h3>
+                <button @click="showAddProductModal = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form @submit.prevent="submitNewProduct()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-700">Nama Produk *</label>
+                    <input type="text" x-model="newProd.name" required placeholder="Misal: Kue Lumpur, Onde-onde"
+                        class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-700">Kategori *</label>
+                        <select x-model="newProd.category_id" required class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            {% for cat in categories %}
+                                <option value="{{ cat.id }}">{{ cat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-700">Satuan *</label>
+                        <select x-model="newProd.unit_id" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            {% for u in units %}
+                                <option value="{{ u.id }}">{{ u.name }} ({{ u.code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-700">Harga Titip (HPP) *</label>
+                        <input type="number" step="0.01" x-model.number="newProd.cost_price" required placeholder="2000"
+                            class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-700">Harga Jual POS *</label>
+                        <input type="number" step="0.01" x-model.number="newProd.sale_price" required placeholder="2500"
+                            class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" x-model="newProd.allow_decimal_qty" id="inflow_decimal"
+                        class="h-4 w-4 rounded border-slate-300 text-indigo-600">
+                    <label for="inflow_decimal" class="text-xs font-medium text-slate-700">Barang Curah (Bisa Desimal)</label>
+                </div>
+                <div class="flex justify-end gap-2 border-t pt-3">
+                    <button type="button" @click="showAddProductModal = false" class="rounded-lg border px-3 py-2 text-xs font-medium text-slate-600">Batal</button>
+                    <button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-700">Simpan & Masukkan ke Tabel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function consignmentInflowApp() {
+    return {
+        selectedConsignorId: '{{ selected_consignor_id|default:"" }}',
+        batchDate: '{{ today|date:"Y-m-d" }}',
+        notes: '',
+        availableProducts: [],
+        items: [],
+        showAddProductModal: false,
+        isSubmitting: false,
+        newProd: {
+            name: '',
+            category_id: '{{ categories.first.id }}',
+            unit_id: '{{ units.first.id }}',
+            cost_price: 2000,
+            sale_price: 2500,
+            allow_decimal_qty: false
+        },
+
+        init() {
+            if (this.selectedConsignorId) {
+                this.loadConsignorProducts();
+            }
+        },
+
+        get selectedConsignor() {
+            return null;
+        },
+
+        async onConsignorChange() {
+            this.items = [];
+            if (!this.selectedConsignorId) {
+                this.availableProducts = [];
+                return;
+            }
+            await this.loadConsignorProducts();
+            this.addNewRow();
+        },
+
+        async loadConsignorProducts() {
+            try {
+                const res = await fetch(`/inventory/consignors/${this.selectedConsignorId}/products/json/`);
+                const data = await res.json();
+                if (data.success) {
+                    this.availableProducts = data.products;
+                }
+            } catch (err) {
+                console.error("Gagal memuat produk penitip:", err);
+            }
+        },
+
+        addNewRow() {
+            this.items.push({
+                product_id: '',
+                qty: 1,
+                cost_price: 0,
+                sale_price: 0,
+                unit: 'pcs',
+                current_stock: 0,
+                allow_decimal_qty: false
+            });
+        },
+
+        onProductSelect(item) {
+            const found = this.availableProducts.find(p => String(p.id) === String(item.product_id));
+            if (found) {
+                item.cost_price = found.cost_price;
+                item.sale_price = found.sale_price;
+                item.unit = found.unit;
+                item.current_stock = found.stock;
+                item.allow_decimal_qty = !!found.allow_decimal_qty;
+            }
+        },
+
+        removeItem(idx) {
+            this.items.splice(idx, 1);
+        },
+
+        calcTotalReceived() {
+            return this.items.reduce((acc, it) => acc + (Number(it.qty || 0) * Number(it.cost_price || 0)), 0);
+        },
+
+        calcTotalRetail() {
+            return this.items.reduce((acc, it) => acc + (Number(it.qty || 0) * Number(it.sale_price || 0)), 0);
+        },
+
+        calcTotalMargin() {
+            return this.calcTotalRetail() - this.calcTotalReceived();
+        },
+
+        formatRupiah(num) {
+            const val = Math.round(num || 0);
+            return 'Rp ' + val.toLocaleString('id-ID');
+        },
+
+        async submitNewProduct() {
+            if (!this.selectedConsignorId) {
+                alert('Pilih penitip terlebih dahulu.');
+                return;
+            }
+            if (!this.newProd.name.trim()) {
+                alert('Nama produk tidak boleh kosong.');
+                return;
+            }
+            const form = new FormData();
+            form.append('name', this.newProd.name);
+            form.append('category_id', this.newProd.category_id);
+            form.append('unit_id', this.newProd.unit_id);
+            form.append('cost_price', this.newProd.cost_price);
+            form.append('sale_price', this.newProd.sale_price);
+            if (this.newProd.allow_decimal_qty) form.append('allow_decimal_qty', '1');
+            form.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+            try {
+                const res = await fetch(`/inventory/consignors/${this.selectedConsignorId}/products/create-api/`, {
+                    method: 'POST',
+                    body: form
+                });
+                const data = await res.json();
+                if (data.success && data.product) {
+                    await this.loadConsignorProducts();
+                    this.items.push({
+                        product_id: data.product.id,
+                        qty: 1,
+                        cost_price: data.product.cost_price,
+                        sale_price: data.product.sale_price,
+                        unit: data.product.unit,
+                        current_stock: data.product.stock,
+                        allow_decimal_qty: data.product.allow_decimal_qty
+                    });
+                    this.newProd.name = '';
+                    this.showAddProductModal = false;
+                } else {
+                    alert(data.message || 'Gagal menyimpan produk titipan baru.');
+                }
+            } catch(e) {
+                alert('Terjadi kesalahan jaringan.');
+            }
+        },
+
+        submitInflow() {
+            if (this.items.length === 0) {
+                alert('Silakan masukkan minimal satu barang titipan.');
+                return;
+            }
+            for (let i = 0; i < this.items.length; i++) {
+                const it = this.items[i];
+                if (!it.product_id) {
+                    alert(`Baris ke-${i + 1}: Silakan pilih barang.`);
+                    return;
+                }
+                if (!it.qty || it.qty <= 0) {
+                    alert(`Baris ke-${i + 1}: Kuantitas harus lebih besar dari 0.`);
+                    return;
+                }
+            }
+            this.isSubmitting = true;
+            document.querySelector('form').submit();
+        }
+    }
+}
+</script>
+{% endblock %}

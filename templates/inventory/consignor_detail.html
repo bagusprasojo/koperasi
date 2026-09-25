@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Penitip: {{ consignor.name }} | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ tab: 'products', showAddProductModal: false }">
+    <!-- Breadcrumb & Header -->
+    <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+            <a href="{% url 'consignor_list' %}" class="text-xs font-semibold text-indigo-600 hover:underline">&larr; Kembali ke Daftar Penitip</a>
+            <div class="mt-1 flex items-center gap-3">
+                <h1 class="text-2xl font-bold text-slate-900">{{ consignor.name }}</h1>
+                <span class="font-mono text-sm font-semibold rounded bg-purple-100 px-2 py-0.5 text-purple-800">{{ consignor.code }}</span>
+                {% if consignor.is_active %}
+                    <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Aktif</span>
+                {% else %}
+                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Nonaktif</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="{% url 'consignment_inflow' %}?consignor_id={{ consignor.id }}" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 transition">
+                <span>☀️</span>
+                <span>Terima Titipan Pagi Ini</span>
+            </a>
+            <button @click="showAddProductModal = true" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition">
+                <span>+</span>
+                <span>Tambah Produk Titip</span>
+            </button>
+            <a href="{% url 'consignor_edit' consignor.uuid %}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                Edit Profil
+            </a>
+        </div>
+    </div>
+
+    <!-- Info Cards & Stats -->
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <!-- Profile Card -->
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Profil & Kontak</h2>
+            <div class="space-y-2 text-sm">
+                <div>
+                    <span class="text-xs text-slate-400 block">Nomor Telepon:</span>
+                    <span class="font-medium text-slate-800">{{ consignor.phone|default:'-' }}</span>
+                </div>
+                <div>
+                    <span class="text-xs text-slate-400 block">Alamat Domisili:</span>
+                    <span class="text-slate-700">{{ consignor.address|default:'-' }}</span>
+                </div>
+                <div>
+                    <span class="text-xs text-slate-400 block">Hubungan Anggota:</span>
+                    {% if consignor.member %}
+                        <div class="mt-0.5 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs">
+                            <p class="font-semibold text-emerald-800">✓ Anggota Koperasi Terdaftar</p>
+                            <p class="text-emerald-700">{{ consignor.member.full_name }} ({{ consignor.member.phone }})</p>
+                            <p class="mt-1 text-slate-600">Hasil pelunasan dapat disetor langsung ke dompet saldo anggota.</p>
+                        </div>
+                    {% else %}
+                        <span class="text-slate-500">Bukan Anggota (Pembayaran Tunai / Transfer)</span>
+                    {% endif %}
+                </div>
+                {% if consignor.bank_account %}
+                    <div>
+                        <span class="text-xs text-slate-400 block">Rekening Bank:</span>
+                        <span class="font-medium text-slate-800">{{ consignor.bank_name }} - {{ consignor.bank_account }}</span>
+                        {% if consignor.bank_account_holder %}
+                            <span class="text-xs text-slate-500 block">a.n. {{ consignor.bank_account_holder }}</span>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Lifetime Performance -->
+        <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between">
+                <p class="text-xs font-semibold uppercase text-slate-500">Batch Diselesaikan</p>
+                <div>
+                    <p class="text-3xl font-extrabold text-slate-800">{{ total_settled_batches }}</p>
+                    <p class="mt-1 text-xs text-slate-400">Total hari titipan selesai</p>
+                </div>
+            </div>
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-5 shadow-sm flex flex-col justify-between">
+                <p class="text-xs font-semibold uppercase text-emerald-800">Total Dibayarkan ke Penitip</p>
+                <div>
+                    <p class="text-2xl font-extrabold text-emerald-700">Rp {{ total_paid_out|floatformat:0 }}</p>
+                    <p class="mt-1 text-xs text-emerald-600">Akumulasi hak lunas</p>
+                </div>
+            </div>
+            <div class="rounded-xl border border-purple-200 bg-purple-50/50 p-5 shadow-sm flex flex-col justify-between">
+                <p class="text-xs font-semibold uppercase text-purple-800">Keuntungan Toko (Margin)</p>
+                <div>
+                    <p class="text-2xl font-extrabold text-purple-700">Rp {{ total_margin_earned|floatformat:0 }}</p>
+                    <p class="mt-1 text-xs text-purple-600">Laba bersih koperasi</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="border-b border-slate-200">
+        <nav class="flex gap-4">
+            <button @click="tab = 'products'"
+                :class="tab === 'products' ? 'border-indigo-600 text-indigo-600 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                class="border-b-2 py-3 text-sm transition">
+                Daftar Produk Titipan ({{ products|length }})
+            </button>
+            <button @click="tab = 'batches'"
+                :class="tab === 'batches' ? 'border-indigo-600 text-indigo-600 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                class="border-b-2 py-3 text-sm transition">
+                Riwayat Batch Penitipan ({{ batches|length }})
+            </button>
+        </nav>
+    </div>
+
+    <!-- Tab 1: Products Table -->
+    <div x-show="tab === 'products'" class="space-y-4">
+        <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-left text-sm">
+                    <thead class="border-b bg-slate-50 text-xs font-semibold uppercase text-slate-600">
+                        <tr>
+                            <th class="px-4 py-3">SKU</th>
+                            <th class="px-4 py-3">Nama Produk</th>
+                            <th class="px-4 py-3">Kategori & Satuan</th>
+                            <th class="px-4 py-3 text-right">Harga Titip (HPP)</th>
+                            <th class="px-4 py-3 text-right">Harga Jual Toko</th>
+                            <th class="px-4 py-3 text-right">Margin Toko</th>
+                            <th class="px-4 py-3 text-center">Stok Hari Ini</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for p in products %}
+                            <tr class="hover:bg-slate-50 transition">
+                                <td class="px-4 py-3 font-mono text-xs font-semibold text-purple-700">{{ p.sku }}</td>
+                                <td class="px-4 py-3">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-medium text-slate-900">{{ p.name }}</span>
+                                        {% if p.allow_decimal_qty %}
+                                            <span class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">Curah</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if p.barcode %}
+                                        <span class="text-xs text-slate-400 font-mono">BC: {{ p.barcode }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-slate-600">
+                                    <span>{{ p.category.name }}</span> &bull; <span>{{ p.unit.name|default:'pcs' }}</span>
+                                </td>
+                                <td class="px-4 py-3 text-right font-medium text-slate-700">
+                                    Rp {{ p.cost_of_goods_sold|floatformat:0 }}
+                                </td>
+                                <td class="px-4 py-3 text-right font-semibold text-slate-900">
+                                    {% with tier=p.price_tiers.first %}
+                                        Rp {{ tier.price|default:p.cost_of_goods_sold|floatformat:0 }}
+                                    {% endwith %}
+                                </td>
+                                <td class="px-4 py-3 text-right text-xs font-semibold text-emerald-700">
+                                    {% with tier=p.price_tiers.first %}
+                                        Rp {{ tier.price|default:p.cost_of_goods_sold|add:"-"|add:p.cost_of_goods_sold|floatformat:0 }}
+                                    {% endwith %}
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <span class="rounded-full px-2.5 py-0.5 text-xs font-bold {% if p.stock > 0 %}bg-emerald-100 text-emerald-800{% else %}bg-slate-100 text-slate-600{% endif %}">
+                                        {{ p.stock }} {{ p.unit.name|default:'pcs' }}
+                                    </span>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-slate-500">
+                                    <p class="font-medium">Belum ada katalog barang titipan untuk {{ consignor.name }}.</p>
+                                    <button @click="showAddProductModal = true" class="mt-2 text-xs font-semibold text-indigo-600 hover:underline">
+                                        + Daftarkan Barang Titipan Baru
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 2: Batches Table -->
+    <div x-show="tab === 'batches'" class="space-y-4" x-cloak>
+        <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-left text-sm">
+                    <thead class="border-b bg-slate-50 text-xs font-semibold uppercase text-slate-600">
+                        <tr>
+                            <th class="px-4 py-3">No. Batch</th>
+                            <th class="px-4 py-3">Tanggal</th>
+                            <th class="px-4 py-3 text-center">Status</th>
+                            <th class="px-4 py-3 text-right">Nilai Masuk (HPP)</th>
+                            <th class="px-4 py-3 text-right">Hak Penitip (Lunas)</th>
+                            <th class="px-4 py-3 text-right">Margin Toko</th>
+                            <th class="px-4 py-3 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for b in batches %}
+                            <tr class="hover:bg-slate-50 transition">
+                                <td class="px-4 py-3 font-mono font-semibold text-slate-800">{{ b.batch_number }}</td>
+                                <td class="px-4 py-3 text-slate-600">{{ b.batch_date|date:"d M Y" }}</td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if b.status == 'open' %}
+                                        <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">Aktif (Sedang Jual)</span>
+                                    {% elif b.status == 'settled' %}
+                                        <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">Selesai & Lunas</span>
+                                    {% else %}
+                                        <span class="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-800">Batal</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right font-medium text-slate-700">Rp {{ b.total_received_amount|floatformat:0 }}</td>
+                                <td class="px-4 py-3 text-right font-bold text-emerald-700">Rp {{ b.total_sold_cost|floatformat:0 }}</td>
+                                <td class="px-4 py-3 text-right text-xs font-semibold text-purple-700">Rp {{ b.total_coop_margin|floatformat:0 }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        {% if b.status == 'open' %}
+                                            <a href="{% url 'consignment_settle_detail' b.uuid %}" class="rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700">
+                                                Rekap Sore &rarr;
+                                            </a>
+                                        {% else %}
+                                            <a href="{% url 'consignment_settle_receipt' b.uuid %}" class="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">
+                                                Struk Pelunasan
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-slate-500">
+                                    Belum ada transaksi batch titipan untuk penitip ini.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Register Consignment Product -->
+    <div x-show="showAddProductModal" x-cloak
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div @click.outside="showAddProductModal = false" class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-base font-bold text-slate-900">Daftarkan Produk Titipan Baru</h3>
+                <button @click="showAddProductModal = false" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <form method="post" action="{% url 'consignor_product_create' consignor.uuid %}" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-700">Nama Produk *</label>
+                    <input type="text" name="name" required placeholder="Misal: Lemper Ayam Spesial, Risol Mayo"
+                        class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-700">Kategori *</label>
+                        <select name="category_id" required class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            {% for cat in categories %}
+                                <option value="{{ cat.id }}">{{ cat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-700">Satuan *</label>
+                        <select name="unit_id" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            {% for u in units %}
+                                <option value="{{ u.id }}">{{ u.name }} ({{ u.code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-700">Harga Titip (HPP) *</label>
+                        <div class="relative mt-1">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-xs text-slate-500">Rp</span>
+                            <input type="number" step="0.01" name="cost_price" required placeholder="2000"
+                                class="block w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                        </div>
+                        <p class="mt-1 text-[11px] text-slate-400">Harga yang dibayarkan ke penitip.</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-700">Harga Jual Toko *</label>
+                        <div class="relative mt-1">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-xs text-slate-500">Rp</span>
+                            <input type="number" step="0.01" name="sale_price" required placeholder="2500"
+                                class="block w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                        </div>
+                        <p class="mt-1 text-[11px] text-slate-400">Harga di kasir POS.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-700">SKU (Opsional)</label>
+                        <input type="text" name="sku" placeholder="Otomatis: TP-{{ consignor.code }}-..."
+                            class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-mono uppercase focus:border-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-700">Barcode (Opsional)</label>
+                        <input type="text" name="barcode" placeholder="Scan barcode..."
+                            class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-mono focus:border-indigo-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" name="allow_decimal_qty" id="allow_decimal_qty" value="1"
+                        class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <label for="allow_decimal_qty" class="text-xs font-medium text-slate-700">Bisa Dijual Pecahan / Curah (Desimal)</label>
+                </div>
+                <div class="flex justify-end gap-2 border-t pt-3">
+                    <button type="button" @click="showAddProductModal = false" class="rounded-lg border px-3 py-2 text-xs font-medium text-slate-600">Batal</button>
+                    <button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-700">Simpan Produk Titip</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

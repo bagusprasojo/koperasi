@@ -397,9 +397,9 @@ def close_daily(closing_date: date, user, note=''):
     products = Product.objects.all()
     for p in products:
         prev_snap = ProductDailySnapshot.objects.filter(closing=prev, product=p).first() if prev else None
-        opening = prev_snap.closing_stock if prev_snap else 0
-        mut_in = StockLedger.objects.filter(product=p, tx_date=closing_date).aggregate(v=Sum('qty_in'))['v'] or 0
-        mut_out = StockLedger.objects.filter(product=p, tx_date=closing_date).aggregate(v=Sum('qty_out'))['v'] or 0
+        opening = prev_snap.closing_stock if prev_snap else Decimal('0.000')
+        mut_in = StockLedger.objects.filter(product=p, tx_date=closing_date).aggregate(v=Sum('qty_in'))['v'] or Decimal('0.000')
+        mut_out = StockLedger.objects.filter(product=p, tx_date=closing_date).aggregate(v=Sum('qty_out'))['v'] or Decimal('0.000')
         ProductDailySnapshot.objects.create(
             closing=closing,
             product=p,

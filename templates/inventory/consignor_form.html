@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Edit Penitip {{ consignor.name }}{% else %}Tambah Penitip Baru{% endif %} | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <a href="{% url 'consignor_list' %}" class="text-xs font-semibold text-indigo-600 hover:underline">&larr; Kembali ke Daftar Penitip</a>
+            <h1 class="mt-1 text-2xl font-bold text-slate-900">
+                {% if is_edit %}Edit Mitra Penitip{% else %}Daftarkan Mitra Penitip Baru{% endif %}
+            </h1>
+        </div>
+    </div>
+
+    <form method="post" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+        {% csrf_token %}
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-700">Kode Penitip *</label>
+                <input type="text" name="code" value="{% if is_edit %}{{ consignor.code }}{% else %}{{ auto_code }}{% endif %}" required
+                    placeholder="Contoh: P01, IBU-SITI"
+                    class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono uppercase focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                <p class="mt-1 text-[11px] text-slate-400">Kode ini menjadi awalan SKU barang (misal: TP-{{ auto_code }}-001).</p>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-700">Nama Lengkap Penitip *</label>
+                <input type="text" name="name" value="{% if is_edit %}{{ consignor.name }}{% endif %}" required
+                    placeholder="Nama orang / pembuat kue..."
+                    class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-700">Nomor Telepon / WhatsApp</label>
+                <input type="text" name="phone" value="{% if is_edit %}{{ consignor.phone }}{% endif %}"
+                    placeholder="08xxxxxxxxxx"
+                    class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-700">Tautkan Akun Anggota Koperasi</label>
+                <select name="member_id" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    <option value="">-- Bukan Anggota (Walk-in) --</option>
+                    {% for m in members %}
+                        <option value="{{ m.id }}" {% if is_edit and consignor.member_id == m.id %}selected{% endif %}>
+                            {{ m.full_name }} ({{ m.phone|default:'-' }})
+                        </option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-[11px] text-slate-400">Jika anggota, hasil penjualan sore dapat disetor otomatis ke dompet saldo anggota.</p>
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-700">Alamat</label>
+            <input type="text" name="address" value="{% if is_edit %}{{ consignor.address }}{% endif %}"
+                placeholder="Alamat rumah / domisili..."
+                class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600">Informasi Rekening Bank (Opsional)</h3>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600">Nama Bank</label>
+                    <input type="text" name="bank_name" value="{% if is_edit %}{{ consignor.bank_name }}{% endif %}"
+                        placeholder="BCA / BRI / Mandiri"
+                        class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600">Nomor Rekening</label>
+                    <input type="text" name="bank_account" value="{% if is_edit %}{{ consignor.bank_account }}{% endif %}"
+                        placeholder="Nomor rekening"
+                        class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-mono focus:border-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600">Atas Nama Rekening</label>
+                    <input type="text" name="bank_account_holder" value="{% if is_edit %}{{ consignor.bank_account_holder }}{% endif %}"
+                        placeholder="Nama pemilik rek"
+                        class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-700">Catatan Khusus</label>
+            <textarea name="notes" rows="2" placeholder="Catatan kesepakatan penitipan, jenis kue, jam antar, dll..."
+                class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">{% if is_edit %}{{ consignor.notes }}{% endif %}</textarea>
+        </div>
+
+        <div class="flex items-center gap-2 pt-2">
+            <input type="checkbox" name="is_active" id="is_active" value="1" {% if not is_edit or consignor.is_active %}checked{% endif %}
+                class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+            <label for="is_active" class="text-sm font-medium text-slate-700">Mitra Penitip Aktif</label>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
+            <a href="{% url 'consignor_list' %}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Batal</a>
+            <button type="submit" class="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition">
+                {% if is_edit %}Simpan Perubahan{% else %}Daftarkan Penitip{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block title %}Rekap & Pelunasan Sore: {{ batch.batch_number }} | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="consignmentSettlementApp()">
+    <!-- Header -->
+    <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+            <a href="{% url 'consignment_settlement_list' %}" class="text-xs font-semibold text-indigo-600 hover:underline">&larr; Kembali ke Daftar Rekap Sore</a>
+            <div class="mt-1 flex items-center gap-3">
+                <span class="text-2xl">🌙</span>
+                <h1 class="text-2xl font-bold text-slate-900">Rekapitulasi & Pelunasan Sore</h1>
+                <span class="font-mono text-sm font-semibold rounded bg-purple-100 px-2.5 py-0.5 text-purple-800">{{ batch.batch_number }}</span>
+                {% if is_settled %}
+                    <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">✓ Selesai & Lunas</span>
+                {% else %}
+                    <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">⏳ Sedang Diproses</span>
+                {% endif %}
+            </div>
+            <p class="mt-1 text-sm text-slate-500">
+                Titipan tanggal <strong>{{ batch.batch_date|date:"d F Y" }}</strong> oleh mitra <strong>{{ batch.consignor.name }}</strong> ({{ batch.consignor.code }}).
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if is_settled %}
+                <a href="{% url 'consignment_settle_receipt' batch.uuid %}" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700">
+                    <span>🖨️ Cetak Struk Pelunasan</span>
+                </a>
+            {% else %}
+                <a href="{% url 'consignment_batch_receipt' batch.uuid %}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                    Lihat Tanda Terima Pagi
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Penitip & Member Info Card -->
+    <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
+            <div>
+                <span class="text-xs text-slate-400 block">Mitra Penitip:</span>
+                <span class="font-bold text-slate-900 text-base">{{ batch.consignor.name }}</span>
+                <span class="font-mono text-xs text-purple-700 block">Kode: {{ batch.consignor.code }}</span>
+            </div>
+            <div>
+                <span class="text-xs text-slate-400 block">No. Telepon:</span>
+                <span class="font-medium text-slate-800">{{ batch.consignor.phone|default:'-' }}</span>
+            </div>
+            <div>
+                <span class="text-xs text-slate-400 block">Status Keanggotaan:</span>
+                {% if batch.consignor.member %}
+                    <div class="rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-800 border border-emerald-200 mt-0.5">
+                        <span class="font-bold">✓ Anggota Koperasi</span>
+                        <div class="text-[11px] text-emerald-700">Saldo Dompet Saat Ini: Rp {{ batch.consignor.member.wallet.balance|floatformat:0 }}</div>
+                    </div>
+                {% else %}
+                    <span class="text-xs text-slate-500">Bukan Anggota</span>
+                {% endif %}
+            </div>
+            <div>
+                <span class="text-xs text-slate-400 block">Informasi Rekening:</span>
+                {% if batch.consignor.bank_account %}
+                    <span class="text-xs font-medium text-slate-800">{{ batch.consignor.bank_name }} - {{ batch.consignor.bank_account }}</span>
+                    <span class="text-[11px] text-slate-500 block">a.n. {{ batch.consignor.bank_account_holder }}</span>
+                {% else %}
+                    <span class="text-xs text-slate-400">Tidak ada rekening terdaftar</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Settlement Table Card -->
+    <form method="post" @submit.prevent="submitSettlement()" class="space-y-6">
+        {% csrf_token %}
+        <input type="hidden" name="settlement_items_json" :value="JSON.stringify(items)">
+
+        <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div class="flex flex-col justify-between gap-2 border-b border-slate-200 p-4 sm:flex-row sm:items-center bg-slate-50">
+                <div>
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Rincian Perhitungan Barang & Penjualan POS</h2>
+                    <p class="text-xs text-slate-500">
+                        Periksa sisa barang di etalase/rak. Jumlah retur & rusak akan otomatis dikeluarkan dari stok saat batch diselesaikan.
+                    </p>
+                </div>
+                {% if not is_settled %}
+                    <span class="rounded bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">
+                        ⚡ Terhubung ke Kasir POS (Real-time)
+                    </span>
+                {% endif %}
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-left text-sm">
+                    <thead class="border-b bg-slate-100 text-xs font-semibold uppercase text-slate-600">
+                        <tr>
+                            <th class="px-4 py-3">Nama Barang</th>
+                            <th class="px-3 py-3 text-center">Titip Pagi</th>
+                            <th class="px-3 py-3 text-center text-blue-700">Terjual POS</th>
+                            <th class="px-3 py-3 text-center">Sisa di Rak</th>
+                            <th class="px-3 py-3 text-center bg-amber-50/50 w-24">Fisik Retur</th>
+                            <th class="px-3 py-3 text-center bg-red-50/50 w-24">Rusak/Loss</th>
+                            <th class="px-3 py-3 text-center font-bold text-slate-900">Laku Final</th>
+                            <th class="px-3 py-3 text-right">Harga Titip</th>
+                            <th class="px-3 py-3 text-right">Hak Penitip</th>
+                            <th class="px-3 py-3 text-right text-purple-700">Margin Toko</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <template x-for="(item, idx) in items" :key="item.item_id">
+                            <tr class="hover:bg-slate-50 transition">
+                                <td class="px-4 py-3">
+                                    <div class="font-semibold text-slate-900" x-text="item.product_name"></div>
+                                    <div class="text-xs text-slate-400 font-mono" x-text="item.product_sku"></div>
+                                </td>
+                                <td class="px-3 py-3 text-center font-medium text-slate-800">
+                                    <span x-text="item.qty_received"></span> <span class="text-xs text-slate-400" x-text="item.unit_name"></span>
+                                </td>
+                                <td class="px-3 py-3 text-center font-bold text-blue-700">
+                                    <span x-text="item.pos_sold"></span>
+                                </td>
+                                <td class="px-3 py-3 text-center">
+                                    <span class="rounded px-2 py-0.5 text-xs font-semibold"
+                                        :class="item.current_stock > 0 ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-400'"
+                                        x-text="item.current_stock">
+                                    </span>
+                                </td>
+                                <!-- Fisik Retur Input -->
+                                <td class="px-3 py-3 text-center bg-amber-50/30">
+                                    {% if is_settled %}
+                                        <span class="font-bold text-amber-900" x-text="item.qty_returned"></span>
+                                    {% else %}
+                                        <input type="number" step="any" min="0" :max="item.qty_received"
+                                            x-model.number="item.qty_returned" @input="recalcItem(item)"
+                                            class="w-20 rounded border border-amber-300 bg-white px-2 py-1 text-center font-bold text-amber-900 focus:border-amber-500 focus:outline-none">
+                                    {% endif %}
+                                </td>
+                                <!-- Fisik Rusak/Basi Input -->
+                                <td class="px-3 py-3 text-center bg-red-50/30">
+                                    {% if is_settled %}
+                                        <span class="font-bold text-red-900" x-text="item.qty_loss"></span>
+                                    {% else %}
+                                        <input type="number" step="any" min="0" :max="item.qty_received"
+                                            x-model.number="item.qty_loss" @input="recalcItem(item)"
+                                            class="w-16 rounded border border-red-300 bg-white px-1.5 py-1 text-center text-xs font-bold text-red-900 focus:border-red-500 focus:outline-none">
+                                    {% endif %}
+                                </td>
+                                <!-- Qty Laku Final -->
+                                <td class="px-3 py-3 text-center font-extrabold text-slate-900 text-base">
+                                    <span x-text="item.qty_sold"></span>
+                                </td>
+                                <!-- Harga Titip -->
+                                <td class="px-3 py-3 text-right text-slate-700 text-xs">
+                                    <span x-text="formatRupiah(item.cost_price)"></span>
+                                </td>
+                                <!-- Hak Bayar Penitip -->
+                                <td class="px-3 py-3 text-right font-bold text-emerald-700 text-sm">
+                                    <span x-text="formatRupiah(item.payable_amount)"></span>
+                                </td>
+                                <!-- Margin Toko -->
+                                <td class="px-3 py-3 text-right text-xs font-semibold text-purple-700">
+                                    <span x-text="formatRupiah(item.coop_margin)"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                    <tfoot class="border-t bg-slate-100 font-semibold text-sm">
+                        <tr>
+                            <td colspan="4" class="px-4 py-3 text-right uppercase text-xs text-slate-600">Total:</td>
+                            <td class="px-3 py-3 text-center font-bold text-amber-900" x-text="calcTotalReturned() + ' item'"></td>
+                            <td class="px-3 py-3 text-center font-bold text-red-900" x-text="calcTotalLoss() + ' item'"></td>
+                            <td class="px-3 py-3 text-center font-extrabold text-slate-900" x-text="calcTotalSold() + ' item'"></td>
+                            <td class="px-3 py-3 text-right uppercase text-xs text-emerald-800">Total Hak Penitip:</td>
+                            <td class="px-3 py-3 text-right font-extrabold text-emerald-700 text-base" x-text="formatRupiah(calcGrandPayable())"></td>
+                            <td class="px-3 py-3 text-right font-bold text-purple-700" x-text="formatRupiah(calcGrandMargin())"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Grand Summary & Settlement Action Card -->
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <!-- Summary Highlights -->
+            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Ringkasan Pelunasan Sore</h3>
+                <div class="space-y-3">
+                    <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
+                        <span class="text-xs font-semibold uppercase text-emerald-800 block">Total Hak Bayar ke Penitip</span>
+                        <span class="text-2xl font-black text-emerald-700" x-text="formatRupiah(calcGrandPayable())"></span>
+                        <p class="text-[11px] text-emerald-600 mt-1">Uang yang diserahkan/disetor ke {{ batch.consignor.name }}.</p>
+                    </div>
+                    <div class="rounded-lg bg-purple-50 border border-purple-200 p-3 flex justify-between items-center">
+                        <div>
+                            <span class="text-xs font-semibold uppercase text-purple-800 block">Keuntungan Koperasi</span>
+                            <span class="text-lg font-bold text-purple-700" x-text="formatRupiah(calcGrandMargin())"></span>
+                        </div>
+                        <span class="text-2xl">💰</span>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 p-3 flex justify-between items-center text-xs text-slate-700">
+                        <span>Total Omzet Penjualan POS:</span>
+                        <span class="font-bold" x-text="formatRupiah(calcGrandRetail())"></span>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 p-3 flex justify-between items-center text-xs text-slate-700">
+                        <span>Total Sisa Barang Diretur:</span>
+                        <span class="font-bold text-amber-800" x-text="calcTotalReturned() + ' item'"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settlement Payment Form -->
+            <div class="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    {% if is_settled %}Informasi Pembayaran (Sudah Lunas){% else %}Metode Pelunasan Pembayaran Penitip{% endif %}
+                </h3>
+
+                {% if is_settled %}
+                    <div class="rounded-lg bg-slate-50 p-4 space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Metode Pembayaran:</span>
+                            <span class="font-bold text-slate-800">{{ batch.get_payout_method_display }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Waktu Pelunasan:</span>
+                            <span class="font-medium text-slate-800">{{ batch.settled_at|date:"d M Y, H:i" }} WIB</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Petugas yang Menyelesaikan:</span>
+                            <span class="font-medium text-slate-800">{{ batch.settled_by.get_full_name|default:batch.settled_by.username }}</span>
+                        </div>
+                        {% if batch.payout_reference %}
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Referensi Pembayaran:</span>
+                                <span class="font-mono text-slate-700">{{ batch.payout_reference }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-700 mb-2">Pilih Cara Pembayaran Hak Penitip *</label>
+                            <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                                <!-- Cash Option -->
+                                <label class="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition"
+                                    :class="payoutMethod === 'cash' ? 'border-emerald-500 bg-emerald-50/40 ring-1 ring-emerald-400' : 'border-slate-200 hover:bg-slate-50'">
+                                    <input type="radio" name="payout_method" value="cash" x-model="payoutMethod" class="mt-0.5 text-emerald-600">
+                                    <div>
+                                        <span class="text-xs font-bold text-slate-900 block">💵 Tunai (Kas Toko)</span>
+                                        <span class="text-[11px] text-slate-500">Diserahkan langsung tunai dari laci kasir sore ini.</span>
+                                    </div>
+                                </label>
+
+                                <!-- Member Deposit Option -->
+                                <label class="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition"
+                                    :class="payoutMethod === 'member_deposit' ? 'border-emerald-500 bg-emerald-50/40 ring-1 ring-emerald-400' : 'border-slate-200 hover:bg-slate-50'"
+                                    {% if not batch.consignor.member %}style="opacity: 0.5; pointer-events: none;"{% endif %}>
+                                    <input type="radio" name="payout_method" value="member_deposit" x-model="payoutMethod" class="mt-0.5 text-emerald-600"
+                                        {% if not batch.consignor.member %}disabled{% endif %}>
+                                    <div>
+                                        <span class="text-xs font-bold text-slate-900 block">💳 Saldo Dompet</span>
+                                        <span class="text-[11px] text-slate-500">
+                                            {% if batch.consignor.member %}
+                                                Disetor langsung ke dompet saldo anggota {{ batch.consignor.member.full_name }}.
+                                            {% else %}
+                                                (Hanya untuk mitra terdaftar sebagai anggota).
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </label>
+
+                                <!-- Bank Transfer Option -->
+                                <label class="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition"
+                                    :class="payoutMethod === 'transfer' ? 'border-emerald-500 bg-emerald-50/40 ring-1 ring-emerald-400' : 'border-slate-200 hover:bg-slate-50'">
+                                    <input type="radio" name="payout_method" value="transfer" x-model="payoutMethod" class="mt-0.5 text-emerald-600">
+                                    <div>
+                                        <span class="text-xs font-bold text-slate-900 block">🏦 Transfer Bank</span>
+                                        <span class="text-[11px] text-slate-500">Ditransfer ke rekening bank penitip.</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-slate-700">Referensi / No. Bukti Pembayaran</label>
+                                <input type="text" name="payout_reference" x-model="payoutReference"
+                                    placeholder="Misal: Kas Toko / No. Ref Transfer..."
+                                    class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-slate-700">Catatan Pelunasan</label>
+                                <input type="text" name="notes" x-model="notes"
+                                    placeholder="Catatan tambahan (misal: 2 lemper basi dibuang)..."
+                                    class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center justify-between border-t border-slate-200 pt-4">
+                            <!-- Cancel Batch Button -->
+                            <button type="button" @click="confirmCancelBatch()"
+                                class="text-xs font-semibold text-rose-600 hover:text-rose-800 hover:underline">
+                                Batalkan Batch Titipan Ini
+                            </button>
+
+                            <button type="submit" :disabled="isSubmitting"
+                                class="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 disabled:opacity-50 transition flex items-center gap-2">
+                                <span x-show="isSubmitting" class="animate-spin text-sm">⌛</span>
+                                <span>✓ Proses Pembayaran & Selesaikan Titipan</span>
+                            </button>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    <!-- Hidden Form for Cancellation -->
+    <form id="cancel-batch-form" method="post" action="{% url 'consignment_batch_cancel' batch.uuid %}" style="display: none;">
+        {% csrf_token %}
+        <input type="hidden" name="reason" id="cancel-reason-input">
+    </form>
+</div>
+
+<script>
+function consignmentSettlementApp() {
+    const rawItems = [
+        {% for item in items %}
+            {
+                item_id: {{ item.item_id }},
+                product_id: {{ item.product_id }},
+                product_name: "{{ item.product_name|escapejs }}",
+                product_sku: "{{ item.product_sku|escapejs }}",
+                unit_name: "{{ item.unit_name|escapejs }}",
+                cost_price: Number("{{ item.cost_price }}"),
+                sale_price: Number("{{ item.sale_price }}"),
+                qty_received: Number("{{ item.qty_received }}"),
+                pos_sold: Number("{{ item.pos_sold }}"),
+                current_stock: Number("{{ item.current_stock }}"),
+                qty_returned: Number("{{ item.suggested_returned }}"),
+                qty_loss: Number("{{ item.suggested_loss }}"),
+                qty_sold: Number("{{ item.suggested_sold }}"),
+                payable_amount: Number("{{ item.payable_amount }}"),
+                coop_margin: Number("{{ item.coop_margin }}"),
+                retail_amount: Number("{{ item.retail_amount }}")
+            },
+        {% endfor %}
+    ];
+
+    return {
+        items: rawItems,
+        payoutMethod: '{% if batch.consignor.member %}member_deposit{% else %}cash{% endif %}',
+        payoutReference: '',
+        notes: '',
+        isSubmitting: false,
+
+        recalcItem(item) {
+            const ret = Number(item.qty_returned || 0);
+            const loss = Number(item.qty_loss || 0);
+            const rec = Number(item.qty_received || 0);
+
+            let sold = rec - ret - loss;
+            if (sold < 0) sold = 0;
+
+            item.qty_sold = sold;
+            item.payable_amount = Math.round(sold * item.cost_price);
+            item.retail_amount = Math.round(sold * item.sale_price);
+            item.coop_margin = item.retail_amount - item.payable_amount;
+        },
+
+        calcTotalReturned() {
+            return this.items.reduce((acc, it) => acc + Number(it.qty_returned || 0), 0);
+        },
+
+        calcTotalLoss() {
+            return this.items.reduce((acc, it) => acc + Number(it.qty_loss || 0), 0);
+        },
+
+        calcTotalSold() {
+            return this.items.reduce((acc, it) => acc + Number(it.qty_sold || 0), 0);
+        },
+
+        calcGrandPayable() {
+            return this.items.reduce((acc, it) => acc + Number(it.payable_amount || 0), 0);
+        },
+
+        calcGrandRetail() {
+            return this.items.reduce((acc, it) => acc + Number(it.retail_amount || 0), 0);
+        },
+
+        calcGrandMargin() {
+            return this.items.reduce((acc, it) => acc + Number(it.coop_margin || 0), 0);
+        },
+
+        formatRupiah(num) {
+            const val = Math.round(num || 0);
+            return 'Rp ' + val.toLocaleString('id-ID');
+        },
+
+        confirmCancelBatch() {
+            const reason = prompt('Masukkan alasan pembatalan batch titipan ini:');
+            if (reason !== null && reason.trim()) {
+                document.getElementById('cancel-reason-input').value = reason;
+                document.getElementById('cancel-batch-form').submit();
+            }
+        },
+
+        submitSettlement() {
+            const totalPay = this.formatRupiah(this.calcGrandPayable());
+            const msg = `Apakah Anda yakin ingin memproses pelunasan titipan ini?\n\n` +
+                        `• Total Hak Penitip: ${totalPay}\n` +
+                        `• Metode Bayar: ${this.payoutMethod.toUpperCase()}\n` +
+                        `• Sisa barang retur (${this.calcTotalReturned()} item) akan dikeluarkan dari stok sistem.`;
+
+            if (confirm(msg)) {
+                this.isSubmitting = true;
+                document.querySelector('form').submit();
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

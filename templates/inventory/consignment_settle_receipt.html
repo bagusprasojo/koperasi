@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Struk Pelunasan Titipan {{ batch.batch_number }} | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+    <!-- Non-printable Toolbar -->
+    <div class="flex items-center justify-between no-print">
+        <div>
+            <a href="{% url 'consignment_settlement_list' %}" class="text-xs font-semibold text-indigo-600 hover:underline">&larr; Ke Daftar Rekap Sore</a>
+            <h1 class="mt-1 text-2xl font-bold text-slate-900">Struk Rekapitulasi & Pelunasan</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="window.print()" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 transition">
+                <span>🖨️</span>
+                <span>Cetak Struk Pelunasan</span>
+            </button>
+            <a href="{% url 'consignment_inflow' %}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Titipan Baru
+            </a>
+        </div>
+    </div>
+
+    <!-- Printable Settlement Receipt Card -->
+    <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-sm print:border-none print:shadow-none print:p-0 text-slate-800" id="printable-settle-receipt">
+        <!-- Receipt Header -->
+        <div class="text-center border-b border-dashed border-slate-300 pb-4">
+            <h2 class="text-lg font-bold tracking-tight uppercase">Koperasi Konsumen</h2>
+            <p class="text-xs text-slate-500">Unit Usaha Pertokoan & Konsinyasi Harian</p>
+            <div class="mt-2 inline-block rounded bg-emerald-50 px-3 py-1 border border-emerald-200">
+                <span class="text-xs font-bold uppercase text-emerald-900">Bukti Rekapitulasi & Pelunasan Titipan (Sore)</span>
+            </div>
+        </div>
+
+        <!-- Meta Info -->
+        <div class="grid grid-cols-2 gap-2 text-xs py-3 border-b border-dashed border-slate-300">
+            <div>
+                <span class="text-slate-400 block">No. Batch:</span>
+                <span class="font-mono font-bold text-slate-900 text-sm">{{ batch.batch_number }}</span>
+            </div>
+            <div class="text-right">
+                <span class="text-slate-400 block">Waktu Pelunasan:</span>
+                <span class="font-medium text-slate-800">{{ batch.settled_at|date:"d M Y, H:i" }} WIB</span>
+            </div>
+            <div>
+                <span class="text-slate-400 block">Mitra Penitip:</span>
+                <span class="font-bold text-slate-900 text-sm">{{ batch.consignor.name }}</span>
+                <span class="font-mono text-purple-700 font-semibold">({{ batch.consignor.code }})</span>
+            </div>
+            <div class="text-right">
+                <span class="text-slate-400 block">Petugas Kasir:</span>
+                <span class="font-medium text-slate-800">{{ batch.settled_by.get_full_name|default:batch.settled_by.username }}</span>
+            </div>
+        </div>
+
+        <!-- Items Table -->
+        <div class="py-3">
+            <table class="w-full text-left text-xs">
+                <thead>
+                    <tr class="border-b border-slate-200 text-slate-500 font-semibold uppercase">
+                        <th class="py-1.5">Nama Barang</th>
+                        <th class="py-1.5 text-center">Masuk</th>
+                        <th class="py-1.5 text-center font-bold text-slate-900">Laku</th>
+                        <th class="py-1.5 text-center text-amber-800">Retur</th>
+                        <th class="py-1.5 text-right">Harga Titip</th>
+                        <th class="py-1.5 text-right">Hak Bayar</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for item in items %}
+                        <tr>
+                            <td class="py-2">
+                                <div class="font-semibold text-slate-900">{{ item.product.name }}</div>
+                                <div class="text-[10px] text-slate-400 font-mono">{{ item.product.sku }}</div>
+                            </td>
+                            <td class="py-2 text-center text-slate-600">
+                                {{ item.qty_received }}
+                            </td>
+                            <td class="py-2 text-center font-bold text-slate-900 text-sm">
+                                {{ item.qty_sold }}
+                            </td>
+                            <td class="py-2 text-center font-semibold text-amber-800">
+                                {{ item.qty_returned }}
+                                {% if item.qty_loss > 0 %}
+                                    <span class="text-[10px] text-red-600 block">(Rusak: {{ item.qty_loss }})</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 text-right text-slate-600">Rp {{ item.cost_price|floatformat:0 }}</td>
+                            <td class="py-2 text-right font-bold text-slate-900">
+                                Rp {{ item.payable_amount|floatformat:0 }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Financial Summary -->
+        <div class="border-t-2 border-slate-800 pt-3 space-y-1.5 text-xs">
+            <div class="flex justify-between items-center text-base font-black text-slate-900">
+                <span>TOTAL HAK PENITIP DIBAYARKAN:</span>
+                <span class="text-emerald-700">Rp {{ batch.total_sold_cost|floatformat:0 }}</span>
+            </div>
+            <div class="flex justify-between items-center text-slate-600">
+                <span>Metode Pembayaran:</span>
+                <span class="font-bold uppercase text-slate-800">{{ batch.get_payout_method_display }}</span>
+            </div>
+            {% if batch.payout_reference %}
+                <div class="flex justify-between items-center text-slate-600">
+                    <span>Referensi / Catatan:</span>
+                    <span class="font-mono text-slate-800">{{ batch.payout_reference }}</span>
+                </div>
+            {% endif %}
+            <div class="flex justify-between items-center text-slate-600">
+                <span>Status Pelunasan:</span>
+                <span class="font-bold text-emerald-700">LUNAS & SELESAI</span>
+            </div>
+        </div>
+
+        <!-- Signatures Box -->
+        <div class="grid grid-cols-2 gap-8 text-center text-xs pt-12">
+            <div>
+                <p class="text-slate-500">Penerima Uang (Penitip),</p>
+                <div class="h-16"></div>
+                <p class="font-bold border-t border-slate-400 pt-1 text-slate-900">
+                    ( {{ batch.consignor.name }} )
+                </p>
+            </div>
+            <div>
+                <p class="text-slate-500">Petugas Koperasi (Kasir),</p>
+                <div class="h-16"></div>
+                <p class="font-bold border-t border-slate-400 pt-1 text-slate-900">
+                    ( {{ batch.settled_by.get_full_name|default:batch.settled_by.username }} )
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .no-print, header, nav, footer {
+        display: none !important;
+    }
+    body {
+        background-color: white !important;
+        color: black !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    #printable-settle-receipt {
+        border: none !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 10px !important;
+    }
+}
+</style>
+{% endblock %}

@@ -35,6 +35,7 @@ class AppAccess(models.Model):
             ('view_inventory', 'Lihat Master Produk & Stok'),
             ('manage_products', 'Kelola Master Produk & Harga Tier'),
             ('manage_purchases', 'Kelola Kulakan / Pembelian'),
+            ('manage_consignments', 'Kelola Barang Titipan / Konsinyasi'),
             ('perform_stock_opname', 'Melakukan Stock Opname'),
             ('perform_daily_closing', 'Melakukan Tutup Harian'),
             ('reopen_daily_closing', 'Buka Kembali Tutup Harian'),
