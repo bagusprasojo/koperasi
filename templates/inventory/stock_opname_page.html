@@ -1,20 +1,515 @@
 {% extends "base.html" %}
 {% load humanize %}
-{% block title %}Stock Opname{% endblock %}
+
+{% block title %}Stock Opname | POS Koperasi{% endblock %}
+
 {% block content %}
-<div class="rounded-xl bg-white p-6 shadow-sm">
-    <h1 class="mb-4 text-xl font-semibold">Transaksi Stock Opname</h1>
-    <form method="post" class="grid gap-3 md:grid-cols-4">
-        {% csrf_token %}
-        <select name="product_id" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <option value="">Pilih produk</option>
-            {% for p in products %}
-                <option value="{{ p.id }}">{{ p.name }} (Stok sistem: {{ p.stock|clean_qty }})</option>
-            {% endfor %}
-        </select>
-        <input type="number" name="actual_stock" min="0" placeholder="Stok aktual" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
-        <input type="text" name="note" placeholder="Catatan" class="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-2">
-        <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white md:col-span-4">Posting Stock Opname</button>
-    </form>
+<div class="space-y-6" x-data="stockOpnameApp()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div>
+            <h1 class="text-xl font-bold text-slate-900">Transaksi Stock Opname</h1>
+            <p class="text-xs text-slate-500">Sesuaikan stok sistem dengan stok fisik aktual di rak/toko menggunakan barcode scanner atau pencarian manual.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'stock_card_report' %}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs">
+                Lihat Kartu Stok &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert / Peringatan -->
+    <div x-show="warningMessage" x-cloak
+         x-transition
+         class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            <span x-text="warningMessage"></span>
+        </div>
+        <button type="button" @click="warningMessage = ''" class="font-bold text-amber-700 hover:text-amber-900">&times;</button>
+    </div>
+
+    <!-- Main Opname Form Card -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <form x-ref="opnameForm" method="post" @submit.prevent="submitOpname()" class="space-y-5">
+            {% csrf_token %}
+            <input type="hidden" name="product_id" :value="selectedProduct ? selectedProduct.id : ''">
+
+            <!-- Step 1: Kotak Scan Barcode / Pencarian Manual -->
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    1. Scan Barcode atau Ketik Nama / SKU Barang
+                </label>
+                <div class="relative">
+                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                    </div>
+                    <input
+                        x-ref="searchInput"
+                        type="text"
+                        x-model="searchQuery"
+                        @input="filterProducts()"
+                        @focus="onSearchFocus()"
+                        @keydown.down.prevent="navigateDown()"
+                        @keydown.up.prevent="navigateUp()"
+                        @keydown.enter.prevent="handleSearchEnter($event)"
+                        @keydown.escape="searchOpen = false"
+                        placeholder="Scan barcode kemasan / ketik SKU / ketik nama barang..."
+                        class="w-full rounded-lg border border-slate-300 pl-11 pr-10 py-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-800/10 shadow-xs transition-all">
+
+                    <!-- Clear Button -->
+                    <button
+                        type="button"
+                        x-show="searchQuery"
+                        @click="clearSelection()"
+                        class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1 rounded-full hover:bg-slate-100"
+                        title="Kosongkan pencarian">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <!-- Dropdown Saran Hasil Pencarian Manual -->
+                <div
+                    x-show="searchOpen && filteredProducts.length"
+                    x-cloak
+                    @click.outside="searchOpen = false"
+                    class="absolute z-30 mt-1 max-h-72 w-full md:max-w-2xl overflow-auto rounded-lg border border-slate-200 bg-white shadow-xl">
+                    <div class="border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold text-slate-500 uppercase">
+                        Hasil Pencarian (Gunakan panah &uarr;&darr; lalu Enter)
+                    </div>
+                    <template x-for="(p, index) in filteredProducts" :key="p.id">
+                        <button
+                            type="button"
+                            @click="selectProduct(p)"
+                            @mouseenter="highlightedIndex = index"
+                            :class="{'bg-slate-100 text-slate-900': highlightedIndex === index, 'text-slate-700': highlightedIndex !== index}"
+                            class="block w-full border-b border-slate-100 px-3 py-2.5 text-left text-sm hover:bg-slate-100 transition-colors">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium text-slate-900" x-text="p.name"></span>
+                                    <span x-show="p.allow_decimal_qty" class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">Curah</span>
+                                </div>
+                                <span class="rounded px-2 py-0.5 text-xs font-semibold"
+                                      :class="p.stock > 0 ? 'bg-slate-100 text-slate-800' : 'bg-red-50 text-red-700'">
+                                    Stok Sistem: <strong x-text="formatQty(p.stock) + ' ' + (p.unit || '')"></strong>
+                                </span>
+                            </div>
+                            <div class="text-xs text-slate-500 mt-0.5 flex items-center gap-3">
+                                <span>SKU: <strong class="font-mono" x-text="p.sku"></strong></span>
+                                <span x-show="p.barcode">Barcode: <strong class="font-mono" x-text="p.barcode"></strong></span>
+                                <span x-show="p.category" class="text-slate-400" x-text="'[' + p.category + ']'"></span>
+                            </div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Detail Barang Terpilih -->
+            <template x-if="selectedProduct">
+                <div class="space-y-4">
+                    <!-- Kartu Info Produk -->
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-3 mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800">PRODUK TERPILIH</span>
+                                <h3 class="text-base font-bold text-slate-900" x-text="selectedProduct.name"></h3>
+                            </div>
+                            <button type="button" @click="clearSelection()" class="text-xs text-slate-500 hover:text-slate-800 underline">
+                                Ganti Produk Lain
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
+                            <div>
+                                <span class="text-slate-500 block">SKU / Barcode:</span>
+                                <span class="font-mono font-medium text-slate-800" x-text="selectedProduct.sku + (selectedProduct.barcode ? ' / ' + selectedProduct.barcode : '')"></span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 block">Kategori / Satuan:</span>
+                                <span class="font-medium text-slate-800" x-text="(selectedProduct.category || '-') + ' / ' + (selectedProduct.unit || '-')"></span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 block">Stok Sistem Saat Ini:</span>
+                                <span class="text-sm font-bold text-slate-900" x-text="formatQty(selectedProduct.stock) + ' ' + (selectedProduct.unit || '')"></span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 block">HPP Satuan:</span>
+                                <span class="font-semibold text-slate-800" x-text="formatMoney(selectedProduct.cost_of_goods_sold)"></span>
+                            </div>
+                        </div>
+
+                        <!-- Peringatan jika HPP 0 -->
+                        <div x-show="parseFloat(selectedProduct.cost_of_goods_sold || 0) <= 0" class="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                            ⚠️ <strong>Peringatan:</strong> HPP produk ini masih <strong>Rp 0</strong>. Jika terdapat selisih stok (surplus/defisit), sistem mewajibkan HPP &gt; 0 agar nilai penyesuaian persediaan dapat dicatat. Harap lengkapi HPP di master data jika diperlukan.
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Input Stok Aktual & Catatan -->
+                    <div class="grid gap-4 md:grid-cols-2 items-start">
+                        <!-- Input Stok Aktual -->
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                2. Masukkan Stok Fisik / Aktual <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <input
+                                    x-ref="actualStockInput"
+                                    type="number"
+                                    name="actual_stock"
+                                    x-model="actualStock"
+                                    :step="selectedProduct.allow_decimal_qty ? 'any' : '1'"
+                                    min="0"
+                                    required
+                                    @keydown.enter.prevent="handleActualStockEnter($event)"
+                                    placeholder="0"
+                                    class="w-full rounded-lg border border-slate-300 px-4 py-3 text-xl font-bold text-slate-900 focus:border-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-800/10 shadow-xs">
+                                <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500" x-text="selectedProduct.unit || ''"></span>
+                            </div>
+                            <p class="mt-1 text-[11px] text-slate-500" x-text="selectedProduct.allow_decimal_qty ? 'Bisa pecahan/desimal (misal: 1.5).' : 'Wajib bilangan bulat (non-curah).'"></p>
+                        </div>
+
+                        <!-- Input Catatan -->
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                3. Catatan Opname (Opsional)
+                            </label>
+                            <input
+                                x-ref="noteInput"
+                                type="text"
+                                name="note"
+                                x-model="note"
+                                @keydown.enter.prevent="submitOpname()"
+                                placeholder="Contoh: Rusak di gudang, selisih hitung, dll."
+                                class="w-full rounded-lg border border-slate-300 px-3.5 py-3 text-sm text-slate-900 focus:border-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-800/10 shadow-xs">
+                            <p class="mt-1 text-[11px] text-slate-400">Tekan Enter untuk langsung memposting transaksi opname.</p>
+                        </div>
+                    </div>
+
+                    <!-- Live Difference / Selisih Preview Card -->
+                    <template x-if="actualStock !== '' && !isNaN(parseFloat(actualStock))">
+                        <div class="rounded-xl border p-4 transition-all"
+                             :class="{
+                                 'border-emerald-300 bg-emerald-50/60': diffQty > 0,
+                                 'border-rose-300 bg-rose-50/60': diffQty < 0,
+                                 'border-slate-300 bg-slate-50': diffQty === 0
+                             }">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Hasil Penyesuaian Stok:</p>
+                                    <div class="mt-1 flex items-baseline gap-2">
+                                        <span class="text-2xl font-black"
+                                              :class="{
+                                                  'text-emerald-700': diffQty > 0,
+                                                  'text-rose-700': diffQty < 0,
+                                                  'text-slate-700': diffQty === 0
+                                              }"
+                                              x-text="(diffQty > 0 ? '+' : '') + formatQty(diffQty) + ' ' + (selectedProduct.unit || '')">
+                                        </span>
+                                        <span class="text-xs font-bold px-2 py-0.5 rounded"
+                                              :class="{
+                                                  'bg-emerald-200 text-emerald-900': diffQty > 0,
+                                                  'bg-rose-200 text-rose-900': diffQty < 0,
+                                                  'bg-slate-200 text-slate-800': diffQty === 0
+                                              }"
+                                              x-text="diffQty > 0 ? 'Surplus (Stok Fisik Lebih)' : (diffQty < 0 ? 'Defisit (Stok Fisik Kurang)' : 'Stok Cocok (Tidak Berubah)')">
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="text-right text-xs">
+                                    <p class="text-slate-500">Estimasi Nilai Selisih Persediaan:</p>
+                                    <p class="text-base font-bold text-slate-900 mt-0.5"
+                                       x-text="formatMoney(Math.abs(diffAmount || 0))">
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Tombol Aksi -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                        <button type="button" @click="clearSelection()" class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                            Batal / Ganti Produk
+                        </button>
+
+                        <button type="submit"
+                                :disabled="isSubmitting || actualStock === ''"
+                                class="rounded-lg bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <span x-show="!isSubmitting">Posting Stock Opname &rarr;</span>
+                            <span x-show="isSubmitting">Memproses...</span>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </form>
+    </div>
+
+    <!-- Riwayat Transaksi Stock Opname Terakhir -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 mb-3">
+            Riwayat 15 Transaksi Stock Opname Terakhir
+        </h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-50 text-xs font-semibold text-slate-600">
+                    <tr>
+                        <th class="px-3 py-2.5">Waktu / Tanggal</th>
+                        <th class="px-3 py-2.5">No Tx</th>
+                        <th class="px-3 py-2.5">Produk</th>
+                        <th class="px-3 py-2.5 text-right">Stok Sebelum</th>
+                        <th class="px-3 py-2.5 text-right">Stok Aktual</th>
+                        <th class="px-3 py-2.5 text-right">Selisih</th>
+                        <th class="px-3 py-2.5">Petugas</th>
+                        <th class="px-3 py-2.5">Catatan</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for l in recent_ledgers %}
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-3 py-2 whitespace-nowrap text-xs text-slate-600">{{ l.created_at|date:"d/m/Y H:i" }}</td>
+                        <td class="px-3 py-2 whitespace-nowrap font-mono text-xs text-slate-700">{{ l.tx.tx_number }}</td>
+                        <td class="px-3 py-2">
+                            <div class="font-medium text-slate-900">{{ l.product.name }}</div>
+                            <div class="text-[11px] text-slate-400 font-mono">SKU: {{ l.product.sku }}{% if l.product.barcode %} | BC: {{ l.product.barcode }}{% endif %}</div>
+                        </td>
+                        <td class="px-3 py-2 text-right text-slate-700 font-medium">{{ l.balance_before|clean_qty }} {{ l.product.unit.name|default:"" }}</td>
+                        <td class="px-3 py-2 text-right font-bold text-slate-900">{{ l.balance_after|clean_qty }} {{ l.product.unit.name|default:"" }}</td>
+                        <td class="px-3 py-2 text-right font-bold">
+                            {% with diff=l.balance_after|add:l.balance_before %}
+                            {% if l.qty_in > 0 %}
+                                <span class="text-emerald-600">+{{ l.qty_in|clean_qty }}</span>
+                            {% elif l.qty_out > 0 %}
+                                <span class="text-rose-600">-{{ l.qty_out|clean_qty }}</span>
+                            {% else %}
+                                <span class="text-slate-400">0</span>
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td class="px-3 py-2 text-xs text-slate-600">{{ l.tx.created_by.get_full_name|default:l.tx.created_by.username }}</td>
+                        <td class="px-3 py-2 text-xs text-slate-500 max-w-xs truncate" title="{{ l.note|default:l.tx.note }}">
+                            {{ l.note|default:l.tx.note|default:"-" }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-3 py-8 text-center text-slate-400">
+                            Belum ada riwayat stock opname.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
+
+<script>
+function stockOpnameApp() {
+    const rawProducts = JSON.parse(document.getElementById('stock-opname-products-json').textContent || '[]');
+    const products = Array.isArray(rawProducts) ? rawProducts : JSON.parse(rawProducts || '[]');
+
+    return {
+        products,
+        searchQuery: '',
+        searchOpen: false,
+        filteredProducts: [],
+        highlightedIndex: 0,
+        selectedProduct: null,
+        actualStock: '',
+        note: '',
+        warningMessage: '',
+        isSubmitting: false,
+
+        init() {
+            this.$nextTick(() => {
+                this.focusSearch();
+            });
+        },
+
+        focusSearch() {
+            if (this.$refs.searchInput) {
+                this.$refs.searchInput.focus();
+                this.$refs.searchInput.select();
+            }
+        },
+
+        onSearchFocus() {
+            if (!this.selectedProduct && this.searchQuery) {
+                this.searchOpen = true;
+            }
+        },
+
+        formatQty(v) {
+            const n = parseFloat(v || 0) || 0;
+            if (n % 1 === 0) return Math.round(n).toLocaleString('id-ID');
+            return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+        },
+
+        formatMoney(v) {
+            const n = parseFloat(v || 0) || 0;
+            return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+        },
+
+        filterProducts() {
+            const q = (this.searchQuery || '').trim().toLowerCase();
+            this.warningMessage = '';
+            this.highlightedIndex = 0;
+
+            if (this.selectedProduct) {
+                const cur = this.selectedProduct;
+                const curLabel = `${cur.name} (${cur.sku})`.toLowerCase();
+                if (q !== curLabel && q !== (cur.barcode || '').toLowerCase() && q !== (cur.sku || '').toLowerCase()) {
+                    this.selectedProduct = null;
+                    this.actualStock = '';
+                }
+            }
+
+            if (!q) {
+                this.filteredProducts = [];
+                this.searchOpen = false;
+                return;
+            }
+
+            this.filteredProducts = this.products.filter(p =>
+                (p.name || '').toLowerCase().includes(q) ||
+                (p.sku || '').toLowerCase().includes(q) ||
+                (p.barcode || '').toLowerCase().includes(q)
+            ).slice(0, 10);
+
+            this.searchOpen = this.filteredProducts.length > 0;
+        },
+
+        navigateDown() {
+            if (!this.searchOpen || !this.filteredProducts.length) return;
+            this.highlightedIndex = (this.highlightedIndex + 1) % this.filteredProducts.length;
+        },
+
+        navigateUp() {
+            if (!this.searchOpen || !this.filteredProducts.length) return;
+            this.highlightedIndex = (this.highlightedIndex - 1 + this.filteredProducts.length) % this.filteredProducts.length;
+        },
+
+        handleSearchEnter(event) {
+            event.preventDefault();
+            const q = (this.searchQuery || '').trim();
+            if (!q) return;
+
+            const needle = q.toLowerCase();
+
+            // 1. Exact match check: Barcode -> SKU -> exact Name
+            const exactBarcode = this.products.find(p => (p.barcode || '').toLowerCase() === needle);
+            if (exactBarcode) {
+                this.selectProduct(exactBarcode);
+                return;
+            }
+
+            const exactSku = this.products.find(p => (p.sku || '').toLowerCase() === needle);
+            if (exactSku) {
+                this.selectProduct(exactSku);
+                return;
+            }
+
+            const exactName = this.products.find(p => (p.name || '').toLowerCase() === needle);
+            if (exactName) {
+                this.selectProduct(exactName);
+                return;
+            }
+
+            // 2. Item yang sedang disorot di dropdown
+            if (this.searchOpen && this.filteredProducts.length > 0 && this.highlightedIndex >= 0 && this.highlightedIndex < this.filteredProducts.length) {
+                this.selectProduct(this.filteredProducts[this.highlightedIndex]);
+                return;
+            }
+
+            // 3. Jika hasil filter hanya 1 produk
+            if (this.filteredProducts.length === 1) {
+                this.selectProduct(this.filteredProducts[0]);
+                return;
+            }
+
+            // 4. Jika ada beberapa hasil pencarian
+            if (this.filteredProducts.length > 1) {
+                this.warningMessage = 'Ditemukan beberapa produk. Gunakan panah Bawah/Atas lalu tekan Enter, atau klik produk yang sesuai.';
+                this.searchOpen = true;
+                return;
+            }
+
+            // 5. Tidak ditemukan
+            this.warningMessage = `Produk tidak ditemukan untuk input "${q}". Pastikan barcode atau SKU sudah terdaftar.`;
+            this.searchOpen = false;
+        },
+
+        selectProduct(p) {
+            this.selectedProduct = p;
+            this.searchQuery = `${p.name} (${p.sku})`;
+            this.searchOpen = false;
+            this.warningMessage = '';
+            this.actualStock = '';
+
+            // Otomatis fokus ke input stok fisik/aktual
+            this.$nextTick(() => {
+                if (this.$refs.actualStockInput) {
+                    this.$refs.actualStockInput.focus();
+                    this.$refs.actualStockInput.select();
+                }
+            });
+        },
+
+        clearSelection() {
+            this.selectedProduct = null;
+            this.searchQuery = '';
+            this.actualStock = '';
+            this.note = '';
+            this.warningMessage = '';
+            this.searchOpen = false;
+            this.$nextTick(() => {
+                this.focusSearch();
+            });
+        },
+
+        get diffQty() {
+            if (!this.selectedProduct || this.actualStock === '' || isNaN(parseFloat(this.actualStock))) return null;
+            const actual = parseFloat(this.actualStock);
+            const system = parseFloat(this.selectedProduct.stock || 0);
+            return actual - system;
+        },
+
+        get diffAmount() {
+            const diff = this.diffQty;
+            if (diff === null || !this.selectedProduct) return null;
+            const hpp = parseFloat(this.selectedProduct.cost_of_goods_sold || 0);
+            return diff * hpp;
+        },
+
+        handleActualStockEnter(event) {
+            if (this.actualStock === '') return;
+            if (this.$refs.noteInput && !this.note) {
+                this.$refs.noteInput.focus();
+            } else {
+                this.submitOpname();
+            }
+        },
+
+        submitOpname() {
+            if (!this.selectedProduct) {
+                this.warningMessage = 'Pilih produk terlebih dahulu!';
+                this.focusSearch();
+                return;
+            }
+            if (this.actualStock === '') {
+                this.warningMessage = 'Stok fisik/aktual wajib diisi!';
+                if (this.$refs.actualStockInput) this.$refs.actualStockInput.focus();
+                return;
+            }
+            const actual = parseFloat(this.actualStock);
+            if (isNaN(actual) || actual < 0) {
+                this.warningMessage = 'Stok aktual tidak boleh negatif atau tidak valid!';
+                return;
+            }
+            this.isSubmitting = true;
+            this.$refs.opnameForm.submit();
+        }
+    };
+}
+</script>
+{{ products_json|json_script:"stock-opname-products-json" }}
 {% endblock %}

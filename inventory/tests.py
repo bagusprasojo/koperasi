@@ -96,3 +96,68 @@ class StockCardReportTest(TestCase):
         self.assertEqual(resp.context['closing_balance'], Decimal('25'))
         self.assertEqual(len(resp.context['ledgers']), 1)
         self.assertContains(resp, 'SALDO AWAL')
+
+
+class StockOpnamePageTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN_TOKO)
+        self.admin_user = User.objects.create_user(username='admin_opname', password='password123')
+        self.admin_user.groups.add(self.admin_group)
+
+        self.category = Category.objects.create(name='Minuman')
+        self.unit = Unit.objects.create(name='Botol', code='btl')
+        self.product = Product.objects.create(
+            category=self.category,
+            name='Teh Botol Sosro',
+            sku='TBS-330',
+            barcode='8991001234567',
+            unit=self.unit,
+            stock=Decimal('10'),
+            cost_of_goods_sold=Decimal('3000'),
+            allow_decimal_qty=False,
+        )
+        self.tx_init = InventoryTransaction.objects.create(
+            tx_number='TX-INIT-001',
+            tx_type=InventoryTransaction.TYPE_PURCHASE,
+            tx_date='2026-09-01',
+            created_by=self.admin_user,
+        )
+        self.ledger_init = StockLedger.objects.create(
+            product=self.product,
+            tx=self.tx_init,
+            tx_date='2026-09-01',
+            qty_in=Decimal('10'),
+            qty_out=Decimal('0'),
+            balance_before=Decimal('0'),
+            balance_after=Decimal('10'),
+            unit_cost_at_txn=Decimal('3000'),
+        )
+
+    def test_stock_opname_get_page(self):
+        self.client.force_login(self.admin_user)
+        url = reverse('stock_opname_page')
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('products_json', resp.context)
+        self.assertIn('recent_ledgers', resp.context)
+        self.assertContains(resp, 'Teh Botol Sosro')
+
+    def test_stock_opname_post_adjustment(self):
+        self.client.force_login(self.admin_user)
+        url = reverse('stock_opname_page')
+        resp = self.client.post(url, {
+            'product_id': str(self.product.id),
+            'actual_stock': '14',
+            'note': 'Penghitungan fisik rak display',
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, Decimal('14'))
+        ledger = StockLedger.objects.filter(product=self.product).order_by('-created_at').first()
+        self.assertIsNotNone(ledger)
+        self.assertEqual(ledger.balance_before, Decimal('10'))
+        self.assertEqual(ledger.balance_after, Decimal('14'))
+        self.assertEqual(ledger.qty_in, Decimal('4'))
+        self.assertEqual(ledger.qty_out, Decimal('0'))
+

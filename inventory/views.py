@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 from core.decorators import role_required
 from core.constants import Role, STAFF_ROLES, MANAGEMENT_ROLES
-from .models import Category, DailyClosing, InventoryTransaction, InventoryTransactionItem, Product, ProductPriceTier, Supplier, Unit
+from .models import Category, DailyClosing, InventoryTransaction, InventoryTransactionItem, Product, ProductPriceTier, StockLedger, Supplier, Unit
 from .services import (
     close_daily,
     create_purchase_transaction,
@@ -793,18 +793,61 @@ def internal_used_page(request):
 
 @role_required(*MANAGEMENT_ROLES, perm='perform_stock_opname')
 def stock_opname_page(request):
-    products = Product.objects.order_by('name')
+    products = Product.objects.select_related('unit', 'category').order_by('name')
     if request.method == 'POST':
         try:
-            product = Product.objects.get(id=request.POST.get('product_id'))
-            actual_stock = int(request.POST.get('actual_stock', '0'))
+            product_id = request.POST.get('product_id', '').strip()
+            if not product_id:
+                raise ValidationError('Silakan pilih produk terlebih dahulu.')
+            product = Product.objects.get(id=product_id)
+            actual_stock_raw = request.POST.get('actual_stock', '').strip()
+            if actual_stock_raw == '':
+                raise ValidationError('Stok fisik/aktual wajib diisi.')
+            actual_stock = Decimal(actual_stock_raw)
+            if not product.allow_decimal_qty and actual_stock % Decimal('1') != Decimal('0'):
+                raise ValidationError(f'Produk "{product.name}" bukan barang curah. Kuantitas stok harus bilangan bulat.')
             note = request.POST.get('note', '').strip()
+            prev_stock = product.stock
             post_stock_opname(product=product, actual_stock=actual_stock, user=request.user, note=note)
-            messages.success(request, 'Transaksi stock opname berhasil diposting.')
+            diff = actual_stock - prev_stock
+            diff_sign = f"+{diff:g}" if diff > 0 else f"{diff:g}"
+            messages.success(
+                request,
+                f'Stock opname "{product.name}" berhasil diposting. '
+                f'Stok sistem: {prev_stock:g} -> Stok aktual: {actual_stock:g} (Penyesuaian: {diff_sign} {product.unit.name if product.unit else ""}).'
+            )
             return redirect('stock_opname_page')
         except Exception as exc:
             messages.error(request, _exc_message(exc))
-    return render(request, 'inventory/stock_opname_page.html', {'products': products})
+
+    recent_ledgers = (
+        StockLedger.objects.filter(tx__tx_type=InventoryTransaction.TYPE_STOCK_OPNAME)
+        .select_related('product__unit', 'tx__created_by')
+        .order_by('-created_at')[:15]
+    )
+
+    return render(
+        request,
+        'inventory/stock_opname_page.html',
+        {
+            'products': products,
+            'products_json': _to_json_payload([
+                {
+                    'id': str(p.id),
+                    'name': p.name,
+                    'sku': p.sku,
+                    'barcode': p.barcode or '',
+                    'unit': p.unit.name if p.unit else '',
+                    'category': p.category.name if p.category else '',
+                    'stock': p.stock,
+                    'cost_of_goods_sold': p.cost_of_goods_sold,
+                    'allow_decimal_qty': bool(p.allow_decimal_qty),
+                }
+                for p in products
+            ]),
+            'recent_ledgers': recent_ledgers,
+        },
+    )
 
 
 @role_required(Role.ADMIN_TOKO, perm='perform_daily_closing')
