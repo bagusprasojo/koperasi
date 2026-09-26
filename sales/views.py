@@ -217,14 +217,29 @@ def pos_member_search_api(request):
     keyword = request.GET.get('q', '').strip()
     rows = search_members(keyword=keyword, limit=10)
     data = []
+    kw_lower = keyword.lower()
     for m in rows:
         card = getattr(m, 'card', None)
+        card_num = card.card_number if card else ''
+        code = m.code or ''
+        phone = m.phone or ''
+        is_exact = bool(
+            keyword
+            and (
+                card_num.lower() == kw_lower
+                or code.lower() == kw_lower
+                or phone.lower() == kw_lower
+            )
+        )
         data.append(
             {
                 'id': m.id,
+                'code': code,
                 'full_name': m.full_name,
-                'phone': m.phone,
-                'card_number': card.card_number if card else '',
+                'phone': phone,
+                'card_number': card_num,
+                'card_status': card.status if card else '',
+                'is_exact': is_exact,
             }
         )
     return JsonResponse({'success': True, 'data': data})

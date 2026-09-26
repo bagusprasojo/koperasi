@@ -32,23 +32,60 @@
                 <p x-show="productWarning" x-cloak class="mt-1 text-xs text-amber-700" x-text="productWarning"></p>
             </div>
             <div>
-                <label class="mb-1 block text-xs font-semibold uppercase text-slate-500">Member (F3)</label>
-                <input x-ref="memberInput" x-model="memberQuery" @input.debounce.250ms="searchMember()" @focus="memberOpen = true" placeholder="Cari nama / no hp / no kartu" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs font-semibold uppercase text-slate-500">Member (F3)</label>
+                    <span class="text-[11px] text-slate-400">Scan barcode kartu / enter</span>
+                </div>
+                <div class="relative">
+                    <input x-ref="memberInput"
+                           x-model="memberQuery"
+                           @input.debounce.250ms="searchMember()"
+                           @focus="memberOpen = true; $el.select()"
+                           @keydown.enter.prevent="submitMemberByQuery()"
+                           @keydown.arrow-down.prevent="moveMemberCursor(1)"
+                           @keydown.arrow-up.prevent="moveMemberCursor(-1)"
+                           @keydown.escape.prevent="memberOpen = false"
+                           placeholder="Scan kartu / ketik nama / HP"
+                           class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm pr-7">
+                    <button type="button"
+                            x-show="memberQuery"
+                            @click="clearMemberQuery()"
+                            class="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600 text-xs">✕</button>
+                </div>
                 <div x-show="memberOpen && memberResults.length" x-cloak class="relative">
                     <div class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-white shadow">
-                        <template x-for="m in memberResults" :key="m.id">
-                            <button type="button" @click="pickMember(m)" class="block w-full border-b px-3 py-2 text-left text-sm hover:bg-slate-100">
-                                <span class="font-medium" x-text="m.full_name"></span>
-                                <span class="text-slate-500" x-text="' - ' + m.phone"></span>
+                        <template x-for="(m, idx) in memberResults" :key="m.id">
+                            <button type="button"
+                                    @click="pickMember(m); $nextTick(() => $refs.scanInput.focus())"
+                                    :class="memberCursor === idx ? 'bg-slate-100' : ''"
+                                    class="block w-full border-b px-3 py-2 text-left text-sm hover:bg-slate-100">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-medium" x-text="m.full_name"></span>
+                                    <span x-show="m.card_number" class="rounded bg-blue-50 px-1.5 py-0.5 font-mono text-xs text-blue-700" x-text="m.card_number"></span>
+                                </div>
+                                <div class="text-xs text-slate-500">
+                                    <span x-text="'HP: ' + (m.phone || '-')"></span>
+                                    <span x-show="m.code" x-text="' | Kode: ' + m.code"></span>
+                                </div>
                             </button>
                         </template>
                     </div>
                 </div>
             </div>
-            <div class="rounded-md bg-slate-50 p-3 text-sm">
-                <p class="text-slate-500">Member Aktif</p>
-                <p class="font-semibold" x-text="selectedMember.full_name"></p>
-                <p class="text-xs text-slate-600" x-text="selectedMember.card_number ? 'Kartu: ' + selectedMember.card_number : 'Tanpa kartu'"></p>
+            <div class="rounded-md bg-slate-50 p-3 text-sm border border-slate-200">
+                <div class="flex items-center justify-between">
+                    <p class="text-xs uppercase font-semibold text-slate-500">Member Aktif</p>
+                    <button type="button"
+                            x-show="!isNonMemberSelected()"
+                            @click="resetToDefaultMember()"
+                            class="text-xs text-red-600 hover:text-red-800 font-medium">Batal / Non-Member</button>
+                </div>
+                <p class="mt-1 font-semibold text-slate-800" x-text="selectedMember.full_name"></p>
+                <div class="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+                    <span x-show="selectedMember.card_number" class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-blue-800" x-text="'Kartu: ' + selectedMember.card_number"></span>
+                    <span x-show="!selectedMember.card_number && !isNonMemberSelected()" class="text-slate-400">Tanpa nomor kartu</span>
+                    <span x-show="selectedMember.phone && selectedMember.phone !== '0000000000'" class="text-slate-500" x-text="'HP: ' + selectedMember.phone"></span>
+                </div>
             </div>
             <div class="grid grid-cols-2 gap-2 pt-2 text-xs">
                 <button type="button" @click="openCheckout()" class="rounded-md bg-slate-900 px-2 py-2 text-white">Checkout (F9)</button>
@@ -222,7 +259,14 @@
 
             <div class="mt-3 grid gap-3 md:grid-cols-2">
                 <div x-show="!isNonMemberSelected()">
-                    <label class="mb-1 block text-sm">Bayar Deposit</label>
+                    <div class="mb-1 flex items-center justify-between">
+                        <label class="block text-sm font-medium text-slate-700">Bayar Deposit</label>
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <button type="button" @click="setFullDeposit()" class="font-medium text-blue-600 hover:text-blue-800 hover:underline">Semua (Deposit Penuh)</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" @click="setZeroDeposit()" class="text-slate-500 hover:text-slate-700 hover:underline">Nol (Semua Tunai)</button>
+                        </div>
+                    </div>
                     <input x-ref="depositInput" type="number" min="0" step="0.01" x-model="payment.deposit" @input="syncPayment()" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
                 </div>
                 <div>
@@ -238,12 +282,12 @@
                     <input type="text" :value="formatMoney(changeAmount())" readonly class="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                 </div>
                 <div class="md:col-span-2" x-show="!isNonMemberSelected() && toNum(payment.deposit) > 0">
-                    <label class="mb-1 block text-sm">No Kartu</label>
-                    <input x-model="payment.card_number" placeholder="Nomor kartu member" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    <label class="mb-1 block text-sm">No Kartu (Scan barcode kartu)</label>
+                    <input x-ref="cardNumberInput" x-model="payment.card_number" @keydown.enter.prevent="$refs.cardAuthInput ? $refs.cardAuthInput.focus() : null" placeholder="Nomor kartu member" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
                 </div>
                 <div class="md:col-span-2" x-show="!isNonMemberSelected() && toNum(payment.deposit) > 0">
                     <label class="mb-1 block text-sm">Password User Member</label>
-                    <input type="password" x-model="payment.card_auth" placeholder="Masukkan password user member" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    <input x-ref="cardAuthInput" type="password" x-model="payment.card_auth" @keydown.enter.prevent="submitCheckout()" placeholder="Masukkan password user member" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
                 </div>
             </div>
             <div class="mt-4 flex items-center justify-between text-sm">
@@ -298,6 +342,7 @@ function posApp() {
         memberQuery: '',
         memberOpen: false,
         memberResults: [],
+        memberCursor: -1,
         productSuggestions: [],
         productSuggestOpen: false,
         productCursor: -1,
@@ -342,16 +387,39 @@ function posApp() {
             return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
         },
         handleShortcut(e) {
-            if (e.key === 'F2') { e.preventDefault(); this.$refs.scanInput.focus(); }
-            if (e.key === 'F3') { e.preventDefault(); this.$refs.memberInput.focus(); }
+            if (e.key === 'F2') {
+                e.preventDefault();
+                this.$refs.scanInput.focus();
+                this.$refs.scanInput.select();
+            }
+            if (e.key === 'F3') {
+                e.preventDefault();
+                this.$refs.memberInput.focus();
+                this.$refs.memberInput.select();
+                this.memberOpen = true;
+            }
             if (e.key === 'F4') { if (this.checkoutOpen) { e.preventDefault(); this.setExactCash(); } }
             if (e.key === 'F6') { e.preventDefault(); this.clearCart(); }
             if (e.key === 'F7') { e.preventDefault(); this.openPendingModal(); }
             if (e.key === 'F8') { e.preventDefault(); this.holdActiveCart(); }
             if (e.key === 'F9') { e.preventDefault(); this.openCheckout(); }
             if (e.key === 'F10') { if (this.checkoutOpen) { e.preventDefault(); this.submitCheckout(); } }
-            if (e.key === 'Escape') { this.checkoutOpen = false; this.memberOpen = false; }
+            if (e.key === 'Escape') {
+                this.checkoutOpen = false;
+                this.memberOpen = false;
+                this.productSuggestOpen = false;
+            }
             if (e.ctrlKey && e.key === 'Delete') { e.preventDefault(); this.removeSelectedLine(); }
+
+            // Auto-redirect fokus ke scanInput jika kasir mengetik/scan barcode saat tidak berada di input manapun
+            if (!this.checkoutOpen && !this.pendingOpen && !this.receiptOpen) {
+                const tag = (document.activeElement && document.activeElement.tagName) || '';
+                if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+                    if (e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                        this.$refs.scanInput.focus();
+                    }
+                }
+            }
         },
         pendingStorageKey() {
             return 'koperasi_pos_pending_v1';
@@ -418,22 +486,117 @@ function posApp() {
             this.pendingTxns = this.pendingTxns.filter(p => p.id !== id);
             this.savePendingTxns();
         },
+        clearMemberQuery() {
+            this.memberQuery = '';
+            this.memberResults = [];
+            this.memberOpen = false;
+            this.memberCursor = -1;
+            this.$nextTick(() => this.$refs.memberInput.focus());
+        },
         async searchMember() {
             const q = (this.memberQuery || '').trim();
-            if (!q) { this.memberResults = []; return; }
-            const res = await fetch(`/sales/pos/api/members?q=${encodeURIComponent(q)}`);
-            const data = await res.json();
-            this.memberResults = data.data || [];
-            this.memberOpen = true;
+            if (!q) {
+                this.memberResults = [];
+                this.memberOpen = false;
+                this.memberCursor = -1;
+                return;
+            }
+            try {
+                const res = await fetch(`/sales/pos/api/members?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                this.memberResults = data.data || [];
+                this.memberOpen = this.memberResults.length > 0;
+                this.memberCursor = -1;
+            } catch (e) {
+                this.memberResults = [];
+            }
+        },
+        moveMemberCursor(step) {
+            if (!this.memberOpen || !this.memberResults.length) return;
+            let next = this.memberCursor + step;
+            if (next < 0) next = this.memberResults.length - 1;
+            if (next >= this.memberResults.length) next = 0;
+            this.memberCursor = next;
+        },
+        async submitMemberByQuery() {
+            const q = (this.memberQuery || '').trim();
+            if (!q) return;
+
+            // Jika kasir memilih dari daftar dropdown dengan panah atas/bawah
+            if (this.memberOpen && this.memberCursor >= 0 && this.memberCursor < this.memberResults.length) {
+                this.pickMember(this.memberResults[this.memberCursor]);
+                this.$nextTick(() => this.$refs.scanInput.focus());
+                return;
+            }
+
+            // Langsung cari ke server secara synchronous/immediate (melewati debounce)
+            try {
+                const res = await fetch(`/sales/pos/api/members?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                const results = data.data || [];
+
+                if (results.length > 0) {
+                    // Cari exact match (prioritas nomor kartu, kode member, phone, atau flag is_exact)
+                    const exact = results.find(m =>
+                        (m.card_number && m.card_number.toLowerCase() === q.toLowerCase()) ||
+                        (m.code && m.code.toLowerCase() === q.toLowerCase()) ||
+                        (m.phone && m.phone === q) ||
+                        m.is_exact
+                    );
+                    const chosen = exact || results[0];
+                    this.pickMember(chosen);
+                    this.productWarning = '';
+                    this.successMessage = `Member terpilih: ${chosen.full_name}${chosen.card_number ? ' (Kartu: ' + chosen.card_number + ')' : ''}`;
+                    setTimeout(() => {
+                        if (this.successMessage && this.successMessage.startsWith('Member terpilih:')) {
+                            this.successMessage = '';
+                        }
+                    }, 3000);
+                    this.$nextTick(() => this.$refs.scanInput.focus());
+                } else {
+                    this.memberResults = [];
+                    this.memberOpen = false;
+                    this.memberCursor = -1;
+                    this.productWarning = `Kartu/Member "${q}" tidak ditemukan.`;
+                }
+            } catch (e) {
+                this.productWarning = `Gagal mencari member: ${e.message}`;
+            }
         },
         pickMember(m) {
             this.selectedMember = m;
-            this.memberQuery = `${m.full_name} - ${m.phone}`;
+            this.memberQuery = `${m.full_name}${m.phone && m.phone !== '0000000000' ? ' - ' + m.phone : ''}`;
             this.memberOpen = false;
+            this.memberCursor = -1;
             if (this.isNonMemberSelected()) {
                 this.payment.deposit = '0.00';
+                this.payment.card_number = '';
+                this.payment.card_auth = '';
+            } else {
+                this.payment.card_number = m.card_number || '';
+                // Default pembayaran deposit otomatis terisi senilai total transaksi jika menggunakan kartu member
+                if (this.toNum(this.total) > 0) {
+                    this.payment.deposit = parseFloat(this.total).toFixed(2);
+                }
             }
-            if (!this.payment.card_number && m.card_number) this.payment.card_number = m.card_number;
+        },
+        resetToDefaultMember() {
+            this.selectedMember = { ...this.defaultMember };
+            this.memberQuery = '';
+            this.memberResults = [];
+            this.memberOpen = false;
+            this.memberCursor = -1;
+            this.payment.deposit = '0.00';
+            this.payment.card_number = '';
+            this.payment.card_auth = '';
+            this.productWarning = '';
+            this.successMessage = 'Member direset ke Non-Member.';
+            setTimeout(() => {
+                if (this.successMessage === 'Member direset ke Non-Member.') {
+                    this.successMessage = '';
+                }
+            }, 2000);
+            this.$nextTick(() => this.$refs.scanInput.focus());
         },
         isNonMemberSelected() {
             return String(this.selectedMember.id) === String(this.defaultMemberId);
@@ -612,11 +775,56 @@ function posApp() {
             }
             this.checkoutError = '';
             this.checkoutOpen = true;
-            if (this.isNonMemberSelected()) this.payment.deposit = '0.00';
+
+            // Jika transaksi menggunakan kartu member, default nilai pembayaran deposit terisi senilai total transaksi
+            if (!this.isNonMemberSelected()) {
+                if (!this.payment.card_number && this.selectedMember.card_number) {
+                    this.payment.card_number = this.selectedMember.card_number;
+                }
+                // Jika pembayaran deposit belum diisi manual atau bernilai 0, default terisi senilai total belanja
+                if (this.toNum(this.payment.deposit) === 0 || !this.payment.deposit) {
+                    this.payment.deposit = parseFloat(this.total || 0).toFixed(2);
+                } else if (this.toNum(this.payment.deposit) > this.toNum(this.total)) {
+                    this.payment.deposit = parseFloat(this.total || 0).toFixed(2);
+                }
+            } else {
+                this.payment.deposit = '0.00';
+            }
+
             this.syncPayment();
             this.$nextTick(() => {
-                if (this.isNonMemberSelected()) this.$refs.cashReceivedInput.focus();
-                else this.$refs.depositInput.focus();
+                if (this.isNonMemberSelected()) {
+                    this.$refs.cashReceivedInput.focus();
+                } else {
+                    // Jika deposit terisi senilai transaksi dan nomor kartu ada, arahkan kursor ke input password member
+                    if (this.toNum(this.payment.deposit) > 0 && this.payment.card_number && this.$refs.cardAuthInput) {
+                        this.$refs.cardAuthInput.focus();
+                    } else if (this.$refs.depositInput) {
+                        this.$refs.depositInput.focus();
+                        this.$refs.depositInput.select();
+                    }
+                }
+            });
+        },
+        setFullDeposit() {
+            if (this.isNonMemberSelected()) return;
+            this.payment.deposit = parseFloat(this.total || 0).toFixed(2);
+            this.syncPayment();
+            this.$nextTick(() => {
+                if (this.payment.card_number && this.$refs.cardAuthInput) {
+                    this.$refs.cardAuthInput.focus();
+                } else if (this.$refs.depositInput) {
+                    this.$refs.depositInput.focus();
+                }
+            });
+        },
+        setZeroDeposit() {
+            this.payment.deposit = '0.00';
+            this.syncPayment();
+            this.$nextTick(() => {
+                if (this.$refs.cashReceivedInput) {
+                    this.$refs.cashReceivedInput.focus();
+                }
             });
         },
         cashDue() {

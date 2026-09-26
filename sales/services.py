@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 
 from inventory.models import Product
 from inventory.services import post_pos_sale
@@ -42,11 +42,24 @@ def search_members(keyword: str, limit: int = 10):
     qs = Member.objects.filter(is_active=True)
     if q:
         qs = qs.filter(
+            Q(card__card_number__icontains=q) |
+            Q(code__icontains=q) |
             Q(full_name__icontains=q) |
-            Q(phone__icontains=q) |
-            Q(card__card_number__icontains=q)
-        )
-    return qs.select_related('card').order_by('full_name')[:limit]
+            Q(phone__icontains=q)
+        ).annotate(
+            match_priority=Case(
+                When(card__card_number__iexact=q, then=Value(1)),
+                When(code__iexact=q, then=Value(2)),
+                When(phone__iexact=q, then=Value(3)),
+                When(card__card_number__icontains=q, then=Value(4)),
+                When(code__icontains=q, then=Value(5)),
+                default=Value(6),
+                output_field=IntegerField(),
+            )
+        ).order_by('match_priority', 'full_name')
+    else:
+        qs = qs.order_by('full_name')
+    return qs.select_related('card')[:limit]
 
 
 def _format_qty(val) -> str:
