@@ -8,6 +8,7 @@ urlpatterns = [
     path('import/', views.member_import_excel, name='member_import_excel'),
     path('import/template/', views.member_import_template_excel, name='member_import_template_excel'),
     path('<uuid:uuid>/', views.member_detail, name='member_detail'),
+    path('<uuid:uuid>/card/print/', views.member_card_print, name='member_card_print'),
     path('<uuid:uuid>/edit/', views.member_edit, name='member_edit'),
     path('<uuid:uuid>/delete/', views.member_delete, name='member_delete'),
     path('cards/', views.card_list, name='card_list'),

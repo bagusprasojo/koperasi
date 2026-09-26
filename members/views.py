@@ -2,6 +2,8 @@ from decimal import Decimal, InvalidOperation
 import csv
 import io
 import json
+import qrcode
+import qrcode.image.svg
 from calendar import monthrange
 from datetime import date, timedelta
 
@@ -269,6 +271,42 @@ def member_detail(request, uuid):
     member = get_object_or_404(Member.objects.select_related('wallet'), uuid=uuid)
     wallet = get_or_create_wallet(member)
     return render(request, 'members/member_detail.html', {'member': member, 'wallet': wallet})
+
+
+@role_required(*STAFF_ROLES, perm='view_members')
+def member_card_print(request, uuid):
+    member = get_object_or_404(
+        Member.objects.select_related('wallet', 'card', 'user'),
+        uuid=uuid,
+    )
+    wallet = get_or_create_wallet(member)
+    card = getattr(member, 'card', None)
+    if not card:
+        card_num = (member.code or '').strip()
+        if not card_num or MemberCard.objects.filter(card_number=card_num).exists():
+            card_num = f"MBR{member.id:05d}"
+        card = MemberCard.objects.create(
+            member=member,
+            card_number=card_num,
+            status=MemberCard.STATUS_ACTIVE,
+        )
+
+    qr_data = card.card_number
+    factory = qrcode.image.svg.SvgPathImage
+    qr_img = qrcode.make(qr_data, image_factory=factory, box_size=10, border=1)
+    qr_svg = qr_img.to_string(encoding='unicode')
+
+    return render(
+        request,
+        'members/member_card_print.html',
+        {
+            'member': member,
+            'card': card,
+            'wallet': wallet,
+            'qr_svg': qr_svg,
+            'qr_data': qr_data,
+        },
+    )
 
 
 @role_required(*MANAGEMENT_ROLES, perm='manage_members')

@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import Client, TestCase
 
 from .models import Member, MemberCard, MemberDepositAuditLog, MemberLedger
 from .services import (
@@ -245,3 +245,44 @@ class MemberDepositServiceTests(TestCase):
 
         self.assertBalance('8000.00')
         self.assertFalse(MemberLedger.objects.filter(ledger_key='POS:SALE-OVER').exists())
+
+
+class MemberCardPrintViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from core.constants import Role
+
+        self.client = Client()
+        self.admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN_TOKO)
+        self.admin = User.objects.create_user(username='admin_print', password='admin-pass')
+        self.admin.groups.add(self.admin_group)
+
+        self.member = Member.objects.create(
+            code='MBR-007',
+            full_name='Bagus Prasojo',
+            phone='081299887766',
+            is_active=True,
+        )
+
+    def test_member_card_print_with_existing_card(self):
+        self.client.force_login(self.admin)
+        MemberCard.objects.create(member=self.member, card_number='CRD-BAGUS-007')
+        from django.urls import reverse
+        url = reverse('member_card_print', kwargs={'uuid': self.member.uuid})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Bagus Prasojo')
+        self.assertContains(resp, 'CRD-BAGUS-007')
+        self.assertContains(resp, '<svg')
+
+    def test_member_card_print_auto_creates_card_if_missing(self):
+        self.client.force_login(self.admin)
+        from django.urls import reverse
+        url = reverse('member_card_print', kwargs={'uuid': self.member.uuid})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.card.card_number, 'MBR-007')
+        self.assertContains(resp, 'MBR-007')
+        self.assertContains(resp, '<svg')
+

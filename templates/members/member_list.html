@@ -41,11 +41,15 @@
                         <td class="px-3 py-2">{{ m.wallet.balance|default:0|clean_number }}</td>
                         <td class="px-3 py-2">{% if m.is_active %}Aktif{% else %}Nonaktif{% endif %}</td>
                         <td class="px-3 py-2">
-                            <div class="flex justify-end gap-2">
-                                <a href="{% url 'member_detail' m.uuid %}" class="rounded-md border px-3 py-1">Detail</a>
-                                <a href="{% url 'member_edit' m.uuid %}?next={{ request.get_full_path|urlencode }}" class="rounded-md border px-3 py-1">Edit</a>
+                            <div class="flex justify-end gap-1.5 items-center">
+                                <a href="{% url 'member_card_print' m.uuid %}" title="Cetak Kartu Belanja (QR Code)" class="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 flex items-center gap-1 transition-colors">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                                    <span>Kartu</span>
+                                </a>
+                                <a href="{% url 'member_detail' m.uuid %}" class="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50">Detail</a>
+                                <a href="{% url 'member_edit' m.uuid %}?next={{ request.get_full_path|urlencode }}" class="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50">Edit</a>
                                 <form method="post" action="{% url 'member_delete' m.uuid %}">{% csrf_token %}
-                                    <button type="submit" @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Hapus', message: 'Member {{ m.full_name|escapejs }} akan dihapus.' })" class="rounded-md bg-red-600 px-3 py-1 text-white">Hapus</button>
+                                    <button type="submit" @click.prevent="$dispatch('confirm-open', { form: $event.target.form, title: 'Konfirmasi Hapus', message: 'Member {{ m.full_name|escapejs }} akan dihapus.' })" class="rounded-md bg-red-600 px-2.5 py-1 text-xs text-white hover:bg-red-700">Hapus</button>
                                 </form>
                             </div>
                         </td>
