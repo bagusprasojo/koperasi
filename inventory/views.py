@@ -2,7 +2,7 @@ from django.core.paginator import Paginator
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.core.exceptions import ValidationError
@@ -913,14 +913,41 @@ def stock_card_report(request):
     date_to = request.GET.get('date_to', '').strip()
     ledgers = []
     selected_product = None
+    opening_balance = Decimal('0')
+    total_qty_in = Decimal('0')
+    total_qty_out = Decimal('0')
+    closing_balance = Decimal('0')
+
     if product_id:
         selected_product = Product.objects.filter(id=product_id).first()
         if selected_product:
-            ledgers = selected_product.stock_ledgers.select_related('tx').order_by('tx_date', 'created_at')
+            if date_from:
+                prev_ledger = (
+                    selected_product.stock_ledgers.filter(tx_date__lt=date_from)
+                    .order_by('-tx_date', '-created_at', '-id')
+                    .first()
+                )
+                if prev_ledger:
+                    opening_balance = prev_ledger.balance_after
+                else:
+                    opening_balance = Decimal('0')
+            else:
+                opening_balance = Decimal('0')
+
+            ledgers = selected_product.stock_ledgers.select_related('tx').order_by('tx_date', 'created_at', 'id')
             if date_from:
                 ledgers = ledgers.filter(tx_date__gte=date_from)
             if date_to:
                 ledgers = ledgers.filter(tx_date__lte=date_to)
+
+            totals = ledgers.aggregate(
+                total_in=Sum('qty_in'),
+                total_out=Sum('qty_out'),
+            )
+            total_qty_in = totals['total_in'] or Decimal('0')
+            total_qty_out = totals['total_out'] or Decimal('0')
+            closing_balance = opening_balance + total_qty_in - total_qty_out
+
     return render(
         request,
         'inventory/stock_card_report.html',
@@ -943,6 +970,10 @@ def stock_card_report(request):
             'ledgers': ledgers,
             'date_from': date_from,
             'date_to': date_to,
+            'opening_balance': opening_balance,
+            'total_qty_in': total_qty_in,
+            'total_qty_out': total_qty_out,
+            'closing_balance': closing_balance,
         },
     )
 

@@ -4,9 +4,12 @@
 {% block title %}Tambah Produk | POS Koperasi{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-6xl rounded-xl bg-white p-6 shadow-sm">
+<div class="mx-auto max-w-6xl rounded-xl bg-white p-6 shadow-sm" x-data="productFormController(JSON.parse('{{ tier_rows_json|escapejs }}'))" x-init="init()">
     <div class="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <h1 class="text-xl font-semibold">Form Tambah Produk</h1>
+        <div>
+            <h1 class="text-xl font-semibold text-slate-900">Form Tambah Produk</h1>
+            <p class="text-xs text-slate-500">Scan barcode kemasan atau ketik data produk baru di bawah ini.</p>
+        </div>
         <a href="{% url 'product_import_excel' %}" style="background-color: #eff6ff !important; color: #1d4ed8 !important; border: 1px solid #93c5fd !important;" class="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-blue-100 transition-all shadow-sm min-w-[210px]">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" style="color: #2563eb;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -14,28 +17,67 @@
             <span style="color: #1d4ed8 !important;" class="font-semibold">Import dari Excel (.xlsx)</span>
         </a>
     </div>
-    <form method="post" class="grid gap-4" x-data="{ tiers: [] }" x-init="tiers = JSON.parse('{{ tier_rows_json|escapejs }}')">
+
+    <!-- Alert status scan barcode -->
+    <div x-show="barcodeScannedSuccess" x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 -translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         class="mb-4 flex items-center justify-between rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
+        <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            <span>Barcode berhasil di-scan: <strong class="font-mono font-bold" x-text="barcodeScannedVal"></strong>. Form tidak disubmit otomatis. Silakan lengkapi data barang.</span>
+        </div>
+        <button type="button" @click="barcodeScannedSuccess = false" class="text-emerald-700 hover:text-emerald-900 font-bold">&times;</button>
+    </div>
+
+    <form method="post" @keydown="handleFormKeydown($event)" class="grid gap-4">
         {% csrf_token %}
         <div class="grid gap-4 md:grid-cols-2 items-start">
             <div class="grid gap-3">
                 <div>
-                    <label class="mb-1 block text-sm font-medium">Nama Produk</label>
-                    <input type="text" name="name" value="{{ request.POST.name }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                    <label class="mb-1 block text-sm font-medium text-slate-800">Nama Produk <span class="text-rose-500">*</span></label>
+                    <input type="text" name="name" x-ref="nameInput" value="{{ request.POST.name }}" required
+                           placeholder="Contoh: Minyak Goreng Bimoli 1L"
+                           class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
                 </div>
                 <div class="grid gap-3 md:grid-cols-2">
                     <div>
-                        <label class="mb-1 block text-sm font-medium">SKU</label>
-                        <input type="text" name="sku" value="{{ request.POST.sku }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-sm font-medium text-slate-800">SKU <span class="text-rose-500">*</span></label>
+                            <button type="button" @click="copyBarcodeToSku()" class="text-[11px] text-blue-600 hover:underline" title="Gunakan nilai barcode sebagai SKU">
+                                = Samakan Barcode
+                            </button>
+                        </div>
+                        <input type="text" name="sku" x-ref="skuInput" value="{{ request.POST.sku }}" required
+                               placeholder="Kode internal / SKU"
+                               class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-medium">Barcode</label>
-                        <input type="text" name="barcode" value="{{ request.POST.barcode }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-sm font-medium text-slate-800">Barcode</label>
+                            <span x-show="barcodeScannedSuccess" x-cloak class="text-[11px] font-semibold text-emerald-600">
+                                ✓ Terbaca
+                            </span>
+                        </div>
+                        <div class="relative">
+                            <input type="text" name="barcode" x-ref="barcodeInput"
+                                   value="{{ request.POST.barcode }}"
+                                   @focus="$el.select()"
+                                   @keydown.enter.prevent="onBarcodeEnter($event)"
+                                   placeholder="Scan barcode di sini..."
+                                   :class="{'border-emerald-500 ring-2 ring-emerald-100 bg-emerald-50/20': barcodeScannedSuccess, 'border-slate-300': !barcodeScannedSuccess}"
+                                   class="w-full rounded-md border px-3 py-2 pr-9 outline-none focus:border-slate-800 transition-all font-mono text-sm">
+                            <div class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-slate-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="grid gap-3 md:grid-cols-2">
                     <div>
-                        <label class="mb-1 block text-sm font-medium">Kategori</label>
-                        <select name="category_id" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                        <label class="mb-1 block text-sm font-medium text-slate-800">Kategori <span class="text-rose-500">*</span></label>
+                        <select name="category_id" x-ref="categoryInput" required class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm bg-white">
                             <option value="">Pilih kategori</option>
                             {% for category in categories %}
                                 <option value="{{ category.id }}" {% if request.POST.category_id == category.id|stringformat:"s" %}selected{% endif %}>{{ category.name }}</option>
@@ -43,8 +85,8 @@
                         </select>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-medium">Satuan</label>
-                        <select name="unit_id" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                        <label class="mb-1 block text-sm font-medium text-slate-800">Satuan <span class="text-rose-500">*</span></label>
+                        <select name="unit_id" x-ref="unitInput" required class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm bg-white">
                             <option value="">Pilih satuan</option>
                             {% for unit in units %}
                                 <option value="{{ unit.id }}" {% if request.POST.unit_id == unit.id|stringformat:"s" %}selected{% endif %}>{{ unit.name }} ({{ unit.code }})</option>
@@ -53,8 +95,8 @@
                     </div>
                 </div>
                 <div>
-                    <label class="mb-1 block text-sm font-medium">Reorder Point</label>
-                    <input type="number" name="reorder_point" step="0.001" min="0" value="{{ request.POST.reorder_point }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                    <label class="mb-1 block text-sm font-medium text-slate-800">Reorder Point</label>
+                    <input type="number" name="reorder_point" x-ref="reorderPointInput" step="0.001" min="0" value="{{ request.POST.reorder_point|default:'0' }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
                 </div>
                 <div class="rounded-lg border border-amber-200 bg-amber-50/70 p-3">
                     <label class="flex items-start gap-2.5 cursor-pointer">
@@ -67,7 +109,7 @@
                 </div>
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
                     <h3 class="mb-2 text-sm font-semibold">Supplier Terakhir</h3>
-                    <div class="grid gap-1 md:grid-cols-2">
+                    <div class="grid gap-1 md:grid-cols-2 text-xs">
                         <p><span class="text-slate-500">Kode:</span> -</p>
                         <p><span class="text-slate-500">Nama:</span> -</p>
                         <p><span class="text-slate-500">Kontak:</span> -</p>
@@ -79,38 +121,38 @@
             <div class="grid gap-3">
                 <div class="grid gap-3 md:grid-cols-2">
                     <div>
-                        <label class="mb-1 block text-sm font-medium">Harga Beli</label>
-                        <input type="number" name="last_purchase_price" step="0.01" min="0" value="{{ request.POST.last_purchase_price }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                        <label class="mb-1 block text-sm font-medium text-slate-800">Harga Beli</label>
+                        <input type="number" name="last_purchase_price" x-ref="buyPriceInput" step="0.01" min="0" value="{{ request.POST.last_purchase_price|default:'0' }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-medium">Harga Pokok Penjualan (HPP)</label>
-                        <input type="number" name="cost_of_goods_sold" step="0.01" min="0" value="{{ request.POST.cost_of_goods_sold }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
+                        <label class="mb-1 block text-sm font-medium text-slate-800">Harga Pokok Penjualan (HPP)</label>
+                        <input type="number" name="cost_of_goods_sold" x-ref="costPriceInput" step="0.01" min="0" value="{{ request.POST.cost_of_goods_sold|default:'0' }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
                     </div>
                 </div>
-                <div class="rounded-lg border border-slate-200 p-4">
+                <div class="rounded-lg border border-slate-200 p-4 bg-white">
                     <div class="mb-3 flex items-center justify-between">
-                        <h2 class="text-sm font-semibold">Level Harga (Fixed 3 Level)</h2>
+                        <h2 class="text-sm font-semibold text-slate-900">Level Harga (Fixed 3 Level)</h2>
                     </div>
                     <div class="grid gap-2">
                         <template x-for="(tier, idx) in tiers" :key="idx">
-                            <div class="grid gap-2 md:grid-cols-12">
-                                <div class="rounded-md bg-slate-100 px-2 py-2 text-sm md:col-span-1" x-text="'L' + tier.level"></div>
-                                <input :name="'tier_' + tier.level + '_min_qty'" x-model="tier.min_qty" type="number" min="1" placeholder="Min Qty" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-2">
-                                <input :name="'tier_' + tier.level + '_max_qty'" x-model="tier.max_qty" type="number" min="1" placeholder="Max Qty" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-2">
+                            <div class="grid gap-2 md:grid-cols-12 items-center">
+                                <div class="rounded-md bg-slate-100 px-2 py-2 text-center text-xs font-bold text-slate-700 md:col-span-1" x-text="'L' + tier.level"></div>
+                                <input :name="'tier_' + tier.level + '_min_qty'" x-model="tier.min_qty" type="number" min="1" placeholder="Min Qty" class="rounded-md border border-slate-300 px-2 py-1.5 text-sm md:col-span-2">
+                                <input :name="'tier_' + tier.level + '_max_qty'" x-model="tier.max_qty" type="number" min="1" placeholder="Max Qty" class="rounded-md border border-slate-300 px-2 py-1.5 text-sm md:col-span-2">
                                 <template x-if="tier.level == '1'">
-                                    <input :name="'tier_' + tier.level + '_value'" x-model="tier.input_value" type="number" step="0.01" min="0" placeholder="Harga Dasar" class="rounded-md border border-slate-300 px-2 py-2 text-sm md:col-span-7">
+                                    <input :name="'tier_' + tier.level + '_value'" x-model="tier.input_value" x-ref="tier1Input" type="number" step="0.01" min="0" placeholder="Harga Dasar (Jual)" class="rounded-md border border-slate-300 px-2 py-1.5 text-sm md:col-span-7 font-semibold">
                                 </template>
                                 <template x-if="tier.level != '1'">
                                     <div class="grid gap-2 md:col-span-7 md:grid-cols-3">
-                                        <select :name="'tier_' + tier.level + '_mode'" x-model="tier.mode" class="rounded-md border border-slate-300 px-2 py-2 text-sm">
+                                        <select :name="'tier_' + tier.level + '_mode'" x-model="tier.mode" class="rounded-md border border-slate-300 px-2 py-1.5 text-xs bg-white">
                                             <option value="final">Harga Jadi</option>
                                             <option value="discount">Diskon</option>
                                         </select>
-                                        <select :name="'tier_' + tier.level + '_discount_type'" x-model="tier.discount_type" :disabled="tier.mode !== 'discount'" class="rounded-md border border-slate-300 px-2 py-2 text-sm disabled:bg-slate-100">
+                                        <select :name="'tier_' + tier.level + '_discount_type'" x-model="tier.discount_type" :disabled="tier.mode !== 'discount'" class="rounded-md border border-slate-300 px-2 py-1.5 text-xs disabled:bg-slate-100 bg-white">
                                             <option value="percent">Diskon %</option>
                                             <option value="nominal">Diskon Nominal</option>
                                         </select>
-                                        <input :name="'tier_' + tier.level + '_value'" x-model="tier.input_value" type="number" step="0.01" min="0" :placeholder="tier.mode === 'final' ? 'Harga Jadi' : 'Nilai Diskon'" class="rounded-md border border-slate-300 px-2 py-2 text-sm">
+                                        <input :name="'tier_' + tier.level + '_value'" x-model="tier.input_value" type="number" step="0.01" min="0" :placeholder="tier.mode === 'final' ? 'Harga Jadi' : 'Nilai Diskon'" class="rounded-md border border-slate-300 px-2 py-1.5 text-sm">
                                     </div>
                                 </template>
                             </div>
@@ -119,17 +161,145 @@
                 </div>
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
                     <h3 class="mb-2 text-sm font-semibold">Informasi Stok</h3>
-                    <p><span class="text-slate-500">Stok Produk:</span> 0</p>
+                    <p><span class="text-slate-500">Stok Awal Produk:</span> 0 (Bertambah melalui menu Pembelian / Opname)</p>
                 </div>
             </div>
         </div>
         {% if error_message %}
-            <p class="text-sm text-red-600">{{ error_message }}</p>
+            <div class="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 font-medium">
+                {{ error_message }}
+            </div>
         {% endif %}
-        <div class="flex gap-2">
-            <a href="{% url 'product_list' %}" class="rounded-md border px-3 py-2 text-sm">Back</a>
-            <button class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white">Simpan</button>
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+            <div class="flex items-center gap-2">
+                <a href="{% url 'product_list' %}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Kembali</a>
+                <button type="submit" x-ref="submitBtn" class="rounded-md bg-slate-900 px-6 py-2 text-sm font-medium text-white hover:bg-slate-800 shadow-sm transition-colors">
+                    Simpan Produk
+                </button>
+            </div>
+            <span class="text-xs text-slate-400 hidden sm:inline">
+                💡 Tips: Tekan <kbd class="px-1.5 py-0.5 rounded bg-slate-100 border text-slate-600 font-mono text-[10px]">Enter</kbd> untuk pindah kolom berikutnya, atau <kbd class="px-1.5 py-0.5 rounded bg-slate-100 border text-slate-600 font-mono text-[10px]">Ctrl + Enter</kbd> untuk simpan langsung.
+            </span>
         </div>
     </form>
 </div>
+
+<script>
+function productFormController(initialTiers) {
+    return {
+        tiers: initialTiers || [],
+        barcodeScannedSuccess: false,
+        barcodeScannedVal: '',
+
+        init() {
+            this.$nextTick(() => {
+                // Jika barcode belum ada, fokus ke barcode agar kasir bisa langsung scan
+                if (this.$refs.barcodeInput && !this.$refs.barcodeInput.value) {
+                    this.$refs.barcodeInput.focus();
+                } else if (this.$refs.nameInput) {
+                    this.$refs.nameInput.focus();
+                }
+            });
+        },
+
+        onBarcodeEnter(event) {
+            event.preventDefault();
+            const val = (this.$refs.barcodeInput.value || '').trim();
+            if (val) {
+                this.barcodeScannedSuccess = true;
+                this.barcodeScannedVal = val;
+                setTimeout(() => {
+                    this.barcodeScannedSuccess = false;
+                }, 3000);
+            }
+
+            // Alur fokus logis setelah scan barcode:
+            // 1. Jika Nama masih kosong, lompat ke Nama Produk
+            if (this.$refs.nameInput && !this.$refs.nameInput.value.trim()) {
+                this.$refs.nameInput.focus();
+                this.$refs.nameInput.select();
+                return;
+            }
+
+            // 2. Jika SKU masih kosong, lompat ke SKU
+            if (this.$refs.skuInput && !this.$refs.skuInput.value.trim()) {
+                this.$refs.skuInput.focus();
+                this.$refs.skuInput.select();
+                return;
+            }
+
+            // 3. Jika Kategori belum dipilih, lompat ke Kategori
+            if (this.$refs.categoryInput && !this.$refs.categoryInput.value) {
+                this.$refs.categoryInput.focus();
+                return;
+            }
+
+            // 4. Jika Satuan belum dipilih, lompat ke Satuan
+            if (this.$refs.unitInput && !this.$refs.unitInput.value) {
+                this.$refs.unitInput.focus();
+                return;
+            }
+
+            // 5. Lompat ke Harga Beli atau Harga Dasar Jual
+            if (this.$refs.buyPriceInput) {
+                this.$refs.buyPriceInput.focus();
+                this.$refs.buyPriceInput.select();
+                return;
+            }
+
+            if (this.$refs.tier1Input) {
+                this.$refs.tier1Input.focus();
+                this.$refs.tier1Input.select();
+                return;
+            }
+        },
+
+        copyBarcodeToSku() {
+            const bc = (this.$refs.barcodeInput.value || '').trim();
+            if (bc && this.$refs.skuInput) {
+                this.$refs.skuInput.value = bc;
+                this.$refs.skuInput.focus();
+            }
+        },
+
+        handleFormKeydown(e) {
+            // Shortcut Ctrl + Enter: Simpan form langsung
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                const form = e.target.closest('form');
+                if (form) form.submit();
+                return;
+            }
+
+            // Jika Enter ditekan di dalam input (selain tombol submit atau textarea)
+            if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+                // Jika berada di barcode input, sudah ditangani di onBarcodeEnter
+                if (e.target === this.$refs.barcodeInput) {
+                    return;
+                }
+
+                // Untuk input lainnya, cegah submit prematur dan arahkan ke field berikutnya
+                e.preventDefault();
+                this.focusNextInput(e.target);
+            }
+        },
+
+        focusNextInput(currentEl) {
+            const form = currentEl.closest('form');
+            if (!form) return;
+            const focusable = Array.from(
+                form.querySelectorAll('input:not([type="hidden"]):not([disabled]), select:not([disabled]), button[type="submit"]')
+            );
+            const index = focusable.indexOf(currentEl);
+            if (index >= 0 && index < focusable.length - 1) {
+                const next = focusable[index + 1];
+                next.focus();
+                if (next.select && typeof next.select === 'function' && next.tagName === 'INPUT') {
+                    next.select();
+                }
+            }
+        }
+    };
+}
+</script>
 {% endblock %}
