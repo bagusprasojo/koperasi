@@ -43,10 +43,11 @@ PERMISSION_MODULES = [
     },
     {
         'title': 'Manajemen Sistem & Otorisasi',
-        'description': 'Pengaturan akun staf dan hak akses dinamis',
+        'description': 'Pengaturan akun staf, hak akses, dan kebijakan operasional toko',
         'permissions': [
             ('manage_staff', 'Kelola Akun & Role Staf', 'Membuat user staf, ubah password, dan pilih role staf'),
             ('manage_role_permissions', 'Atur Matriks Izin Role', 'Mengubah checklist izin yang dimiliki masing-masing role'),
+            ('manage_settings', 'Kelola Pengaturan Toko & POS', 'Mengatur izin transaksi stok minus POS dan identitas nota toko'),
         ],
     },
 ]

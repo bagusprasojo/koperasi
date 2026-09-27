@@ -153,16 +153,21 @@ def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number
     preview = build_price_preview(items)
     total = preview['total']
 
-    # Pre-validation: Periksa ketersediaan stok seluruh item sebelum memproses pembayaran
-    insufficient_items = []
-    for line in preview['lines']:
-        if line['stock'] < line['qty']:
-            unit_label = line.get('unit') or 'pcs'
-            insufficient_items.append(
-                f"• {line['product_name']}: sisa stok {_format_qty(line['stock'])} {unit_label}, diminta {_format_qty(line['qty'])} {unit_label}"
-            )
-    if insufficient_items:
-        raise ValidationError("Stok barang tidak mencukupi:\n" + "\n".join(insufficient_items))
+    # Pre-validation: Periksa ketersediaan stok jika stok minus tidak diizinkan
+    from core.models import StoreSetting
+    setting = StoreSetting.get_settings()
+    allow_negative = setting.pos_allow_negative_stock
+
+    if not allow_negative:
+        insufficient_items = []
+        for line in preview['lines']:
+            if line['stock'] < line['qty']:
+                unit_label = line.get('unit') or 'pcs'
+                insufficient_items.append(
+                    f"• {line['product_name']}: sisa stok {_format_qty(line['stock'])} {unit_label}, diminta {_format_qty(line['qty'])} {unit_label}"
+                )
+        if insufficient_items:
+            raise ValidationError("Stok barang tidak mencukupi:\n" + "\n".join(insufficient_items))
 
     if not payments:
         raise ValidationError('Pembayaran wajib diisi.')
@@ -259,7 +264,7 @@ def checkout_pos(*, member_id, items, payments, client_txn_id, user, card_number
         )
 
     for product, qty in product_ids_for_stock_post:
-        post_pos_sale(product=product, qty=qty, user=user, reference=sale.sale_number, note='Checkout POS')
+        post_pos_sale(product=product, qty=qty, user=user, reference=sale.sale_number, note='Checkout POS', allow_negative=allow_negative)
 
     return sale, True
 
@@ -327,14 +332,20 @@ def _build_escpos_payload(sale: Sale, copies: int = 1):
         else (sale.created_by.username if sale.created_by else '-')
     )
     lines = [
-        'POS KOPERASI',
+        _center(setting.store_name or 'POS KOPERASI'),
+    ]
+    if setting.store_address:
+        lines.append(_center(setting.store_address))
+    if setting.store_phone:
+        lines.append(_center(f"Telp: {setting.store_phone}"))
+    lines.extend([
         '',
         f"No: {rc['sale_number']}",
         f"Tgl: {rc['sale_date']}",
         f"Member: {rc['member_name']}",
         f"Kasir: {cashier_name}",
         '-------------------------------',
-    ]
+    ])
     for it in rc['items']:
         lines.append(f"{it['product_name']}")
         left_text = f"{it['qty']} x {_fmt_amount(it['unit_price'])}"
@@ -354,7 +365,10 @@ def _build_escpos_payload(sale: Sale, copies: int = 1):
         pay_label = f"Bayar {method_label}"
         lines.append(_label_value(pay_label, _fmt_amount(p['amount'])))
     lines.append('')
-    lines.append(_center('Jazakumullahu Khairan'))
+    if setting.receipt_footer:
+        lines.append(_center(setting.receipt_footer))
+    else:
+        lines.append(_center('Jazakumullahu Khairan'))
     return {
         'job_id': f'PRN-{uuid4().hex[:10].upper()}',
         'sale_number': sale.sale_number,

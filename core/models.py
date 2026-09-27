@@ -50,4 +50,49 @@ class AppAccess(models.Model):
             # Manajemen Sistem & Staf
             ('manage_staff', 'Kelola Akun & Penugasan Role Staff'),
             ('manage_role_permissions', 'Atur Matriks Izin Role'),
+            ('manage_settings', 'Kelola Pengaturan Toko & POS'),
         ]
+
+
+class StoreSetting(BaseModel):
+    store_name = models.CharField(max_length=150, default='Koperasi', verbose_name='Nama Toko / Koperasi')
+    store_address = models.CharField(max_length=255, blank=True, default='', verbose_name='Alamat Toko')
+    store_phone = models.CharField(max_length=50, blank=True, default='', verbose_name='No. Telepon / WhatsApp')
+    receipt_footer = models.CharField(
+        max_length=255,
+        blank=True,
+        default='Terima Kasih Atas Kunjungan Anda',
+        verbose_name='Catatan Footer Struk (Catatan Kaki)',
+    )
+    pos_allow_negative_stock = models.BooleanField(
+        default=False,
+        verbose_name='Izinkan Transaksi POS Saat Stok Habis / Minus',
+        help_text='Jika aktif, kasir dapat menyelesaikan penjualan saat stok sistem 0 atau kurang (stok tercatat minus hingga barang masuk diinput gudang).',
+    )
+
+    class Meta:
+        verbose_name = 'Pengaturan Toko & POS'
+        verbose_name_plural = 'Pengaturan Toko & POS'
+
+    def __str__(self):
+        return f"{self.store_name} Settings"
+
+    @classmethod
+    def get_settings(cls):
+        try:
+            setting = cls.objects.first()
+            if not setting:
+                setting = cls.objects.create(
+                    store_name='Koperasi',
+                    receipt_footer='Terima Kasih Atas Kunjungan Anda',
+                    pos_allow_negative_stock=False,
+                )
+            return setting
+        except Exception:
+            class FallbackSetting:
+                store_name = 'Koperasi'
+                store_address = ''
+                store_phone = ''
+                receipt_footer = 'Terima Kasih Atas Kunjungan Anda'
+                pos_allow_negative_stock = False
+            return FallbackSetting()

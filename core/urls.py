@@ -1,10 +1,13 @@
 from django.urls import path
 
-from . import views, views_staff, views_matrix
+from . import views, views_staff, views_matrix, views_settings
 
 urlpatterns = [
     path('', views.home, name='home'),
     path('dashboard/', views.dashboard, name='dashboard'),
+
+    # Pengaturan Toko & POS
+    path('settings/store/', views_settings.store_settings_view, name='store_settings'),
 
     # Pendekatan A: Manajemen Staf & Pengguna
     path('staff/', views_staff.staff_list, name='staff_list'),

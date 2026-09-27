@@ -186,6 +186,8 @@ def _simple_text_pdf(lines):
 
 @role_required(*CASHIER_ROLES, perm='access_pos')
 def pos_page(request):
+    from core.models import StoreSetting
+    store_setting = StoreSetting.get_settings()
     products = Product.objects.select_related('unit').filter(price_tiers__level=1).distinct().order_by('name')
     default_member = get_default_member()
     products_data = [
@@ -207,6 +209,8 @@ def pos_page(request):
         {
             'products_json': json.dumps(products_data),
             'default_member': default_member,
+            'store_setting': store_setting,
+            'pos_allow_negative_stock': store_setting.pos_allow_negative_stock,
         },
     )
 

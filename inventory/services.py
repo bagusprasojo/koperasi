@@ -280,19 +280,33 @@ def post_internal_used(product: Product, qty, user, note=''):
 
 
 @transaction.atomic
-def post_pos_sale(product: Product, qty, user, reference='', note=''):
+def post_pos_sale(product: Product, qty, user, reference='', note='', allow_negative=None):
     _ensure_not_closed(date.today())
     qty = Decimal(str(qty))
     if qty <= Decimal('0'):
         raise ValidationError('Qty penjualan harus > 0.')
-    if product.stock < qty:
+
+    if allow_negative is None:
+        try:
+            from core.models import StoreSetting
+            allow_negative = StoreSetting.get_settings().pos_allow_negative_stock
+        except Exception:
+            allow_negative = False
+
+    if not allow_negative and product.stock < qty:
         unit_label = product.unit.name if product.unit else 'item'
         raise ValidationError(
             f"Stok tidak mencukupi untuk '{product.name}'. Tersedia: {product.stock} {unit_label}, diminta: {qty} {unit_label}."
         )
+
     unit_cost = product.cost_of_goods_sold
     if unit_cost <= 0:
-        raise ValidationError('HPP produk harus lebih besar dari 0 untuk transaksi penjualan POS.')
+        if product.last_purchase_price > 0:
+            unit_cost = product.last_purchase_price
+        elif allow_negative:
+            unit_cost = Decimal('0.00')
+        else:
+            raise ValidationError('HPP produk harus lebih besar dari 0 untuk transaksi penjualan POS.')
     tx = InventoryTransaction.objects.create(
         tx_number=_tx_number('SAL'),
         tx_type=InventoryTransaction.TYPE_POS_SALE,

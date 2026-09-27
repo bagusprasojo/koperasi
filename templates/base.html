@@ -140,10 +140,13 @@
                                 </div>
                             {% endif %}
 
-                            {% if perms.core.manage_staff or perms.core.manage_role_permissions %}
+                            {% if perms.core.manage_staff or perms.core.manage_role_permissions or perms.core.manage_settings %}
                                 <div class="relative" x-data="{ pOpen: false }">
                                     <button @click="pOpen=!pOpen" class="rounded-md px-3 py-2 text-sm hover:bg-slate-100">Pengaturan</button>
-                                    <div x-show="pOpen" x-cloak @click.outside="pOpen=false" class="absolute left-0 z-40 mt-1 w-52 rounded-md border bg-white p-1 shadow">
+                                    <div x-show="pOpen" x-cloak @click.outside="pOpen=false" class="absolute left-0 z-40 mt-1 w-56 rounded-md border bg-white p-1 shadow">
+                                        {% if perms.core.manage_settings %}
+                                            <a href="{% url 'store_settings' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Pengaturan Toko & POS</a>
+                                        {% endif %}
                                         {% if perms.core.manage_staff %}
                                             <a href="{% url 'staff_list' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Kelola Staf</a>
                                         {% endif %}
@@ -245,8 +248,11 @@
                                 {% endif %}
                             {% endif %}
 
-                            {% if perms.core.manage_staff or perms.core.manage_role_permissions or perms.core.validate_topup %}
+                            {% if perms.core.manage_staff or perms.core.manage_role_permissions or perms.core.manage_settings or perms.core.validate_topup %}
                                 <p class="px-1 pt-1 text-xs font-semibold uppercase text-slate-500">Pengaturan</p>
+                                {% if perms.core.manage_settings %}
+                                    <a href="{% url 'store_settings' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Pengaturan Toko & POS</a>
+                                {% endif %}
                                 {% if perms.core.manage_staff %}
                                     <a href="{% url 'staff_list' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Kelola Staf</a>
                                 {% endif %}

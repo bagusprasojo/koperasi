@@ -20,8 +20,9 @@
                                         <span x-show="p.is_consignment" class="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold text-purple-800">Titipan</span>
                                     </div>
                                     <span class="rounded px-1.5 py-0.5 text-xs font-semibold"
-                                          :class="p.stock > 0 ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'">
+                                          :class="p.stock > 0 ? 'bg-slate-100 text-slate-700' : (allowNegativeStock ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700')">
                                         Stok: <span x-text="formatQty(p.stock)"></span> <span x-text="p.unit"></span>
+                                        <span x-show="allowNegativeStock && p.stock <= 0" class="text-[10px] ml-0.5">(bisa dijual)</span>
                                     </span>
                                 </div>
                                 <p class="text-xs text-slate-500" x-text="'SKU: ' + p.sku + (p.barcode ? ' | BC: ' + p.barcode : '')"></p>
@@ -132,8 +133,13 @@
                                     <span x-show="line.allow_decimal_qty" class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">Curah</span>
                                     <span x-show="line.is_consignment" class="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold text-purple-800">Titipan</span>
                                 </div>
-                                <div x-show="line.stock !== undefined && toNum(line.qty) > toNum(line.stock)" class="text-xs font-medium text-red-600">
-                                    ⚠️ Melebihi stok (sisa: <span x-text="formatQty(line.stock)"></span> <span x-text="line.unit"></span>)
+                                <div x-show="line.stock !== undefined && toNum(line.qty) > toNum(line.stock)">
+                                    <div x-show="!allowNegativeStock" class="text-xs font-medium text-red-600">
+                                        ⚠️ Melebihi stok (sisa: <span x-text="formatQty(line.stock)"></span> <span x-text="line.unit"></span>)
+                                    </div>
+                                    <div x-show="allowNegativeStock" class="text-xs font-medium text-amber-600 flex items-center gap-1">
+                                        <span>ℹ️ Stok sistem <span x-text="formatQty(line.stock)"></span> (diizinkan minus)</span>
+                                    </div>
                                 </div>
                                 <div x-show="!line.allow_decimal_qty && (toNum(line.qty) % 1 !== 0)" class="text-xs font-semibold text-rose-600">
                                     ⚠️ Bukan barang curah (harus bilangan bulat)
@@ -150,7 +156,7 @@
                                     @input="onQtyInput(line)"
                                     @change="onQtyChange(line)"
                                     class="w-24 rounded-md border px-2 py-1 text-sm font-semibold transition"
-                                    :class="(!line.allow_decimal_qty && (toNum(line.qty) % 1 !== 0)) || (line.stock !== undefined && toNum(line.qty) > toNum(line.stock)) ? 'border-red-500 bg-red-50 text-red-700 ring-1 ring-red-400' : 'border-slate-300 text-slate-800'"
+                                    :class="(!line.allow_decimal_qty && (toNum(line.qty) % 1 !== 0)) || (!allowNegativeStock && line.stock !== undefined && toNum(line.qty) > toNum(line.stock)) ? 'border-red-500 bg-red-50 text-red-700 ring-1 ring-red-400' : 'border-slate-300 text-slate-800'"
                                 >
                             </td>
                             <td class="px-2 py-2" x-text="formatMoney(line.unit_price)"></td>
@@ -337,6 +343,7 @@
 <script>
 function posApp() {
     return {
+        allowNegativeStock: {{ pos_allow_negative_stock|yesno:"true,false" }},
         products: [],
         scanQuery: '',
         memberQuery: '',

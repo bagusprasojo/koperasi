@@ -1083,5 +1083,135 @@ class CoreTemplateTagsTest(TestCase):
         self.assertEqual(multiply_qty(10000, Decimal('0.5')), 'Rp 5.000')
 
 
+class StoreSettingsAndNegativeStockTests(TestCase):
+    def setUp(self):
+        self.admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN_TOKO)
+        self.kasir_group, _ = Group.objects.get_or_create(name=Role.KASIR)
+
+        self.admin_user = User.objects.create_user(username='admin_setting', password='password123')
+        self.admin_user.groups.add(self.admin_group)
+
+        self.kasir_user = User.objects.create_user(username='kasir_setting', password='password123')
+        self.kasir_user.groups.add(self.kasir_group)
+
+    def test_store_setting_get_or_create_singleton(self):
+        from core.models import StoreSetting
+        setting = StoreSetting.get_settings()
+        self.assertIsNotNone(setting)
+        self.assertEqual(setting.store_name, 'Koperasi')
+        self.assertFalse(setting.pos_allow_negative_stock)
+
+    def test_store_settings_view_admin_access_and_save(self):
+        from core.models import StoreSetting
+        from django.urls import reverse
+
+        self.client.login(username='admin_setting', password='password123')
+        url = reverse('store_settings')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Pengaturan Toko & POS')
+
+        # Test POST update settings
+        post_data = {
+            'store_name': 'Koperasi Berkah Maju',
+            'store_address': 'Jl. Mawar No. 5',
+            'store_phone': '08123456789',
+            'receipt_footer': 'Terima Kasih, Belanja Membawa Berkah',
+            'pos_allow_negative_stock': 'on',
+        }
+        res_post = self.client.post(url, post_data)
+        self.assertRedirects(res_post, url)
+
+        setting = StoreSetting.get_settings()
+        self.assertEqual(setting.store_name, 'Koperasi Berkah Maju')
+        self.assertEqual(setting.store_phone, '08123456789')
+        self.assertTrue(setting.pos_allow_negative_stock)
+
+    def test_pos_checkout_with_negative_stock_allowed(self):
+        from core.models import StoreSetting
+        from inventory.models import Category, Unit, Product, ProductPriceTier
+        from sales.models import SalePayment
+        from sales.services import checkout_pos
+
+        setting = StoreSetting.get_settings()
+        setting.pos_allow_negative_stock = True
+        setting.save()
+
+        cat = Category.objects.create(name='Snack')
+        unit = Unit.objects.create(name='Bungkus', code='BKS')
+        prod = Product.objects.create(
+            category=cat,
+            unit=unit,
+            name='Keripik Singkong',
+            sku='KRP-01',
+            stock=0,  # STOK AWAL 0
+            cost_of_goods_sold=Decimal('3000.00'),
+        )
+        ProductPriceTier.objects.create(product=prod, level=1, min_qty=1, max_qty=999, price=Decimal('5000.00'))
+
+        items = [{'product_id': str(prod.id), 'qty': 2}]
+        payments = [{'method': SalePayment.METHOD_CASH, 'amount': '10000.00'}]
+
+        # Checkout 2 item padahal stok 0 -> harus berhasil karena pos_allow_negative_stock = True
+        sale, success = checkout_pos(
+            member_id=None,
+            items=items,
+            payments=payments,
+            client_txn_id='test-neg-stock-1',
+            user=self.kasir_user,
+            cash_received_raw='10000.00',
+        )
+
+        self.assertTrue(success)
+        prod.refresh_from_db()
+        self.assertEqual(prod.stock, Decimal('-2.000'))
+
+        # Pastikan mutasi di StockLedger tercatat rapi
+        last_ledger = prod.stock_ledgers.order_by('-id').first()
+        self.assertIsNotNone(last_ledger)
+        self.assertEqual(last_ledger.qty_out, Decimal('2.000'))
+        self.assertEqual(last_ledger.balance_after, Decimal('-2.000'))
+
+    def test_pos_checkout_with_negative_stock_disallowed(self):
+        from core.models import StoreSetting
+        from inventory.models import Category, Unit, Product, ProductPriceTier
+        from sales.models import SalePayment
+        from sales.services import checkout_pos
+        from django.core.exceptions import ValidationError
+
+        setting = StoreSetting.get_settings()
+        setting.pos_allow_negative_stock = False
+        setting.save()
+
+        cat = Category.objects.create(name='Sembako')
+        unit = Unit.objects.create(name='Kg', code='KG')
+        prod = Product.objects.create(
+            category=cat,
+            unit=unit,
+            name='Gula Pasir',
+            sku='GLA-01',
+            stock=1,  # Stok hanya 1
+            cost_of_goods_sold=Decimal('12000.00'),
+        )
+        ProductPriceTier.objects.create(product=prod, level=1, min_qty=1, max_qty=999, price=Decimal('15000.00'))
+
+        items = [{'product_id': str(prod.id), 'qty': 3}]  # Beli 3
+        payments = [{'method': SalePayment.METHOD_CASH, 'amount': '45000.00'}]
+
+        with self.assertRaises(ValidationError) as ctx:
+            checkout_pos(
+                member_id=None,
+                items=items,
+                payments=payments,
+                client_txn_id='test-neg-stock-blocked',
+                user=self.kasir_user,
+                cash_received_raw='45000.00',
+            )
+
+        self.assertIn('Stok barang tidak mencukupi', str(ctx.exception))
+        prod.refresh_from_db()
+        self.assertEqual(prod.stock, Decimal('1.000'))
+
+
 
 

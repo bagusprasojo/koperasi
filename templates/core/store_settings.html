@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Pengaturan Toko & POS | POS Koperasi{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6">
+    <!-- Header -->
+    <div class="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
+        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h1 class="text-xl font-bold text-slate-800">⚙️ Pengaturan Toko & POS</h1>
+                <p class="text-sm text-slate-500">Kelola kebijakan transaksi kasir, kontrol stok minus, dan informasi cetak struk.</p>
+            </div>
+            <a href="{% url 'pos_page' %}" class="inline-flex items-center gap-1.5 self-start rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                <span>🛒 Buka Kasir POS</span>
+            </a>
+        </div>
+    </div>
+
+    <form method="post" class="space-y-6" x-data="{ allowNegative: {{ setting.pos_allow_negative_stock|yesno:'true,false' }} }">
+        {% csrf_token %}
+
+        <!-- Card 1: Kebijakan Transaksi Stok Kasir -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="mb-4 border-b border-slate-100 pb-3">
+                <h2 class="text-base font-semibold text-slate-800">1. Kebijakan Validasi Stok Kasir (POS)</h2>
+                <p class="text-xs text-slate-500">Tentukan apakah kasir diizinkan menjual produk ketika stok sistem habis atau belum sempat diinput gudang.</p>
+            </div>
+
+            <div class="rounded-lg border p-4 transition-colors" :class="allowNegative ? 'border-amber-300 bg-amber-50/60' : 'border-slate-200 bg-slate-50'">
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input 
+                        type="checkbox" 
+                        name="pos_allow_negative_stock" 
+                        x-model="allowNegative" 
+                        class="mt-1 h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        {% if setting.pos_allow_negative_stock %}checked{% endif %}
+                    >
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold text-slate-800">Izinkan Transaksi POS Saat Stok Habis / Minus</span>
+                            <span 
+                                class="rounded-full px-2 py-0.5 text-[11px] font-bold"
+                                :class="allowNegative ? 'bg-amber-200 text-amber-900' : 'bg-slate-200 text-slate-700'"
+                                x-text="allowNegative ? 'Stok Minus Diizinkan (Bypass Cek Stok)' : 'Validasi Ketat (Blokir Jika Stok Habis)'"
+                            ></span>
+                        </div>
+                        <p class="text-xs text-slate-600 leading-relaxed">
+                            Bila diaktifkan, kasir <strong>tidak akan terblokir</strong> saat ada barang fisik yang dibeli pelanggan namun faktur pembelian supplier belum sempat diinput admin gudang.
+                        </p>
+                    </div>
+                </label>
+
+                <!-- Penjelasan Dampak -->
+                <div class="mt-4 pt-3 border-t border-slate-200/80 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div class="rounded bg-white p-2.5 border border-slate-200 shadow-2xs">
+                        <strong class="text-amber-800 flex items-center gap-1">
+                            <span>✅ Ketika Diaktifkan:</span>
+                        </strong>
+                        <ul class="mt-1 list-disc list-inside text-slate-600 space-y-0.5">
+                            <li>Pelayanan kasir cepat tanpa antrean macet.</li>
+                            <li>Stok tercatat minus sementara waktu (misal: -2).</li>
+                            <li>Otomatis seimbang begitu faktur barang masuk diinput gudang (-2 + 10 = +8).</li>
+                        </ul>
+                    </div>
+                    <div class="rounded bg-white p-2.5 border border-slate-200 shadow-2xs">
+                        <strong class="text-slate-800 flex items-center gap-1">
+                            <span>🔒 Ketika Dinonaktifkan:</span>
+                        </strong>
+                        <ul class="mt-1 list-disc list-inside text-slate-600 space-y-0.5">
+                            <li>Validasi ketat sistem inventaris.</li>
+                            <li>Kasir langsung diblokir pesan <em>"Stok tidak mencukupi"</em> bila stok habis.</li>
+                            <li>Wajib input faktur pembelian/opname sebelum barang bisa di-scan kasir.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Identitas Toko & Cetak Struk -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="mb-4 border-b border-slate-100 pb-3">
+                <h2 class="text-base font-semibold text-slate-800">2. Identitas Toko & Informasi Struk Thermal</h2>
+                <p class="text-xs text-slate-500">Informasi ini akan tercetak pada kop dan catatan kaki (*footer*) struk belanja kasir.</p>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div class="sm:col-span-2">
+                    <label class="mb-1 block text-sm font-medium text-slate-700">Nama Toko / Koperasi <span class="text-red-500">*</span></label>
+                    <input 
+                        type="text" 
+                        name="store_name" 
+                        value="{{ setting.store_name }}" 
+                        required 
+                        placeholder="Contoh: Koperasi Pondok Sayur Sejahtera" 
+                        class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+                    >
+                    <p class="mt-1 text-[11px] text-slate-400">Nama yang tampil di bagian paling atas struk kasir.</p>
+                </div>
+
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-slate-700">No. Telepon / WhatsApp Toko</label>
+                    <input 
+                        type="text" 
+                        name="store_phone" 
+                        value="{{ setting.store_phone }}" 
+                        placeholder="Contoh: 0812-3456-7890" 
+                        class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+                    >
+                </div>
+
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-slate-700">Alamat Singkat Toko</label>
+                    <input 
+                        type="text" 
+                        name="store_address" 
+                        value="{{ setting.store_address }}" 
+                        placeholder="Contoh: Jl. Merdeka No. 10, Jakarta" 
+                        class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+                    >
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label class="mb-1 block text-sm font-medium text-slate-700">Catatan Kaki Struk (Footer)</label>
+                    <input 
+                        type="text" 
+                        name="receipt_footer" 
+                        value="{{ setting.receipt_footer }}" 
+                        placeholder="Contoh: Terima Kasih Atas Kunjungan Anda" 
+                        class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+                    >
+                    <p class="mt-1 text-[11px] text-slate-400">Pesan penutup yang tercetak di bagian bawah nota belanja.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tombol Simpan -->
+        <div class="flex items-center justify-end gap-3 pt-2">
+            <a href="{% url 'dashboard' %}" class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Batal
+            </a>
+            <button type="submit" class="rounded-md bg-slate-900 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition">
+                💾 Simpan Pengaturan
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
