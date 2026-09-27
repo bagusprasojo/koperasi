@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from inventory.models import Product, InventoryTransaction, InventoryTransactionItem, StockLedger
-from inventory.services import _tx_number
+from inventory.services import _tx_number, _rebuild_product_stock_from_ledgers
 
 
 class Command(BaseCommand):
@@ -78,18 +78,24 @@ class Command(BaseCommand):
             updated_count = 0
             items_to_create = []
             ledgers_to_create = []
-            products_to_update = []
+            affected_products = []
 
             for p in Product.objects.all():
-                diff = target_qty - p.stock
-                if diff == 0:
+                # Dapatkan saldo ledger terakhir produk
+                last_ledger = (
+                    StockLedger.objects
+                    .filter(product=p)
+                    .order_by('-tx_date', '-created_at', '-id')
+                    .first()
+                )
+                current_ledger_balance = last_ledger.balance_after if last_ledger else Decimal('0.000')
+
+                # Hitung selisih dari saldo ledger yang sebenarnya
+                diff = target_qty - current_ledger_balance
+                if diff == 0 and p.stock == target_qty:
                     continue
 
-                before = p.stock
-                p.stock = target_qty
-                products_to_update.append(p)
                 updated_count += 1
-
                 unit_cost = p.cost_of_goods_sold or p.last_purchase_price or Decimal('0')
                 total_cost = (unit_cost * abs(diff)).quantize(Decimal('0.01'))
 
@@ -110,7 +116,7 @@ class Command(BaseCommand):
                         tx_date=tx.tx_date,
                         qty_in=max(diff, Decimal('0')),
                         qty_out=max(-diff, Decimal('0')),
-                        balance_before=before,
+                        balance_before=current_ledger_balance,
                         balance_after=target_qty,
                         unit_cost_at_txn=unit_cost,
                         value_in=total_cost if diff > 0 else Decimal('0'),
@@ -118,14 +124,18 @@ class Command(BaseCommand):
                         note=f'Penetapan Stok Masal ({target_qty})',
                     )
                 )
+                affected_products.append(p)
 
-            if products_to_update:
-                Product.objects.bulk_update(products_to_update, ['stock', 'updated_at'])
+            if items_to_create:
                 InventoryTransactionItem.objects.bulk_create(items_to_create)
                 StockLedger.objects.bulk_create(ledgers_to_create)
+
+            # Rebuild saldo untuk memastikan field product.stock dan seluruh ledger 100% konsisten
+            for p in affected_products:
+                _rebuild_product_stock_from_ledgers(p)
 
         self.stdout.write(self.style.SUCCESS(
             f"\nSUKSES: Stok {updated_count} produk telah diperbarui menjadi {target_qty}.\n"
             f"Nomor Transaksi: {tx.tx_number}\n"
-            f"Mutasi kartu stok telah tercatat rapi sehingga Laporan Kartu Stok sinkron!"
+            f"Mutasi kartu stok telah tercatat dan dihitung ulang (rebuild) sehingga transaksi POS berikutnya aman!"
         ))
