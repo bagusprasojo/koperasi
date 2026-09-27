@@ -1212,6 +1212,53 @@ class StoreSettingsAndNegativeStockTests(TestCase):
         prod.refresh_from_db()
         self.assertEqual(prod.stock, Decimal('1.000'))
 
+    def test_pos_checkout_api_builds_receipt_payload_with_store_setting(self):
+        import json
+        from django.urls import reverse
+        from core.models import StoreSetting
+        from inventory.models import Category, Unit, Product, ProductPriceTier
+        from sales.models import SalePayment
+
+        setting = StoreSetting.get_settings()
+        setting.store_name = 'Koperasi Maju Sejahtera'
+        setting.store_address = 'Jl. Anggrek No. 12'
+        setting.store_phone = '081999888777'
+        setting.receipt_footer = 'Terima Kasih Banyak'
+        setting.save()
+
+        cat = Category.objects.create(name='ATK')
+        unit = Unit.objects.create(name='Pcs', code='PCS')
+        prod = Product.objects.create(
+            category=cat,
+            unit=unit,
+            name='Buku Tulis',
+            sku='BK-01',
+            stock=10,
+            cost_of_goods_sold=Decimal('3000.00'),
+        )
+        ProductPriceTier.objects.create(product=prod, level=1, min_qty=1, max_qty=999, price=Decimal('5000.00'))
+
+        self.client.login(username='kasir_setting', password='password123')
+        payload = {
+            'member_id': None,
+            'items': [{'product_id': str(prod.id), 'qty': 1}],
+            'payments': [{'method': SalePayment.METHOD_CASH, 'amount': '5000.00'}],
+            'client_txn_id': 'test-pos-api-receipt-ok',
+            'cash_received': '5000.00',
+        }
+        url = reverse('pos_checkout_api')
+        res = self.client.post(url, data=json.dumps(payload), content_type='application/json')
+        self.assertEqual(res.status_code, 200)
+
+        data = res.json()
+        self.assertTrue(data['success'])
+        receipt_lines = data['data']['receipt_payload']['lines']
+        # Pastikan nama toko muncul di receipt
+        self.assertTrue(any('Koperasi Maju Sejahtera' in line for line in receipt_lines))
+        self.assertTrue(any('Jl. Anggrek No. 12' in line for line in receipt_lines))
+        self.assertTrue(any('081999888777' in line for line in receipt_lines))
+        self.assertTrue(any('Terima Kasih Banyak' in line for line in receipt_lines))
+
 
 
 

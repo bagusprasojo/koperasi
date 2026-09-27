@@ -304,6 +304,8 @@ def get_receipt_detail(sale: Sale):
 
 
 def _build_escpos_payload(sale: Sale, copies: int = 1):
+    from core.models import StoreSetting
+    setting = StoreSetting.get_settings()
     line_width = 32
 
     def _fmt_amount(value) -> str:
