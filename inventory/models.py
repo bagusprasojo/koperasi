@@ -132,6 +132,27 @@ class Product(BaseModel):
             return str(int(d))
         return f"{d:f}".rstrip('0').rstrip('.')
 
+    @property
+    def clean_reorder_point(self):
+        d = Decimal(str(self.reorder_point or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
+
+    @property
+    def clean_last_purchase_price(self):
+        d = Decimal(str(self.last_purchase_price or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
+
+    @property
+    def clean_cost_of_goods_sold(self):
+        d = Decimal(str(self.cost_of_goods_sold or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
+
     def __str__(self):
         return self.name
 
@@ -218,6 +239,27 @@ class ProductPriceTier(BaseModel):
                 raise ValidationError(
                     "Range harus lebih kecil dari tier berikutnya"
                 )
+
+    @property
+    def clean_min_qty(self):
+        d = Decimal(str(self.min_qty or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
+
+    @property
+    def clean_max_qty(self):
+        d = Decimal(str(self.max_qty or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
+
+    @property
+    def clean_price(self):
+        d = Decimal(str(self.price or 0))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
 
     def __str__(self):
         return f"{self.product.name} - Level {self.level}"

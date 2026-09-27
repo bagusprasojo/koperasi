@@ -55,6 +55,30 @@ def clean_qty(value):
     return clean_number(value)
 
 
+@register.filter(name='clean_decimal')
+def clean_decimal(value):
+    """
+    Format angka desimal murni tanpa trailing zero, tanpa pemisah ribuan (khusus input type="number"):
+      0.000 -> '0'
+      1.000 -> '1'
+      999.000 -> '999'
+      15000.00 -> '15000'
+      15000.50 -> '15000.5'
+      0.500 -> '0.5'
+      None / '' -> ''
+    """
+    if value is None or value == '':
+        return ''
+    try:
+        d = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return str(value)
+
+    if d % Decimal('1') == Decimal('0'):
+        return str(int(d))
+    return f"{d:f}".rstrip('0').rstrip('.')
+
+
 @register.filter(name='format_rupiah')
 def format_rupiah(value):
     """

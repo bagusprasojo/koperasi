@@ -91,7 +91,7 @@
                 </div>
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-800">Reorder Point</label>
-                    <input type="number" name="reorder_point" x-ref="reorderPointInput" step="0.001" min="0" value="{{ request.POST.reorder_point|default:product.reorder_point }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
+                    <input type="number" name="reorder_point" x-ref="reorderPointInput" step="0.001" min="0" value="{% if request.method == 'POST' %}{{ request.POST.reorder_point|clean_decimal }}{% else %}{{ product.reorder_point|clean_decimal }}{% endif %}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
                 </div>
                 <div class="rounded-lg border border-amber-200 bg-amber-50/70 p-3">
                     <label class="flex items-start gap-2.5 cursor-pointer">
@@ -117,11 +117,11 @@
                 <div class="grid gap-3 md:grid-cols-2">
                     <div>
                         <label class="mb-1 block text-sm font-medium text-slate-800">Harga Beli</label>
-                        <input type="number" name="last_purchase_price" x-ref="buyPriceInput" step="0.01" min="0" value="{{ request.POST.last_purchase_price|default:product.last_purchase_price }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
+                        <input type="number" name="last_purchase_price" x-ref="buyPriceInput" step="0.01" min="0" value="{% if request.method == 'POST' %}{{ request.POST.last_purchase_price|clean_decimal }}{% else %}{{ product.last_purchase_price|clean_decimal }}{% endif %}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-medium text-slate-800">Harga Pokok Penjualan (HPP)</label>
-                        <input type="number" name="cost_of_goods_sold" x-ref="costPriceInput" step="0.01" min="0" value="{{ request.POST.cost_of_goods_sold|default:product.cost_of_goods_sold }}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
+                        <input type="number" name="cost_of_goods_sold" x-ref="costPriceInput" step="0.01" min="0" value="{% if request.method == 'POST' %}{{ request.POST.cost_of_goods_sold|clean_decimal }}{% else %}{{ product.cost_of_goods_sold|clean_decimal }}{% endif %}" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800 text-sm">
                     </div>
                 </div>
                 <div class="rounded-lg border border-slate-200 p-4 bg-white">

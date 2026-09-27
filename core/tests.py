@@ -1082,6 +1082,19 @@ class CoreTemplateTagsTest(TestCase):
         self.assertEqual(multiply_qty(10000, 2), 'Rp 20.000')
         self.assertEqual(multiply_qty(10000, Decimal('0.5')), 'Rp 5.000')
 
+    def test_clean_decimal(self):
+        from core.templatetags.core_tags import clean_decimal
+        self.assertEqual(clean_decimal(0), '0')
+        self.assertEqual(clean_decimal('0.000'), '0')
+        self.assertEqual(clean_decimal(Decimal('0.000')), '0')
+        self.assertEqual(clean_decimal(Decimal('1.000')), '1')
+        self.assertEqual(clean_decimal(Decimal('999.000')), '999')
+        self.assertEqual(clean_decimal(Decimal('15000.00')), '15000')
+        self.assertEqual(clean_decimal(Decimal('15000.50')), '15000.5')
+        self.assertEqual(clean_decimal(Decimal('12.250')), '12.25')
+        self.assertEqual(clean_decimal(''), '')
+        self.assertEqual(clean_decimal(None), '')
+
 
 class StoreSettingsAndNegativeStockTests(TestCase):
     def setUp(self):

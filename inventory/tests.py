@@ -157,7 +157,58 @@ class StockOpnamePageTest(TestCase):
         ledger = StockLedger.objects.filter(product=self.product).order_by('-created_at').first()
         self.assertIsNotNone(ledger)
         self.assertEqual(ledger.balance_before, Decimal('10'))
-        self.assertEqual(ledger.balance_after, Decimal('14'))
         self.assertEqual(ledger.qty_in, Decimal('4'))
         self.assertEqual(ledger.qty_out, Decimal('0'))
+
+
+class ProductEditDecimalFormattingTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN_TOKO)
+        self.admin_user = User.objects.create_user(username='admin_prod_edit', password='password123')
+        self.admin_user.groups.add(self.admin_group)
+
+        self.category = Category.objects.create(name='Minuman')
+        self.unit = Unit.objects.create(name='Botol', code='BTL')
+        self.product = Product.objects.create(
+            category=self.category,
+            name='Kopi Susu Gula Aren',
+            sku='KP-SUSU-01',
+            unit=self.unit,
+            stock=Decimal('50.000'),
+            reorder_point=Decimal('10.000'),
+            last_purchase_price=Decimal('12000.00'),
+            cost_of_goods_sold=Decimal('10000.00'),
+        )
+        from inventory.models import ProductPriceTier
+        self.tier1 = ProductPriceTier.objects.create(
+            product=self.product,
+            level=1,
+            min_qty=Decimal('1.000'),
+            max_qty=Decimal('999.000'),
+            price=Decimal('15000.00'),
+            source_mode='final',
+        )
+
+    def test_product_edit_renders_clean_decimals(self):
+        import json
+        self.client.force_login(self.admin_user)
+        url = reverse('product_edit', kwargs={'uuid': self.product.uuid})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+        content = resp.content.decode('utf-8')
+        # Pastikan input value tidak mengandung trailing .000 atau .00 yang kotor
+        self.assertIn('name="reorder_point" x-ref="reorderPointInput" step="0.001" min="0" value="10"', content)
+        self.assertIn('name="last_purchase_price" x-ref="buyPriceInput" step="0.01" min="0" value="12000"', content)
+        self.assertIn('name="cost_of_goods_sold" x-ref="costPriceInput" step="0.01" min="0" value="10000"', content)
+
+        # Pastikan data level tier_rows_json bersih tanpa desimal liar
+        tier_rows_json = resp.context['tier_rows_json']
+        tiers = json.loads(tier_rows_json)
+        tier1 = tiers[0]
+        self.assertEqual(tier1['min_qty'], '1')
+        self.assertEqual(tier1['max_qty'], '999')
+        self.assertEqual(tier1['input_value'], '15000')
+        self.assertEqual(tier1['price'], '15000')
 

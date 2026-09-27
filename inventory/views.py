@@ -50,17 +50,29 @@ def _get_safe_next_url(request):
     return next_url
 
 
+def _clean_decimal_str(val):
+    if val is None or val == '':
+        return ''
+    try:
+        d = Decimal(str(val))
+        if d % Decimal('1') == Decimal('0'):
+            return str(int(d))
+        return f"{d:f}".rstrip('0').rstrip('.')
+    except (InvalidOperation, ValueError, TypeError):
+        return str(val)
+
+
 def _extract_tier_rows(request):
     rows = []
     for level in [1, 2, 3]:
         rows.append(
             {
                 'level': str(level),
-                'min_qty': request.POST.get(f'tier_{level}_min_qty', '').strip(),
-                'max_qty': request.POST.get(f'tier_{level}_max_qty', '').strip(),
+                'min_qty': _clean_decimal_str(request.POST.get(f'tier_{level}_min_qty', '').strip()),
+                'max_qty': _clean_decimal_str(request.POST.get(f'tier_{level}_max_qty', '').strip()),
                 'mode': request.POST.get(f'tier_{level}_mode', 'final').strip(),
                 'discount_type': request.POST.get(f'tier_{level}_discount_type', 'percent').strip(),
-                'input_value': request.POST.get(f'tier_{level}_value', '').strip(),
+                'input_value': _clean_decimal_str(request.POST.get(f'tier_{level}_value', '').strip()),
                 'price': '',
             }
         )
@@ -73,15 +85,16 @@ def _serialize_tiers(product):
     for level in [1, 2, 3]:
         tier = by_level.get(level)
         if tier:
+            input_val = tier.discount_value if tier.source_mode == 'discount' and tier.discount_value is not None else tier.price
             rows.append(
                 {
                     'level': str(level),
-                    'min_qty': str(tier.min_qty),
-                    'max_qty': str(tier.max_qty),
+                    'min_qty': _clean_decimal_str(tier.min_qty),
+                    'max_qty': _clean_decimal_str(tier.max_qty),
                     'mode': tier.source_mode or 'final',
                     'discount_type': tier.discount_type or 'percent',
-                    'input_value': str(tier.discount_value if tier.source_mode == 'discount' and tier.discount_value is not None else tier.price),
-                    'price': str(tier.price),
+                    'input_value': _clean_decimal_str(input_val),
+                    'price': _clean_decimal_str(tier.price),
                 }
             )
         else:
