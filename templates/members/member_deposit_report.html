@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% load humanize core_tags %}
+
+{% block title %}Laporan Rekapitulasi & Saldo Deposit Member | POS Koperasi{% endblock %}
+
+{% block extra_head %}
+<style>
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-size: 11pt !important;
+    }
+    .print-only {
+        display: block !important;
+    }
+    .shadow-sm, .shadow {
+        box-shadow: none !important;
+    }
+    .border {
+        border-color: #cbd5e1 !important;
+    }
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+    }
+    th, td {
+        border: 1px solid #cbd5e1 !important;
+        padding: 4px 8px !important;
+        font-size: 9pt !important;
+    }
+    thead {
+        display: table-header-group !important;
+    }
+    tr {
+        page-break-inside: avoid !important;
+    }
+}
+.print-only {
+    display: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header Standar (Web) -->
+    <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center no-print">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">💳</span>
+                <h1 class="text-2xl font-bold text-slate-900">Laporan Rekapitulasi &amp; Saldo Deposit Member</h1>
+            </div>
+            <p class="mt-1 text-sm text-slate-500">
+                Posisi saldo simpanan belanja anggota, mutasi aliran dana (topup, belanja POS, penarikan), dan audit liabilitas koperasi.
+            </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button onclick="window.print()" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                <span>Cetak Laporan</span>
+            </button>
+            <a href="{% url 'member_deposit_report_export_csv' %}?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&balance_filter={{ balance_filter }}&q={{ query|urlencode }}" class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                <span>Export CSV / Excel</span>
+            </a>
+            <a href="{% url 'member_ledger' %}" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+                <span>Buku Ledger</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Header Khusus Print -->
+    <div class="print-only border-b pb-4 mb-4">
+        <div class="text-center">
+            <h1 class="text-xl font-bold uppercase tracking-wider text-slate-900">{{ store_setting.store_name|default:"KOPERASI" }}</h1>
+            {% if store_setting.store_address %}
+                <p class="text-xs text-slate-600">{{ store_setting.store_address }}</p>
+            {% endif %}
+            {% if store_setting.store_phone %}
+                <p class="text-xs text-slate-600">Telp: {{ store_setting.store_phone }}</p>
+            {% endif %}
+            <h2 class="mt-3 text-base font-bold uppercase underline">Laporan Rekapitulasi & Saldo Deposit Anggota</h2>
+            <p class="text-xs text-slate-600">Periode: {{ date_from|date:"d F Y" }} s/d {{ date_to|date:"d F Y" }}</p>
+        </div>
+    </div>
+
+    <!-- Filter Bar (no-print) -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm no-print">
+        <form method="get" class="flex flex-wrap items-end gap-3">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600">Dari Tanggal</label>
+                <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"
+                    class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600">Sampai Tanggal</label>
+                <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"
+                    class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600">Filter Tampilan Saldo</label>
+                <select name="balance_filter" class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none">
+                    <option value="has_balance" {% if balance_filter == 'has_balance' %}selected{% endif %}>Hanya Member Bersaldo / Ada Mutasi</option>
+                    <option value="positive_only" {% if balance_filter == 'positive_only' %}selected{% endif %}>Hanya Saldo Terkini > Rp 0</option>
+                    <option value="all" {% if balance_filter == 'all' %}selected{% endif %}>Tampilkan Semua Member</option>
+                    <option value="zero_balance" {% if balance_filter == 'zero_balance' %}selected{% endif %}>Hanya Saldo Rp 0</option>
+                </select>
+            </div>
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-xs font-semibold uppercase text-slate-600">Cari Member</label>
+                <input type="text" name="q" value="{{ query }}" placeholder="Nama / Kode / No. HP..."
+                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none">
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 shadow-sm transition-colors">
+                    Terapkan Filter
+                </button>
+                <a href="{% url 'member_deposit_report' %}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                    Reset
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- KPI Summary Cards -->
+    <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <!-- Total Saldo Mengendap (Kewajiban) -->
+        <div class="col-span-2 sm:col-span-1 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold text-emerald-800 uppercase tracking-wide">Saldo Mengendap</p>
+                <span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">Liabilitas</span>
+            </div>
+            <p class="mt-2 text-2xl font-black text-emerald-900">{{ kpi.total_wallet_pool|format_rupiah }}</p>
+            <p class="mt-1 text-[11px] text-emerald-700">
+                <span class="font-bold">{{ kpi.members_with_balance_count }}</span> dari {{ kpi.total_all_members }} member memiliki saldo
+            </p>
+        </div>
+
+        <!-- Total Topup Periode -->
+        <div class="rounded-xl border border-blue-200 bg-blue-50/50 p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold text-blue-800 uppercase tracking-wide">Topup Masuk (+)</p>
+                <span class="text-xs">📥</span>
+            </div>
+            <p class="mt-2 text-2xl font-black text-blue-900">{{ kpi.period_total_topup|format_rupiah }}</p>
+            <p class="mt-1 text-[11px] text-blue-700">Setoran tunai/transfer periode ini</p>
+        </div>
+
+        <!-- Total Belanja POS Periode -->
+        <div class="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold text-amber-800 uppercase tracking-wide">Belanja POS (-)</p>
+                <span class="text-xs">🛒</span>
+            </div>
+            <p class="mt-2 text-2xl font-black text-amber-900">{{ kpi.period_total_purchase|format_rupiah }}</p>
+            <p class="mt-1 text-[11px] text-amber-700">Deposit terserap jadi omzet kasir</p>
+        </div>
+
+        <!-- Total Penarikan Periode -->
+        <div class="rounded-xl border border-rose-200 bg-rose-50/50 p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold text-rose-800 uppercase tracking-wide">Penarikan Saldo (-)</p>
+                <span class="text-xs">📤</span>
+            </div>
+            <p class="mt-2 text-2xl font-black text-rose-900">{{ kpi.period_total_withdrawal|format_rupiah }}</p>
+            <p class="mt-1 text-[11px] text-rose-700">Tarik tunai saldo oleh anggota</p>
+        </div>
+
+        <!-- Arus Bersih Periode -->
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold text-slate-700 uppercase tracking-wide">Arus Bersih Periode</p>
+                <span class="text-xs">🔄</span>
+            </div>
+            <p class="mt-2 text-2xl font-black {% if kpi.period_net_flow >= 0 %}text-emerald-700{% else %}text-rose-700{% endif %}">
+                {% if kpi.period_net_flow >= 0 %}+{% endif %}{{ kpi.period_net_flow|format_rupiah }}
+            </p>
+            <p class="mt-1 text-[11px] text-slate-500">Net inflow / outflow deposit</p>
+        </div>
+    </div>
+
+    <!-- Banner Integritas Data & Audit Rekonsiliasi -->
+    {% if kpi.is_reconciled %}
+        <div class="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-xs text-emerald-900 flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span><strong>Status Integritas Saldo: 100% Klop / Terverifikasi.</strong> Total saldo dompet saat ini (<strong>{{ kpi.total_wallet_pool|format_rupiah }}</strong>) sepenuhnya seimbang dengan rekam jejak mutasi ledger.</span>
+            </div>
+            <span class="hidden sm:inline-block rounded-full bg-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Balanced</span>
+        </div>
+    {% else %}
+        <div class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <span><strong>Perhatian: Terdapat Selisih Audit Sebesar {{ kpi.reconcile_diff|format_rupiah }}.</strong> Disarankan melakukan rekonsiliasi jurnal transaksi member.</span>
+            </div>
+            <span class="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">Audit Alert</span>
+        </div>
+    {% endif %}
+
+    <!-- Tabel Rekapitulasi per Member -->
+    <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Rincian Rekap Deposit per Anggota ({{ date_from|date:"d M Y" }} s/d {{ date_to|date:"d M Y" }})
+                </h2>
+                <p class="text-xs text-slate-500">Menampilkan {{ table_totals.count }} data member sesuai filter yang dipilih.</p>
+            </div>
+            <div class="text-xs text-slate-500 no-print">
+                <span>Diurutkan berdasarkan <strong>Saldo Terkini Tertinggi</strong></span>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+                <thead class="border-b bg-slate-100 text-xs font-semibold uppercase text-slate-600">
+                    <tr>
+                        <th class="px-3 py-3 text-center w-12">No</th>
+                        <th class="px-3 py-3">Kode</th>
+                        <th class="px-3 py-3">Nama Anggota</th>
+                        <th class="px-3 py-3">No. Telepon</th>
+                        <th class="px-3 py-3 text-right">Saldo Awal</th>
+                        <th class="px-3 py-3 text-right text-blue-700">Topup (+)</th>
+                        <th class="px-3 py-3 text-right text-amber-700">Belanja POS (-)</th>
+                        <th class="px-3 py-3 text-right text-rose-700">Penarikan (-)</th>
+                        <th class="px-3 py-3 text-right">Mutasi Bersih</th>
+                        <th class="px-3 py-3 text-right">Saldo Akhir Periode</th>
+                        <th class="px-3 py-3 text-right font-bold text-emerald-800">Saldo Saat Ini</th>
+                        <th class="px-3 py-3 text-center no-print">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-xs">
+                    {% for r in rows %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-3 py-2.5 text-center text-slate-500 font-medium">{{ forloop.counter }}</td>
+                            <td class="px-3 py-2.5 font-mono text-slate-700 font-medium">{{ r.member.code|default:"-" }}</td>
+                            <td class="px-3 py-2.5">
+                                <div class="font-semibold text-slate-900">{{ r.member.full_name }}</div>
+                                {% if not r.member.is_active %}
+                                    <span class="inline-block rounded bg-red-100 px-1.5 py-0.2 text-[9px] font-semibold text-red-700">Nonaktif</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2.5 text-slate-600">{{ r.member.phone|default:"-" }}</td>
+                            <td class="px-3 py-2.5 text-right font-mono text-slate-600">{{ r.saldo_awal|clean_number }}</td>
+                            <td class="px-3 py-2.5 text-right font-mono font-medium {% if r.topup > 0 %}text-blue-700 font-semibold{% else %}text-slate-400{% endif %}">
+                                {% if r.topup > 0 %}+{{ r.topup|clean_number }}{% else %}0{% endif %}
+                            </td>
+                            <td class="px-3 py-2.5 text-right font-mono font-medium {% if r.purchase > 0 %}text-amber-700 font-semibold{% else %}text-slate-400{% endif %}">
+                                {% if r.purchase > 0 %}-{{ r.purchase|clean_number }}{% else %}0{% endif %}
+                            </td>
+                            <td class="px-3 py-2.5 text-right font-mono font-medium {% if r.withdrawal > 0 %}text-rose-700 font-semibold{% else %}text-slate-400{% endif %}">
+                                {% if r.withdrawal > 0 %}-{{ r.withdrawal|clean_number }}{% else %}0{% endif %}
+                            </td>
+                            <td class="px-3 py-2.5 text-right font-mono font-medium {% if r.net_change > 0 %}text-emerald-700{% elif r.net_change < 0 %}text-rose-700{% else %}text-slate-400{% endif %}">
+                                {% if r.net_change > 0 %}+{% endif %}{{ r.net_change|clean_number }}
+                            </td>
+                            <td class="px-3 py-2.5 text-right font-mono font-semibold text-slate-800">{{ r.saldo_akhir|clean_number }}</td>
+                            <td class="px-3 py-2.5 text-right font-mono font-bold text-emerald-800 bg-emerald-50/30">{{ r.current_balance|clean_number }}</td>
+                            <td class="px-3 py-2.5 text-center no-print">
+                                <a href="{% url 'member_ledger' %}?q={{ r.member.code|default:r.member.phone }}" title="Lihat Histori Mutasi Buku Ledger"
+                                   class="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+                                    <span>Ledger</span>
+                                    <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                </a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="12" class="px-4 py-8 text-center text-slate-500">
+                                <p class="text-sm font-medium">Tidak ada data deposit member yang sesuai dengan filter.</p>
+                                <p class="text-xs text-slate-400 mt-1">Coba sesuaikan pilihan filter tampilan saldo atau hapus kata kunci pencarian.</p>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+                {% if rows %}
+                    <tfoot class="border-t-2 border-slate-300 bg-slate-50 text-xs font-bold text-slate-900">
+                        <tr>
+                            <td colspan="4" class="px-3 py-3 text-center uppercase tracking-wider">
+                                TOTAL ({{ table_totals.count }} Member)
+                            </td>
+                            <td class="px-3 py-3 text-right font-mono">{{ table_totals.saldo_awal|clean_number }}</td>
+                            <td class="px-3 py-3 text-right font-mono text-blue-700">+{{ table_totals.topup|clean_number }}</td>
+                            <td class="px-3 py-3 text-right font-mono text-amber-700">-{{ table_totals.purchase|clean_number }}</td>
+                            <td class="px-3 py-3 text-right font-mono text-rose-700">-{{ table_totals.withdrawal|clean_number }}</td>
+                            <td class="px-3 py-3 text-right font-mono {% if table_totals.net_change >= 0 %}text-emerald-700{% else %}text-rose-700{% endif %}">
+                                {% if table_totals.net_change > 0 %}+{% endif %}{{ table_totals.net_change|clean_number }}
+                            </td>
+                            <td class="px-3 py-3 text-right font-mono">{{ table_totals.saldo_akhir|clean_number }}</td>
+                            <td class="px-3 py-3 text-right font-mono text-emerald-900 bg-emerald-100/50">{{ table_totals.current_balance|clean_number }}</td>
+                            <td class="no-print"></td>
+                        </tr>
+                    </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    <!-- Catatan Laporan & Footer Tanda Tangan Cetak -->
+    <div class="print-only mt-8 text-xs text-slate-700">
+        <div class="flex justify-between items-end pt-12">
+            <div class="text-center w-48">
+                <p>Mengetahui,</p>
+                <p class="font-bold">Pengurus / Manajer</p>
+                <div class="h-20"></div>
+                <p class="border-t border-slate-400 pt-1 font-semibold">( ........................................ )</p>
+            </div>
+            <div class="text-center w-48">
+                <p>Dicetak Pada: {{ now|date:"d/m/Y H:i" }}</p>
+                <p class="font-bold">Kasir / Bagian Keuangan</p>
+                <div class="h-20"></div>
+                <p class="border-t border-slate-400 pt-1 font-semibold">( {{ request.user.get_full_name|default:request.user.username }} )</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

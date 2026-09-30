@@ -134,6 +134,7 @@
                                             <a href="{% url 'reorder_alert_page' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Reorder Alert</a>
                                         {% endif %}
                                         {% if perms.core.view_members %}
+                                            <a href="{% url 'member_deposit_report' %}" class="block rounded px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50">Rekap Saldo Deposit</a>
                                             <a href="{% url 'member_ledger' %}" class="block rounded px-3 py-2 text-sm hover:bg-slate-100">Ledger Member</a>
                                         {% endif %}
                                     </div>
@@ -244,6 +245,7 @@
                                     <a href="{% url 'reorder_alert_page' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Reorder Alert</a>
                                 {% endif %}
                                 {% if perms.core.view_members %}
+                                    <a href="{% url 'member_deposit_report' %}" class="rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">Rekap Saldo Deposit</a>
                                     <a href="{% url 'member_ledger' %}" class="rounded-md bg-slate-100 px-3 py-2 text-sm">Ledger Member</a>
                                 {% endif %}
                             {% endif %}

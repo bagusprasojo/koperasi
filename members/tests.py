@@ -286,3 +286,95 @@ class MemberCardPrintViewTests(TestCase):
         self.assertContains(resp, 'MBR-007')
         self.assertContains(resp, '<svg')
 
+
+class MemberDepositReportTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group, Permission
+        from django.contrib.contenttypes.models import ContentType
+        from core.constants import Role
+
+        self.client = Client()
+        self.admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN_TOKO)
+        self.member_group, _ = Group.objects.get_or_create(name=Role.MEMBER)
+
+        # Grant view_members permission to admin group
+        ct, _ = ContentType.objects.get_or_create(app_label='core', model='appaccess')
+        perm, _ = Permission.objects.get_or_create(codename='view_members', content_type=ct, defaults={'name': 'View members'})
+        self.admin_group.permissions.add(perm)
+
+        self.admin = User.objects.create_user(username='admin_deposit', password='admin-pass')
+        self.admin.groups.add(self.admin_group)
+
+        self.normal_member_user = User.objects.create_user(username='member_only', password='member-pass')
+        self.normal_member_user.groups.add(self.member_group)
+
+        # Create members
+        self.m1 = Member.objects.create(code='MBR-01', full_name='Budi Santoso', phone='0811111111', is_active=True)
+        self.w1 = get_or_create_wallet(self.m1)
+        self.c1 = MemberCard.objects.create(member=self.m1, card_number='CRD-01')
+
+        self.u2 = User.objects.create_user(username='MBR-02', password='pass-m2')
+        self.m2 = Member.objects.create(code='MBR-02', user=self.u2, full_name='Siti Rahma', phone='0822222222', is_active=True)
+        self.w2 = get_or_create_wallet(self.m2)
+        self.c2 = MemberCard.objects.create(member=self.m2, card_number='CRD-02')
+
+        # Add transactions
+        create_admin_topup(member=self.m1, amount=Decimal('100000.00'), created_by=self.admin, note='Topup 1')
+        charge_member_by_card(card_number=self.c1.card_number, amount=Decimal('30000.00'), reference_code='SALE-01')
+
+        create_admin_topup(member=self.m2, amount=Decimal('50000.00'), created_by=self.admin, note='Topup 2')
+        create_admin_withdrawal(member=self.m2, amount=Decimal('10000.00'), member_password='pass-m2', created_by=self.admin, note='Tarik tunai')
+
+    def test_anonymous_redirects_to_login(self):
+        from django.urls import reverse
+        resp = self.client.get(reverse('member_deposit_report'))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_member_role_forbidden(self):
+        from django.urls import reverse
+        self.client.force_login(self.normal_member_user)
+        resp = self.client.get(reverse('member_deposit_report'))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_admin_can_view_deposit_report_and_kpi(self):
+        from django.urls import reverse
+        self.client.force_login(self.admin)
+        resp = self.client.get(reverse('member_deposit_report'))
+        self.assertEqual(resp.status_code, 200)
+
+        # Check KPI values in context
+        kpi = resp.context['kpi']
+        self.assertEqual(kpi['total_wallet_pool'], Decimal('110000.00'))  # 70000 + 40000
+        self.assertEqual(kpi['period_total_topup'], Decimal('150000.00'))
+        self.assertEqual(kpi['period_total_purchase'], Decimal('30000.00'))
+        self.assertEqual(kpi['period_total_withdrawal'], Decimal('10000.00'))
+        self.assertEqual(kpi['period_net_flow'], Decimal('110000.00'))
+        self.assertTrue(kpi['is_reconciled'])
+
+        # Check content rendered in HTML
+        self.assertContains(resp, 'Laporan Rekapitulasi &amp; Saldo Deposit Member')
+        self.assertContains(resp, 'Budi Santoso')
+        self.assertContains(resp, 'Siti Rahma')
+        self.assertContains(resp, '100% Klop / Terverifikasi')
+
+    def test_deposit_report_search_query(self):
+        from django.urls import reverse
+        self.client.force_login(self.admin)
+        resp = self.client.get(reverse('member_deposit_report') + '?q=Budi')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Budi Santoso')
+        self.assertNotContains(resp, 'Siti Rahma')
+
+    def test_deposit_report_export_csv(self):
+        from django.urls import reverse
+        self.client.force_login(self.admin)
+        resp = self.client.get(reverse('member_deposit_report_export_csv'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('text/csv', resp['Content-Type'])
+        content = resp.content.decode('utf-8-sig')
+        self.assertIn('LAPORAN REKAPITULASI & SALDO DEPOSIT MEMBER', content)
+        self.assertIn('Budi Santoso', content)
+        self.assertIn('Siti Rahma', content)
+        self.assertIn('110,000.00', content)
+
+

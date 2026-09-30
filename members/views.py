@@ -15,8 +15,8 @@ from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
-from django.db.models import Q
-from django.db.models import Count, Sum
+from django.db.models import Q, Count, Sum, Case, When, Value, F, DecimalField
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.http import FileResponse
 from django.conf import settings
@@ -28,6 +28,7 @@ from django.utils import timezone
 
 from core.decorators import role_required
 from core.constants import Role, STAFF_ROLES, MANAGEMENT_ROLES
+from core.models import StoreSetting
 from .permissions import can_access_topup_proof
 from .models import Member, MemberCard, MemberLedger, MemberTopUp, MemberWithdrawal
 from sales.models import Sale, SaleItem
@@ -892,6 +893,7 @@ def ledger_list(request):
     ledgers = MemberLedger.objects.select_related('member', 'card').order_by('-created_at')
     if query:
         ledgers = ledgers.filter(
+            Q(member__code__icontains=query) |
             Q(member__full_name__icontains=query) |
             Q(member__phone__icontains=query) |
             Q(card__card_number__icontains=query) |
@@ -1405,3 +1407,277 @@ def member_import_excel(request):
     return render(request, 'members/member_import.html', {
         'preview_mode': False,
     })
+
+
+def _get_member_deposit_report_data(request):
+    today = timezone.localdate()
+
+    date_from_raw = request.GET.get('date_from', '').strip()
+    date_to_raw = request.GET.get('date_to', '').strip()
+
+    try:
+        date_from = date.fromisoformat(date_from_raw) if date_from_raw else today.replace(day=1)
+    except (ValueError, TypeError):
+        date_from = today.replace(day=1)
+
+    try:
+        date_to = date.fromisoformat(date_to_raw) if date_to_raw else today
+    except (ValueError, TypeError):
+        date_to = today
+
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    balance_filter = request.GET.get('balance_filter', 'has_balance').strip()
+    q = request.GET.get('q', '').strip()
+
+    members_qs = Member.objects.select_related('wallet').order_by('full_name')
+    if q:
+        members_qs = members_qs.filter(
+            Q(code__icontains=q) |
+            Q(full_name__icontains=q) |
+            Q(phone__icontains=q)
+        )
+
+    # 1. Overall System KPI Metrics
+    total_active_members = Member.objects.filter(is_active=True).count()
+    total_all_members = Member.objects.count()
+
+    DECIMAL_14_2 = DecimalField(max_digits=14, decimal_places=2)
+    ZERO_DECIMAL = Value(Decimal('0.00'), output_field=DECIMAL_14_2)
+
+    total_wallet_pool = (
+        Member.objects
+        .aggregate(total=Coalesce(Sum('wallet__balance'), Decimal('0.00'), output_field=DECIMAL_14_2))
+    )['total'] or Decimal('0.00')
+
+    members_with_balance_count = (
+        Member.objects
+        .filter(wallet__balance__gt=0)
+        .count()
+    )
+
+    all_time_in = (
+        MemberLedger.objects
+        .filter(txn_type__in=DEPOSIT_IN_TYPES)
+        .aggregate(total=Coalesce(Sum('amount'), Decimal('0.00'), output_field=DECIMAL_14_2))
+    )['total'] or Decimal('0.00')
+
+    all_time_out = (
+        MemberLedger.objects
+        .filter(txn_type__in=DEPOSIT_OUT_TYPES)
+        .aggregate(total=Coalesce(Sum('amount'), Decimal('0.00'), output_field=DECIMAL_14_2))
+    )['total'] or Decimal('0.00')
+
+    expected_wallet_pool = all_time_in - all_time_out
+    is_reconciled = (total_wallet_pool == expected_wallet_pool)
+    reconcile_diff = total_wallet_pool - expected_wallet_pool
+
+    # 2. Overall Period Ledger Totals
+    period_ledgers = MemberLedger.objects.filter(created_at__date__gte=date_from, created_at__date__lte=date_to)
+    period_kpi = period_ledgers.aggregate(
+        total_topup=Coalesce(Sum(Case(When(txn_type=MemberLedger.TYPE_TOPUP, then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+        total_purchase=Coalesce(Sum(Case(When(txn_type=MemberLedger.TYPE_PURCHASE, then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+        total_withdrawal=Coalesce(Sum(Case(When(txn_type=MemberLedger.TYPE_WITHDRAWAL, then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+        total_other_in=Coalesce(Sum(Case(When(txn_type__in=[MemberLedger.TYPE_REFUND, MemberLedger.TYPE_REVERSAL_WITHDRAWAL], then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+        total_other_out=Coalesce(Sum(Case(When(txn_type=MemberLedger.TYPE_REVERSAL_TOPUP, then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+    )
+    period_total_topup = period_kpi['total_topup'] or Decimal('0.00')
+    period_total_purchase = period_kpi['total_purchase'] or Decimal('0.00')
+    period_total_withdrawal = period_kpi['total_withdrawal'] or Decimal('0.00')
+    period_total_other_in = period_kpi['total_other_in'] or Decimal('0.00')
+    period_total_other_out = period_kpi['total_other_out'] or Decimal('0.00')
+
+    period_total_in = period_total_topup + period_total_other_in
+    period_total_out = period_total_purchase + period_total_withdrawal + period_total_other_out
+    period_net_flow = period_total_in - period_total_out
+
+    # 3. Pre-period mutasi per member (< date_from) for saldo_awal
+    pre_stats = (
+        MemberLedger.objects
+        .filter(created_at__date__lt=date_from)
+        .values('member_id')
+        .annotate(
+            pre_in=Coalesce(Sum(Case(When(txn_type__in=DEPOSIT_IN_TYPES, then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+            pre_out=Coalesce(Sum(Case(When(txn_type__in=DEPOSIT_OUT_TYPES, then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+        )
+    )
+    pre_map = {row['member_id']: (row['pre_in'] or Decimal('0.00')) - (row['pre_out'] or Decimal('0.00')) for row in pre_stats}
+
+    # 4. In-period mutasi per member
+    period_stats = (
+        MemberLedger.objects
+        .filter(created_at__date__gte=date_from, created_at__date__lte=date_to)
+        .values('member_id')
+        .annotate(
+            topup=Coalesce(Sum(Case(When(txn_type=MemberLedger.TYPE_TOPUP, then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+            purchase=Coalesce(Sum(Case(When(txn_type=MemberLedger.TYPE_PURCHASE, then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+            withdrawal=Coalesce(Sum(Case(When(txn_type=MemberLedger.TYPE_WITHDRAWAL, then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+            other_in=Coalesce(Sum(Case(When(txn_type__in=[MemberLedger.TYPE_REFUND, MemberLedger.TYPE_REVERSAL_WITHDRAWAL], then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+            other_out=Coalesce(Sum(Case(When(txn_type=MemberLedger.TYPE_REVERSAL_TOPUP, then='amount'), default=ZERO_DECIMAL, output_field=DECIMAL_14_2)), Decimal('0.00'), output_field=DECIMAL_14_2),
+        )
+    )
+    period_map = {row['member_id']: row for row in period_stats}
+
+    rows = []
+    for m in members_qs:
+        current_bal = m.wallet.balance if hasattr(m, 'wallet') and m.wallet else Decimal('0.00')
+        saldo_awal = pre_map.get(m.id, Decimal('0.00'))
+        p = period_map.get(m.id, {})
+        topup = p.get('topup') or Decimal('0.00')
+        purchase = p.get('purchase') or Decimal('0.00')
+        withdrawal = p.get('withdrawal') or Decimal('0.00')
+        other_in = p.get('other_in') or Decimal('0.00')
+        other_out = p.get('other_out') or Decimal('0.00')
+
+        total_in = topup + other_in
+        total_out = purchase + withdrawal + other_out
+        net_change = total_in - total_out
+        saldo_akhir = saldo_awal + net_change
+
+        if balance_filter == 'has_balance':
+            if current_bal == 0 and saldo_awal == 0 and total_in == 0 and total_out == 0:
+                continue
+        elif balance_filter == 'positive_only':
+            if current_bal <= 0:
+                continue
+        elif balance_filter == 'zero_balance':
+            if current_bal != 0:
+                continue
+
+        rows.append({
+            'member': m,
+            'saldo_awal': saldo_awal,
+            'topup': topup,
+            'purchase': purchase,
+            'withdrawal': withdrawal,
+            'other_in': other_in,
+            'other_out': other_out,
+            'total_in': total_in,
+            'total_out': total_out,
+            'net_change': net_change,
+            'saldo_akhir': saldo_akhir,
+            'current_balance': current_bal,
+        })
+
+    rows.sort(key=lambda r: (-r['current_balance'], r['member'].full_name))
+
+    table_totals = {
+        'count': len(rows),
+        'saldo_awal': sum((r['saldo_awal'] for r in rows), Decimal('0.00')),
+        'topup': sum((r['topup'] for r in rows), Decimal('0.00')),
+        'purchase': sum((r['purchase'] for r in rows), Decimal('0.00')),
+        'withdrawal': sum((r['withdrawal'] for r in rows), Decimal('0.00')),
+        'total_in': sum((r['total_in'] for r in rows), Decimal('0.00')),
+        'total_out': sum((r['total_out'] for r in rows), Decimal('0.00')),
+        'net_change': sum((r['net_change'] for r in rows), Decimal('0.00')),
+        'saldo_akhir': sum((r['saldo_akhir'] for r in rows), Decimal('0.00')),
+        'current_balance': sum((r['current_balance'] for r in rows), Decimal('0.00')),
+    }
+
+    return {
+        'date_from': date_from,
+        'date_to': date_to,
+        'balance_filter': balance_filter,
+        'query': q,
+        'rows': rows,
+        'table_totals': table_totals,
+        'kpi': {
+            'total_wallet_pool': total_wallet_pool,
+            'total_active_members': total_active_members,
+            'total_all_members': total_all_members,
+            'members_with_balance_count': members_with_balance_count,
+            'period_total_topup': period_total_topup,
+            'period_total_purchase': period_total_purchase,
+            'period_total_withdrawal': period_total_withdrawal,
+            'period_total_other_in': period_total_other_in,
+            'period_total_other_out': period_total_other_out,
+            'period_total_in': period_total_in,
+            'period_total_out': period_total_out,
+            'period_net_flow': period_net_flow,
+            'is_reconciled': is_reconciled,
+            'reconcile_diff': reconcile_diff,
+        }
+    }
+
+
+@role_required(*STAFF_ROLES, perm='view_members')
+def member_deposit_report(request):
+    data = _get_member_deposit_report_data(request)
+    store_setting = StoreSetting.get_settings()
+    context = {
+        **data,
+        'store_setting': store_setting,
+    }
+    return render(request, 'members/member_deposit_report.html', context)
+
+
+@role_required(*STAFF_ROLES, perm='view_members')
+def member_deposit_report_export_csv(request):
+    data = _get_member_deposit_report_data(request)
+    date_from_str = data['date_from'].strftime('%Y%m%d')
+    date_to_str = data['date_to'].strftime('%Y%m%d')
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="rekap_deposit_member_{date_from_str}_{date_to_str}.csv"'
+
+    response.write('\ufeff'.encode('utf8'))
+    writer = csv.writer(response)
+
+    writer.writerow(['LAPORAN REKAPITULASI & SALDO DEPOSIT MEMBER'])
+    writer.writerow(['Periode:', f"{data['date_from'].strftime('%d/%m/%Y')} s/d {data['date_to'].strftime('%d/%m/%Y')}"])
+    writer.writerow(['Total Saldo Mengendap (Liabilitas Koperasi):', f"Rp {data['kpi']['total_wallet_pool']:,.2f}"])
+    writer.writerow(['Status Integritas Data:', '100% Klop / Terverifikasi' if data['kpi']['is_reconciled'] else f"Selisih Rp {data['kpi']['reconcile_diff']:,.2f}"])
+    writer.writerow([])
+
+    writer.writerow([
+        'No',
+        'Kode Member',
+        'Nama Lengkap',
+        'No. Telepon',
+        'Status Member',
+        'Saldo Awal Periode',
+        'Total Topup (+)',
+        'Total Belanja POS (-)',
+        'Total Penarikan (-)',
+        'Mutasi Bersih',
+        'Saldo Akhir Periode',
+        'Saldo Terkini',
+    ])
+
+    for idx, row in enumerate(data['rows'], 1):
+        m = row['member']
+        writer.writerow([
+            idx,
+            m.code or '-',
+            m.full_name,
+            m.phone or '-',
+            'Aktif' if m.is_active else 'Nonaktif',
+            f"{row['saldo_awal']:,.2f}",
+            f"{row['topup']:,.2f}",
+            f"{row['purchase']:,.2f}",
+            f"{row['withdrawal']:,.2f}",
+            f"{row['net_change']:,.2f}",
+            f"{row['saldo_akhir']:,.2f}",
+            f"{row['current_balance']:,.2f}",
+        ])
+
+    totals = data['table_totals']
+    writer.writerow([])
+    writer.writerow([
+        'TOTAL',
+        '-',
+        f"{totals['count']} Member",
+        '-',
+        '-',
+        f"{totals['saldo_awal']:,.2f}",
+        f"{totals['topup']:,.2f}",
+        f"{totals['purchase']:,.2f}",
+        f"{totals['withdrawal']:,.2f}",
+        f"{totals['net_change']:,.2f}",
+        f"{totals['saldo_akhir']:,.2f}",
+        f"{totals['current_balance']:,.2f}",
+    ])
+
+    return response
+

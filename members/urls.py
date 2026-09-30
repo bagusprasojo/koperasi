@@ -33,4 +33,6 @@ urlpatterns = [
     path('withdrawal/<uuid:uuid>/', views.withdrawal_detail, name='member_withdrawal_detail'),
     path('withdrawal/<uuid:uuid>/reverse/', views.withdrawal_reverse_action, name='member_withdrawal_reverse'),
     path('ledger/', views.ledger_list, name='member_ledger'),
+    path('deposit/report/', views.member_deposit_report, name='member_deposit_report'),
+    path('deposit/report/export/', views.member_deposit_report_export_csv, name='member_deposit_report_export_csv'),
 ]
