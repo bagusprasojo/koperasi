@@ -3,7 +3,7 @@
 
 {% block title %}Cetak Kartu Member Masal ({{ total_cards }} Kartu) | POS Koperasi{% endblock %}
 
-{% block extra_head %}
+{% block content %}
 <style>
 /* Styling Kartu Ukuran Standar ISO CR80 (85.6mm x 54mm) */
 .id-card-wrapper {
@@ -27,19 +27,15 @@
         flex-wrap: wrap;
         gap: 1.5rem;
         justify-content: center;
-        padding: 1rem 0;
+        padding: 1.5rem 0;
     }
     .id-card-wrapper {
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-        border: 1px dashed #cbd5e1;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
     }
 }
 
 @media print {
-    @page {
-        size: A4 portrait;
-        margin: 8mm 6mm;
-    }
+    /* Sembunyikan elemen non-cetak */
     header, nav, aside, footer, .no-print {
         display: none !important;
     }
@@ -50,58 +46,43 @@
         padding: 0 !important;
     }
     .print-sheet {
-        display: grid !important;
-        grid-template-columns: repeat(2, 85.6mm) !important;
-        gap: 5mm 8mm !important;
-        justify-content: center !important;
-        padding: 0 !important;
-        margin: 0 auto !important;
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        gap: 10mm !important;
+        padding: 10mm !important;
+        justify-content: flex-start !important;
     }
     .id-card-wrapper {
         border: 1px dashed #94a3b8 !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
-        box-shadow: none !important;
     }
 }
 </style>
-{% endblock %}
 
-{% block content %}
-<div class="mx-auto max-w-7xl space-y-6" x-data="{ layoutMode: 'front_only' }">
+<div class="mx-auto max-w-5xl space-y-6" x-data="{ showBackSide: true }">
     <!-- Action Bar & Panduan Cetak (No Print) -->
     <div class="no-print rounded-xl bg-white p-6 shadow-sm border border-slate-200">
         <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
                 <div class="flex items-center gap-2">
                     <span class="rounded-lg bg-emerald-100 p-2 text-emerald-700">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
                     </span>
                     <h1 class="text-xl font-bold text-slate-900">Cetak Kartu Member Masal (Bulk Print)</h1>
                 </div>
                 <p class="mt-1 text-xs text-slate-500">
-                    Menampilkan <strong>{{ total_cards }} kartu member</strong> siap dicetak sekaligus pada lembar kertas A4 (format grid 2 kolom).
+                    Menampilkan <strong>{{ total_cards }} kartu anggota</strong> siap cetak sekaligus dengan standar kartu resmi Koperasi Pondok Sayur.
                 </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <a href="{% url 'member_list' %}" class="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs">
-                    &larr; Kembali ke Daftar Member
+                    &larr; Kembali ke Daftar Anggota
                 </a>
-
-                <!-- Switch Mode Cetak -->
-                <div class="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-xs font-semibold">
-                    <button type="button" @click="layoutMode = 'front_only'"
-                        :class="layoutMode === 'front_only' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
-                        class="rounded-md px-3 py-1.5 transition-all">
-                        Sisi Depan Saja (Hemat A4)
-                    </button>
-                    <button type="button" @click="layoutMode = 'front_back'"
-                        :class="layoutMode === 'front_back' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
-                        class="rounded-md px-3 py-1.5 transition-all">
-                        Depan &amp; Belakang
-                    </button>
-                </div>
-
+                <button type="button" @click="showBackSide = !showBackSide" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs">
+                    <span x-text="showBackSide ? 'Sembunyikan Sisi Belakang' : 'Tampilkan Sisi Belakang'"></span>
+                </button>
                 <button type="button" onclick="window.print()" class="rounded-lg bg-slate-900 px-5 py-2 text-xs font-bold text-white hover:bg-slate-800 shadow-md transition-colors flex items-center gap-2">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                     <span>Cetak Semua Kartu ({{ total_cards }})</span>
@@ -113,17 +94,17 @@
         <div class="mt-4 rounded-lg bg-slate-50 p-3.5 text-xs text-slate-600 border border-slate-200/80 flex items-start gap-2.5">
             <svg class="h-5 w-5 text-blue-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             <div>
-                <strong class="font-semibold text-slate-800">Petunjuk Cetak Kertas A4:</strong>
+                <strong class="font-semibold text-slate-800">Petunjuk Cetak:</strong>
                 <ul class="mt-1 list-disc list-inside space-y-0.5 text-slate-500">
-                    <li><strong>Tata Letak A4:</strong> Kartu otomatis diatur berjejer dalam 2 kolom dengan garis batas potong putus-putus. Satu lembar A4 memuat hingga 8-10 kartu.</li>
-                    <li><strong>Skala Ukuran:</strong> Pada menu cetak browser (Ctrl + P), pastikan <em>Paper size</em> dipilih <strong>A4</strong> dan <em>Scale</em> diatur ke <strong>100% / Actual Size</strong> agar ukuran kartu persis standar ATM (85.6 &times; 54 mm).</li>
-                    <li><strong>Warna Kartu:</strong> Centang opsi <em>"Background graphics"</em> / <em>"Grafis latar belakang"</em> agar warna gradasi kartu tercetak sempurna.</li>
+                    <li><strong>Ukuran Kartu:</strong> Standar ATM/KTP (85.6 &times; 54 mm). Pada dialog print browser, pilih ukuran kertas <em>A4</em> atau <em>CR80</em> dengan skala <strong>100% (Actual Size)</strong>.</li>
+                    <li><strong>Warna Latar:</strong> Pastikan opsi <em>"Background graphics"</em> atau <em>"Cetak latar belakang"</em> di centang agar desain gradasi kartu tercetak sempurna.</li>
+                    <li><strong>Penggunaan di Kasir:</strong> Arahkan 2D barcode scanner / kamera kasir ke QR Code pada kartu ini di menu Kasir POS (shortcut F3).</li>
                 </ul>
             </div>
         </div>
     </div>
 
-    <!-- Lembar Kartu Siap Cetak (Multi-Card Print Grid) -->
+    <!-- Container Kartu Siap Cetak -->
     <div class="print-sheet card-preview-container">
         {% for item in card_items %}
             <!-- SISI DEPAN (FRONT SIDE) -->
@@ -132,16 +113,14 @@
                 <div class="flex items-start justify-between">
                     <div class="flex items-center gap-2">
                         <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-slate-900 font-black text-sm shadow">
-                            {{ store_initials }}
+                            PS
                         </div>
                         <div>
-                            <h2 class="text-[11px] font-black tracking-wider uppercase text-emerald-400 leading-tight">
-                                {{ store_setting.store_name|default:"KOPERASI PONDOK SAYUR"|upper }}
-                            </h2>
+                            <h2 class="text-[11px] font-black tracking-wider uppercase text-emerald-400 leading-tight">KOPERASI PONDOK SAYUR</h2>
                             <p class="text-[8px] tracking-widest uppercase text-slate-300 font-semibold">KARTU BELANJA ANGGOTA</p>
                         </div>
                     </div>
-                    <!-- Contactless Visual Icon -->
+                    <!-- Chip & Contactless Visual Icon -->
                     <div class="flex items-center gap-1.5 opacity-80">
                         <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path></svg>
                         <span class="text-[8px] font-bold text-slate-300 uppercase tracking-tighter">MEMBER</span>
@@ -194,30 +173,28 @@
                 </div>
             </div>
 
-            <!-- SISI BELAKANG (BACK SIDE - Opsional) -->
-            <div x-show="layoutMode === 'front_back'" class="id-card-wrapper bg-slate-100 text-slate-800 p-0 flex flex-col justify-between border border-slate-300 select-none">
+            <!-- SISI BELAKANG (BACK SIDE) -->
+            <div x-show="showBackSide" class="id-card-wrapper bg-slate-100 text-slate-800 p-0 flex flex-col justify-between border border-slate-300 select-none">
                 <!-- Magnetic Stripe Visual Bar -->
                 <div class="w-full h-8 bg-slate-900 mt-3"></div>
 
                 <!-- Syarat & Ketentuan -->
                 <div class="px-3.5 py-1 text-[7px] text-slate-600 space-y-1">
-                    <p class="font-bold text-[7.5px] text-slate-800 uppercase tracking-wider">Syarat &amp; Ketentuan Penggunaan:</p>
+                    <p class="font-bold text-[7.5px] text-slate-800 uppercase tracking-wider">Syarat & Ketentuan Penggunaan:</p>
                     <ol class="list-decimal list-inside space-y-0.5 leading-tight">
-                        <li>Kartu ini adalah identitas resmi anggota <strong>{{ store_setting.store_name|default:"Koperasi" }}</strong>.</li>
-                        <li>Tunjukkan QR Code pada kartu ini kepada kasir saat menyelesaikan transaksi belanja.</li>
-                        <li>Kartu dapat digunakan untuk pembayaran menggunakan saldo deposit anggota.</li>
+                        <li>Kartu ini adalah identitas resmi anggota <strong>Koperasi Pondok Sayur</strong>.</li>
+                        <li>Tunjukkan QR Code pada kartu ini kepada kasir sebelum menyelesaikan transaksi belanja.</li>
+                        <li>Kartu dapat digunakan untuk pembayaran menggunakan saldo dompet deposit anggota.</li>
                         <li>Kartu tidak dapat dipindahtangankan tanpa persetujuan pihak koperasi.</li>
-                        <li>Bila kartu ini hilang, segera laporkan ke Admin Koperasi untuk diblokir.</li>
+                        <li>Bila kartu ini hilang, segera laporkan ke Admin Koperasi untuk dilakukan pemblokiran.</li>
                     </ol>
                 </div>
 
                 <!-- Tanda Tangan & Footer Kontak -->
                 <div class="px-3.5 pb-2.5 pt-1 border-t border-slate-200 flex items-end justify-between text-[7px]">
                     <div>
-                        <p class="font-bold text-slate-800">{{ store_setting.store_name|default:"Koperasi" }}</p>
-                        {% if store_setting.store_phone %}
-                            <p class="text-slate-500">Layanan: {{ store_setting.store_phone }}</p>
-                        {% endif %}
+                        <p class="font-bold text-slate-800">Koperasi Konsumen Pondok Sayur</p>
+                        <p class="text-slate-500">Layanan Anggota: 0812-3456-7890</p>
                     </div>
                     <!-- Box Tanda Tangan -->
                     <div class="text-right">
