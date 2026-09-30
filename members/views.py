@@ -297,6 +297,9 @@ def member_card_print(request, uuid):
     qr_img = qrcode.make(qr_data, image_factory=factory, box_size=10, border=1)
     qr_svg = qr_img.to_string(encoding='unicode')
 
+    store_setting = StoreSetting.get_settings()
+    store_initials = (store_setting.store_name[:2] if store_setting.store_name else 'KP').upper()
+
     return render(
         request,
         'members/member_card_print.html',
@@ -306,6 +309,77 @@ def member_card_print(request, uuid):
             'wallet': wallet,
             'qr_svg': qr_svg,
             'qr_data': qr_data,
+            'store_setting': store_setting,
+            'store_initials': store_initials,
+        },
+    )
+
+
+@role_required(*STAFF_ROLES, perm='view_members')
+def member_card_bulk_print(request):
+    selected_uuids = request.POST.getlist('member_uuids')
+    if not selected_uuids:
+        ids_param = request.GET.get('ids', '').strip()
+        if ids_param:
+            selected_uuids = [u.strip() for u in ids_param.split(',') if u.strip()]
+
+    query = request.GET.get('q', '').strip()
+
+    members_qs = Member.objects.select_related('card', 'wallet', 'user').order_by('code', 'full_name')
+
+    if selected_uuids:
+        members_qs = members_qs.filter(uuid__in=selected_uuids)
+    elif query:
+        members_qs = members_qs.filter(
+            Q(code__icontains=query) |
+            Q(full_name__icontains=query) |
+            Q(phone__icontains=query)
+        )
+    else:
+        members_qs = members_qs.filter(is_active=True)
+
+    members_list = list(members_qs)
+
+    if not members_list:
+        messages.warning(request, 'Tidak ada data member yang dipilih untuk dicetak.')
+        return redirect('member_list')
+
+    factory = qrcode.image.svg.SvgPathImage
+    card_items = []
+
+    for m in members_list:
+        card = getattr(m, 'card', None)
+        if not card:
+            card_num = (m.code or '').strip()
+            if not card_num or MemberCard.objects.filter(card_number=card_num).exists():
+                card_num = f"MBR{m.id:05d}"
+            card = MemberCard.objects.create(
+                member=m,
+                card_number=card_num,
+                status=MemberCard.STATUS_ACTIVE,
+            )
+        qr_data = card.card_number
+        qr_img = qrcode.make(qr_data, image_factory=factory, box_size=10, border=1)
+        qr_svg = qr_img.to_string(encoding='unicode')
+        card_items.append({
+            'member': m,
+            'card': card,
+            'qr_svg': qr_svg,
+            'qr_data': qr_data,
+        })
+
+    store_setting = StoreSetting.get_settings()
+    store_initials = (store_setting.store_name[:2] if store_setting.store_name else 'KP').upper()
+
+    return render(
+        request,
+        'members/member_card_bulk_print.html',
+        {
+            'card_items': card_items,
+            'total_cards': len(card_items),
+            'store_setting': store_setting,
+            'store_initials': store_initials,
+            'query': query,
         },
     )
 

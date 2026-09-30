@@ -13,6 +13,7 @@ urlpatterns = [
     path('<uuid:uuid>/delete/', views.member_delete, name='member_delete'),
     path('cards/', views.card_list, name='card_list'),
     path('cards/create/', views.card_create, name='card_create'),
+    path('cards/bulk-print/', views.member_card_bulk_print, name='member_card_bulk_print'),
     path('cards/<uuid:uuid>/', views.card_detail, name='card_detail'),
     path('cards/<uuid:uuid>/edit/', views.card_edit, name='card_edit'),
     path('cards/<uuid:uuid>/delete/', views.card_delete, name='card_delete'),

@@ -378,3 +378,73 @@ class MemberDepositReportTests(TestCase):
         self.assertIn('110,000.00', content)
 
 
+class MemberCardBulkPrintTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group, Permission
+        from django.contrib.contenttypes.models import ContentType
+        from core.constants import Role
+
+        self.client = Client()
+        self.admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN_TOKO)
+        self.member_group, _ = Group.objects.get_or_create(name=Role.MEMBER)
+
+        ct, _ = ContentType.objects.get_or_create(app_label='core', model='appaccess')
+        perm, _ = Permission.objects.get_or_create(codename='view_members', content_type=ct, defaults={'name': 'View members'})
+        self.admin_group.permissions.add(perm)
+
+        self.admin = User.objects.create_user(username='admin_bulk_card', password='admin-pass')
+        self.admin.groups.add(self.admin_group)
+
+        self.normal_member_user = User.objects.create_user(username='normal_user', password='pass')
+        self.normal_member_user.groups.add(self.member_group)
+
+        self.m1 = Member.objects.create(code='MBR-001', full_name='Ahmad Dahlan', phone='08111222333', is_active=True)
+        self.m2 = Member.objects.create(code='MBR-002', full_name='Fatmawati Sukarno', phone='08222333444', is_active=True)
+        self.m3 = Member.objects.create(code='MBR-003', full_name='Ki Hajar Dewantara', phone='08333444555', is_active=False)
+
+    def test_bulk_print_requires_login(self):
+        from django.urls import reverse
+        resp = self.client.get(reverse('member_card_bulk_print'))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_bulk_print_forbidden_for_member_role(self):
+        from django.urls import reverse
+        self.client.force_login(self.normal_member_user)
+        resp = self.client.get(reverse('member_card_bulk_print'))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_bulk_print_with_selected_uuids_post(self):
+        from django.urls import reverse
+        self.client.force_login(self.admin)
+        resp = self.client.post(reverse('member_card_bulk_print'), {
+            'member_uuids': [str(self.m1.uuid), str(self.m2.uuid)]
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Ahmad Dahlan')
+        self.assertContains(resp, 'Fatmawati Sukarno')
+        self.assertNotContains(resp, 'Ki Hajar Dewantara')
+        self.assertContains(resp, 'Cetak Semua Kartu (2)')
+
+        # Ensure cards were auto-created
+        self.m1.refresh_from_db()
+        self.m2.refresh_from_db()
+        self.assertIsNotNone(self.m1.card)
+        self.assertIsNotNone(self.m2.card)
+
+    def test_bulk_print_with_query_param(self):
+        from django.urls import reverse
+        self.client.force_login(self.admin)
+        resp = self.client.get(reverse('member_card_bulk_print') + '?q=Fatmawati')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Fatmawati Sukarno')
+        self.assertNotContains(resp, 'Ahmad Dahlan')
+
+    def test_bulk_print_empty_selection_redirects(self):
+        from django.urls import reverse
+        self.client.force_login(self.admin)
+        resp = self.client.get(reverse('member_card_bulk_print') + '?q=NotExistentPersonXYZ')
+        self.assertEqual(resp.status_code, 302)
+        self.assertRedirects(resp, reverse('member_list'))
+
+
+
