@@ -126,82 +126,6 @@
         </form>
     </div>
 
-    <!-- KPI Summary Cards -->
-    <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <!-- Total Saldo Mengendap (Kewajiban) -->
-        <div class="col-span-2 sm:col-span-1 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
-            <div class="flex items-center justify-between">
-                <p class="text-xs font-semibold text-emerald-800 uppercase tracking-wide">Saldo Mengendap</p>
-                <span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">Liabilitas</span>
-            </div>
-            <p class="mt-2 text-2xl font-black text-emerald-900">{{ kpi.total_wallet_pool|format_rupiah }}</p>
-            <p class="mt-1 text-[11px] text-emerald-700">
-                <span class="font-bold">{{ kpi.members_with_balance_count }}</span> dari {{ kpi.total_all_members }} member memiliki saldo
-            </p>
-        </div>
-
-        <!-- Total Topup Periode -->
-        <div class="rounded-xl border border-blue-200 bg-blue-50/50 p-4 shadow-sm">
-            <div class="flex items-center justify-between">
-                <p class="text-xs font-semibold text-blue-800 uppercase tracking-wide">Topup Masuk (+)</p>
-                <span class="text-xs">📥</span>
-            </div>
-            <p class="mt-2 text-2xl font-black text-blue-900">{{ kpi.period_total_topup|format_rupiah }}</p>
-            <p class="mt-1 text-[11px] text-blue-700">Setoran tunai/transfer periode ini</p>
-        </div>
-
-        <!-- Total Belanja POS Periode -->
-        <div class="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
-            <div class="flex items-center justify-between">
-                <p class="text-xs font-semibold text-amber-800 uppercase tracking-wide">Belanja POS (-)</p>
-                <span class="text-xs">🛒</span>
-            </div>
-            <p class="mt-2 text-2xl font-black text-amber-900">{{ kpi.period_total_purchase|format_rupiah }}</p>
-            <p class="mt-1 text-[11px] text-amber-700">Deposit terserap jadi omzet kasir</p>
-        </div>
-
-        <!-- Total Penarikan Periode -->
-        <div class="rounded-xl border border-rose-200 bg-rose-50/50 p-4 shadow-sm">
-            <div class="flex items-center justify-between">
-                <p class="text-xs font-semibold text-rose-800 uppercase tracking-wide">Penarikan Saldo (-)</p>
-                <span class="text-xs">📤</span>
-            </div>
-            <p class="mt-2 text-2xl font-black text-rose-900">{{ kpi.period_total_withdrawal|format_rupiah }}</p>
-            <p class="mt-1 text-[11px] text-rose-700">Tarik tunai saldo oleh anggota</p>
-        </div>
-
-        <!-- Arus Bersih Periode -->
-        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div class="flex items-center justify-between">
-                <p class="text-xs font-semibold text-slate-700 uppercase tracking-wide">Arus Bersih Periode</p>
-                <span class="text-xs">🔄</span>
-            </div>
-            <p class="mt-2 text-2xl font-black {% if kpi.period_net_flow >= 0 %}text-emerald-700{% else %}text-rose-700{% endif %}">
-                {% if kpi.period_net_flow >= 0 %}+{% endif %}{{ kpi.period_net_flow|format_rupiah }}
-            </p>
-            <p class="mt-1 text-[11px] text-slate-500">Net inflow / outflow deposit</p>
-        </div>
-    </div>
-
-    <!-- Banner Integritas Data & Audit Rekonsiliasi -->
-    {% if kpi.is_reconciled %}
-        <div class="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-xs text-emerald-900 flex items-center justify-between shadow-sm">
-            <div class="flex items-center gap-2">
-                <svg class="w-5 h-5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span><strong>Status Integritas Saldo: 100% Klop / Terverifikasi.</strong> Total saldo dompet saat ini (<strong>{{ kpi.total_wallet_pool|format_rupiah }}</strong>) sepenuhnya seimbang dengan rekam jejak mutasi ledger.</span>
-            </div>
-            <span class="hidden sm:inline-block rounded-full bg-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Balanced</span>
-        </div>
-    {% else %}
-        <div class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 flex items-center justify-between shadow-sm">
-            <div class="flex items-center gap-2">
-                <svg class="w-5 h-5 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                <span><strong>Perhatian: Terdapat Selisih Audit Sebesar {{ kpi.reconcile_diff|format_rupiah }}.</strong> Disarankan melakukan rekonsiliasi jurnal transaksi member.</span>
-            </div>
-            <span class="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">Audit Alert</span>
-        </div>
-    {% endif %}
-
     <!-- Tabel Rekapitulasi per Member -->
     <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div class="p-4 border-b border-slate-200 bg-slate-50 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -211,8 +135,18 @@
                 </h2>
                 <p class="text-xs text-slate-500">Menampilkan {{ table_totals.count }} data member sesuai filter yang dipilih.</p>
             </div>
-            <div class="text-xs text-slate-500 no-print">
-                <span>Diurutkan berdasarkan <strong>Saldo Terkini Tertinggi</strong></span>
+            <div class="flex items-center gap-3 text-xs no-print">
+                {% if kpi.is_reconciled %}
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-800">
+                        <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                        <span>Status: 100% Klop / Terverifikasi</span>
+                    </span>
+                {% else %}
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-800">
+                        <span>⚠️ Selisih: {{ kpi.reconcile_diff|format_rupiah }}</span>
+                    </span>
+                {% endif %}
+                <span class="text-slate-500">Urut: <strong>Saldo Tertinggi</strong></span>
             </div>
         </div>
 
