@@ -100,8 +100,10 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': os.getenv('DB_HOST'),
         'PORT': os.getenv('DB_PORT'),
+        'TIME_ZONE': 'Asia/Jakarta',
         'OPTIONS': {
             'charset': 'utf8mb4',
+            'init_command': "SET time_zone = '+07:00'",
         },
     }
 }
@@ -137,7 +139,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Jakarta'
 
 USE_I18N = True
 
