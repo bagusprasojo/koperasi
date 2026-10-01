@@ -2,6 +2,7 @@ from decimal import Decimal, InvalidOperation
 import csv
 import io
 import json
+import os
 import qrcode
 import qrcode.image.svg
 from calendar import monthrange
@@ -582,6 +583,14 @@ def member_topup_request(request):
                 raise ValueError('Bukti transfer wajib diunggah.')
             if proof_file.size > (2 * 1024 * 1024):
                 raise ValueError('Ukuran bukti transfer maksimal 2MB.')
+            allowed_extensions = ('.jpg', '.jpeg', '.png', '.pdf')
+            file_ext = os.path.splitext(proof_file.name)[1].lower()
+            if file_ext not in allowed_extensions:
+                raise ValueError('Format bukti transfer tidak didukung. Harap unggah file gambar (JPG, PNG) atau dokumen PDF.')
+            if hasattr(proof_file, 'content_type') and proof_file.content_type:
+                allowed_mimes = ('image/jpeg', 'image/png', 'application/pdf')
+                if proof_file.content_type.lower() not in allowed_mimes:
+                    raise ValueError('Tipe konten file tidak valid (harus berupa berkas JPG, PNG, atau PDF).')
             request_member_topup(
                 member=member,
                 amount=amount,

@@ -447,4 +447,49 @@ class MemberCardBulkPrintTests(TestCase):
         self.assertRedirects(resp, reverse('member_list'))
 
 
+class MemberTopupUploadSecurityTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from core.constants import Role
+        self.user = User.objects.create_user(username='mbr_sec', password='password123')
+        grp, _ = Group.objects.get_or_create(name=Role.MEMBER)
+        self.user.groups.add(grp)
+        self.member = Member.objects.create(
+            code='MBRSEC',
+            user=self.user,
+            full_name='Security Member',
+            phone='08999999999',
+            is_active=True,
+        )
+
+    def test_disallow_unauthorized_file_extension(self):
+        from django.urls import reverse
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_login(self.user)
+        bad_file = SimpleUploadedFile('exploit.html', b'<h1>Bad File</h1>', content_type='text/html')
+        resp = self.client.post(reverse('member_topup_request'), {
+            'amount': '50000',
+            'note': 'Test bad file',
+            'proof_file': bad_file,
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Format bukti transfer tidak didukung')
+
+    def test_allow_valid_image_file(self):
+        from django.urls import reverse
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from members.models import MemberTopUp
+        self.client.force_login(self.user)
+        valid_file = SimpleUploadedFile('struk.jpg', b'\xff\xd8\xff\xe0test_jpeg', content_type='image/jpeg')
+        resp = self.client.post(reverse('member_topup_request'), {
+            'amount': '50000',
+            'note': 'Test valid file',
+            'proof_file': valid_file,
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Request topup dikirim')
+        self.assertTrue(MemberTopUp.objects.filter(member=self.member, amount=Decimal('50000')).exists())
+
+
+
 
