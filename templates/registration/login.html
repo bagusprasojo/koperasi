@@ -16,7 +16,16 @@
             <label class="mb-1 block text-sm font-medium">Password</label>
             <input type="password" name="password" class="w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-800">
         </div>
-        {% if form.errors %}
+        {% if form.non_field_errors %}
+            <div class="rounded-lg bg-red-50 p-3 text-xs text-red-700 border border-red-200 space-y-1">
+                {% for err in form.non_field_errors %}
+                    <p class="font-medium flex items-start gap-1.5">
+                        <svg class="w-4 h-4 shrink-0 text-red-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <span>{{ err }}</span>
+                    </p>
+                {% endfor %}
+            </div>
+        {% elif form.errors %}
             <p class="text-sm text-red-600">Username atau password salah.</p>
         {% endif %}
         <button class="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white">Login</button>

@@ -1273,5 +1273,57 @@ class StoreSettingsAndNegativeStockTests(TestCase):
         self.assertTrue(any('Terima Kasih Banyak' in line for line in receipt_lines))
 
 
+class LoginRateLimitSecurityTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.user = User.objects.create_user(username='victim_user', password='correct_password123')
+
+    def tearDown(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_successful_login_works(self):
+        from django.urls import reverse
+        resp = self.client.post(reverse('login'), {
+            'username': 'victim_user',
+            'password': 'correct_password123',
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['user'].is_authenticated)
+
+    def test_failed_login_warning_and_lockout(self):
+        from django.urls import reverse
+        login_url = reverse('login')
+
+        # 4 failed attempts
+        for i in range(1, 5):
+            resp = self.client.post(login_url, {
+                'username': 'victim_user',
+                'password': 'wrong_password',
+            })
+            self.assertEqual(resp.status_code, 200)
+            if i >= 3:
+                # Should show warning about remaining tries
+                self.assertContains(resp, 'Peringatan: Tersisa')
+
+        # 5th failed attempt -> locks out
+        resp5 = self.client.post(login_url, {
+            'username': 'victim_user',
+            'password': 'wrong_password',
+        })
+        self.assertEqual(resp5.status_code, 200)
+        self.assertContains(resp5, 'dikunci sementara')
+
+        # 6th attempt with CORRECT password must still be BLOCKED because of lockout!
+        resp6 = self.client.post(login_url, {
+            'username': 'victim_user',
+            'password': 'correct_password123',
+        })
+        self.assertEqual(resp6.status_code, 200)
+        self.assertContains(resp6, 'dikunci sementara')
+
+
+
 
 
