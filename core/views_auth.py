@@ -1,10 +1,12 @@
 import logging
 import math
-import time
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import views as auth_views
-from django.core.cache import cache
+from django.utils import timezone
+
+from .models import LoginSecurityRecord
 
 logger = logging.getLogger('security.auth')
 
@@ -19,7 +21,9 @@ def get_client_ip(request) -> str:
 
 class RateLimitedLoginView(auth_views.LoginView):
     """
-    Subclass LoginView dengan proteksi anti brute-force dan rate-limiting berbasis Django Cache:
+    Subclass LoginView dengan proteksi anti brute-force dan rate-limiting terpusat
+    menggunakan model database LoginSecurityRecord:
+    - Tersinkronisasi 100% di semua worker Gunicorn, proses server, dan multi-server.
     - Melacak percobaan gagal berdasarkan kombinasi Alamat IP dan Username.
     - Mengunci login selama LOGIN_LOCKOUT_DURATION detik jika gagal mencapai LOGIN_MAX_FAILED_ATTEMPTS kali.
     - Mencatat log audit keamanan saat terjadi kegagalan atau pemblokiran login.
@@ -29,33 +33,31 @@ class RateLimitedLoginView(auth_views.LoginView):
     def _get_max_attempts(self) -> int:
         return getattr(settings, 'LOGIN_MAX_FAILED_ATTEMPTS', 5)
 
-    def _get_lockout_duration(self) -> int:
-        return getattr(settings, 'LOGIN_LOCKOUT_DURATION', 900)
-
-    def _cache_keys(self, request, username: str = ''):
-        ip = get_client_ip(request)
-        clean_user = (username or '').strip().lower()
-        ip_attempts_key = f'auth_attempts_ip:{ip}'
-        user_attempts_key = f'auth_attempts_user:{clean_user}' if clean_user else None
-        ip_lock_key = f'auth_lock_ip:{ip}'
-        user_lock_key = f'auth_lock_user:{clean_user}' if clean_user else None
-        return ip, clean_user, ip_attempts_key, user_attempts_key, ip_lock_key, user_lock_key
+    def _get_lockout_duration_delta(self) -> timedelta:
+        seconds = getattr(settings, 'LOGIN_LOCKOUT_DURATION', 900)
+        return timedelta(seconds=seconds)
 
     def _check_lockout(self, request, username: str = ''):
-        """Memeriksa apakah IP atau Username saat ini sedang dalam status terkunci."""
-        now = time.time()
-        ip, clean_user, _, _, ip_lock_key, user_lock_key = self._cache_keys(request, username)
+        """Memeriksa apakah IP atau Username saat ini sedang dalam status terkunci di database."""
+        now = timezone.now()
+        ip = get_client_ip(request)
+        clean_user = (username or '').strip().lower()
 
-        ip_lock_until = cache.get(ip_lock_key)
-        if ip_lock_until and ip_lock_until > now:
-            remaining = max(1, math.ceil((ip_lock_until - now) / 60))
-            return True, f"Terlalu banyak percobaan login gagal dari IP Anda ({ip}). Akses dikunci sementara selama {remaining} menit."
+        identifiers = [f'ip:{ip}']
+        if clean_user:
+            identifiers.append(f'user:{clean_user}')
 
-        if user_lock_key:
-            user_lock_until = cache.get(user_lock_key)
-            if user_lock_until and user_lock_until > now:
-                remaining = max(1, math.ceil((user_lock_until - now) / 60))
-                return True, f"Akun '{clean_user}' dikunci sementara selama {remaining} menit karena terlalu banyak percobaan login yang gagal."
+        locked_record = LoginSecurityRecord.objects.filter(
+            identifier__in=identifiers,
+            locked_until__gt=now,
+        ).order_by('-locked_until').first()
+
+        if locked_record:
+            remaining_mins = max(1, math.ceil((locked_record.locked_until - now).total_seconds() / 60))
+            if locked_record.identifier.startswith('ip:'):
+                return True, f"Terlalu banyak percobaan login gagal dari IP Anda ({ip}). Akses dikunci sementara selama {remaining_mins} menit."
+            else:
+                return True, f"Akun '{clean_user}' dikunci sementara selama {remaining_mins} menit karena terlalu banyak percobaan login yang gagal."
 
         return False, None
 
@@ -78,44 +80,57 @@ class RateLimitedLoginView(auth_views.LoginView):
 
     def form_invalid(self, form):
         username = self.request.POST.get('username', '').strip()
-        now = time.time()
-        duration = self._get_lockout_duration()
+        now = timezone.now()
+        duration_delta = self._get_lockout_duration_delta()
         max_attempts = self._get_max_attempts()
-        ip, clean_user, ip_att_key, user_att_key, ip_lock_key, user_lock_key = self._cache_keys(self.request, username)
+        ip = get_client_ip(self.request)
+        clean_user = (username or '').strip().lower()
 
-        # Increment IP attempts
-        ip_attempts = cache.get(ip_att_key, 0) + 1
-        cache.set(ip_att_key, ip_attempts, timeout=duration)
+        # Update or create security records for IP and user
+        targets = [f'ip:{ip}']
+        if clean_user:
+            targets.append(f'user:{clean_user}')
 
-        # Increment User attempts
-        user_attempts = 0
-        if user_att_key:
-            user_attempts = cache.get(user_att_key, 0) + 1
-            cache.set(user_att_key, user_attempts, timeout=duration)
+        ip_record = None
+        user_record = None
+
+        for ident in targets:
+            rec, _ = LoginSecurityRecord.objects.get_or_create(identifier=ident)
+            # Reset jika percobaan gagal sebelumnya sudah lewat dari window durasi lockout
+            if rec.last_attempt_at and (now - rec.last_attempt_at) > duration_delta:
+                rec.failed_count = 0
+                rec.locked_until = None
+
+            rec.failed_count += 1
+            if rec.failed_count >= max_attempts:
+                rec.locked_until = now + duration_delta
+
+            rec.save()
+
+            if ident.startswith('ip:'):
+                ip_record = rec
+            else:
+                user_record = rec
 
         logger.warning(
             "Login gagal untuk user '%s' dari IP %s (IP attempts: %d/%d, User attempts: %d/%d)",
             username,
             ip,
-            ip_attempts,
+            ip_record.failed_count if ip_record else 0,
             max_attempts,
-            user_attempts,
+            user_record.failed_count if user_record else 0,
             max_attempts,
         )
 
-        # Periksa apakah mencapai batas penguncian
-        if ip_attempts >= max_attempts:
-            cache.set(ip_lock_key, now + duration, timeout=duration)
-            logger.error("IP %s DIKUNCI sementara selama %d detik karena gagal login %d kali.", ip, duration, max_attempts)
-            remaining_mins = math.ceil(duration / 60)
+        # Tambahkan pesan lockout atau peringatan jika mendekati batas
+        remaining_mins = math.ceil(duration_delta.total_seconds() / 60)
+        if ip_record and ip_record.failed_count >= max_attempts:
             form.add_error(None, f"Terlalu banyak percobaan login gagal dari IP Anda ({ip}). Akses dikunci sementara selama {remaining_mins} menit.")
-        elif user_attempts >= max_attempts and clean_user:
-            cache.set(user_lock_key, now + duration, timeout=duration)
-            logger.error("User '%s' DIKUNCI sementara selama %d detik karena gagal login %d kali.", clean_user, duration, max_attempts)
-            remaining_mins = math.ceil(duration / 60)
+        elif user_record and user_record.failed_count >= max_attempts:
             form.add_error(None, f"Akun '{clean_user}' dikunci sementara selama {remaining_mins} menit karena terlalu banyak percobaan login yang gagal.")
         else:
-            remaining_tries = max_attempts - max(ip_attempts, user_attempts)
+            max_failed = max(ip_record.failed_count if ip_record else 0, user_record.failed_count if user_record else 0)
+            remaining_tries = max_attempts - max_failed
             if remaining_tries <= 2:
                 form.add_error(None, f"Peringatan: Tersisa {remaining_tries} percobaan lagi sebelum akun/IP dikunci sementara.")
 
@@ -123,15 +138,14 @@ class RateLimitedLoginView(auth_views.LoginView):
 
     def form_valid(self, form):
         username = form.cleaned_data.get('username') or self.request.POST.get('username', '').strip()
-        ip, clean_user, ip_att_key, user_att_key, ip_lock_key, user_lock_key = self._cache_keys(self.request, username)
+        ip = get_client_ip(self.request)
+        clean_user = (username or '').strip().lower()
 
-        # Reset counters on success
-        cache.delete(ip_att_key)
-        cache.delete(ip_lock_key)
-        if user_att_key:
-            cache.delete(user_att_key)
-        if user_lock_key:
-            cache.delete(user_lock_key)
+        # Reset record kegagalan saat login berhasil
+        targets = [f'ip:{ip}']
+        if clean_user:
+            targets.append(f'user:{clean_user}')
+        LoginSecurityRecord.objects.filter(identifier__in=targets).delete()
 
         logger.info("Login BERHASIL untuk user '%s' dari IP %s.", username, ip)
         return super().form_valid(form)

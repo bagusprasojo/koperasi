@@ -1275,25 +1275,29 @@ class StoreSettingsAndNegativeStockTests(TestCase):
 
 class LoginRateLimitSecurityTests(TestCase):
     def setUp(self):
-        from django.core.cache import cache
-        cache.clear()
+        from core.models import LoginSecurityRecord
+        LoginSecurityRecord.objects.all().delete()
         self.user = User.objects.create_user(username='victim_user', password='correct_password123')
 
     def tearDown(self):
-        from django.core.cache import cache
-        cache.clear()
+        from core.models import LoginSecurityRecord
+        LoginSecurityRecord.objects.all().delete()
 
-    def test_successful_login_works(self):
+    def test_successful_login_works_and_cleans_records(self):
         from django.urls import reverse
+        from core.models import LoginSecurityRecord
         resp = self.client.post(reverse('login'), {
             'username': 'victim_user',
             'password': 'correct_password123',
         }, follow=True)
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.context['user'].is_authenticated)
+        # Verify no failure records exist
+        self.assertFalse(LoginSecurityRecord.objects.filter(identifier='user:victim_user').exists())
 
     def test_failed_login_warning_and_lockout(self):
         from django.urls import reverse
+        from core.models import LoginSecurityRecord
         login_url = reverse('login')
 
         # 4 failed attempts
@@ -1307,6 +1311,11 @@ class LoginRateLimitSecurityTests(TestCase):
                 # Should show warning about remaining tries
                 self.assertContains(resp, 'Peringatan: Tersisa')
 
+        # Verify failure count in DB
+        rec = LoginSecurityRecord.objects.get(identifier='user:victim_user')
+        self.assertEqual(rec.failed_count, 4)
+        self.assertIsNone(rec.locked_until)
+
         # 5th failed attempt -> locks out
         resp5 = self.client.post(login_url, {
             'username': 'victim_user',
@@ -1315,6 +1324,11 @@ class LoginRateLimitSecurityTests(TestCase):
         self.assertEqual(resp5.status_code, 200)
         self.assertContains(resp5, 'dikunci sementara')
 
+        # Verify DB is locked
+        rec.refresh_from_db()
+        self.assertEqual(rec.failed_count, 5)
+        self.assertIsNotNone(rec.locked_until)
+
         # 6th attempt with CORRECT password must still be BLOCKED because of lockout!
         resp6 = self.client.post(login_url, {
             'username': 'victim_user',
@@ -1322,6 +1336,9 @@ class LoginRateLimitSecurityTests(TestCase):
         })
         self.assertEqual(resp6.status_code, 200)
         self.assertContains(resp6, 'dikunci sementara')
+        # User must NOT be logged in!
+        self.assertFalse(resp6.context['user'].is_authenticated)
+
 
 
 

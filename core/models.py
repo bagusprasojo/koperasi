@@ -96,3 +96,23 @@ class StoreSetting(BaseModel):
                 receipt_footer = 'Terima Kasih Atas Kunjungan Anda'
                 pos_allow_negative_stock = False
             return FallbackSetting()
+
+
+class LoginSecurityRecord(models.Model):
+    """
+    Model database untuk melacak percobaan login gagal dan penguncian (lockout)
+    secara terpusat (tersinkronisasi di semua worker gunicorn dan server).
+    """
+    identifier = models.CharField(max_length=150, unique=True, db_index=True)
+    failed_count = models.PositiveIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(auto_now=True)
+    locked_until = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Audit Percobaan Login'
+        verbose_name_plural = 'Audit Percobaan Login'
+        ordering = ['-last_attempt_at']
+
+    def __str__(self):
+        return f"{self.identifier} (gagal: {self.failed_count})"
+
