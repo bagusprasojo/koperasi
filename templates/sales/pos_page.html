@@ -2,6 +2,7 @@
 {% block title %}Kasir | POS Koperasi{% endblock %}
 {% block content %}
 <div x-data="posApp()" x-init="init()" @keydown.window="handleShortcut($event)" class="grid gap-4 lg:grid-cols-12">
+    <div class="hidden">{% csrf_token %}</div>
     <div x-show="successMessage" x-cloak class="lg:col-span-12 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" x-text="successMessage"></div>
     <div class="rounded-xl bg-white p-4 shadow-sm lg:col-span-3">
         <h1 class="mb-3 text-lg font-semibold">Kasir POS</h1>
@@ -706,44 +707,58 @@ function posApp() {
                 this.subtotal = '0.00'; this.total = '0.00';
                 return;
             }
-            const items = this.lines.map(l => ({ product_id: l.product_id, qty: this.toNum(l.qty) }));
-            const res = await fetch('/sales/pos/api/price-preview', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCsrfToken() },
-                body: JSON.stringify({ items })
-            });
-            const data = await res.json();
-            if (!data.success) {
-                this.productWarning = data.message || 'Gagal memuat harga item.';
-                // Jika ada barang biasa yang pecahan, rapikan ke bilangan bulat
-                this.lines.forEach(l => {
-                    if (!l.allow_decimal_qty && (this.toNum(l.qty) % 1 !== 0)) {
-                        l.qty = Math.max(1, Math.floor(this.toNum(l.qty)) || 1);
-                    }
+            try {
+                const items = this.lines.map(l => ({ product_id: l.product_id, qty: this.toNum(l.qty) }));
+                const res = await fetch('/sales/pos/api/price-preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCsrfToken() },
+                    body: JSON.stringify({ items })
                 });
-                return;
+                if (!res.ok) {
+                    if (res.status === 403) {
+                        this.productWarning = '⚠️ Sesi atau token CSRF kedaluwarsa. Silakan refresh halaman (F5).';
+                    } else {
+                        const errData = await res.json().catch(() => ({}));
+                        this.productWarning = errData.message || `⚠️ Gagal memuat harga (Error ${res.status}).`;
+                    }
+                    return;
+                }
+                const data = await res.json();
+                if (!data.success) {
+                    this.productWarning = data.message || 'Gagal memuat harga item.';
+                    // Jika ada barang biasa yang pecahan, rapikan ke bilangan bulat
+                    this.lines.forEach(l => {
+                        if (!l.allow_decimal_qty && (this.toNum(l.qty) % 1 !== 0)) {
+                            l.qty = Math.max(1, Math.floor(this.toNum(l.qty)) || 1);
+                        }
+                    });
+                    return;
+                }
+                this.productWarning = '';
+                this.subtotal = data.data.subtotal;
+                this.total = data.data.total;
+                const byId = {};
+                (data.data.lines || []).forEach(x => { byId[String(x.product_id)] = x; });
+                this.lines = this.lines.map(old => {
+                    const latest = byId[String(old.product_id)];
+                    if (!latest) return old;
+                    return {
+                        ...old,
+                        qty: latest.qty,
+                        unit_price: latest.unit_price,
+                        line_total: latest.line_total,
+                        product_name: latest.product_name,
+                        stock: latest.stock !== undefined ? latest.stock : old.stock,
+                        unit: latest.unit || old.unit,
+                        allow_decimal_qty: latest.allow_decimal_qty !== undefined ? latest.allow_decimal_qty : old.allow_decimal_qty,
+                        is_consignment: latest.is_consignment !== undefined ? latest.is_consignment : old.is_consignment,
+                    };
+                });
+                this.syncPayment();
+            } catch (err) {
+                console.error('Error refreshPreview:', err);
+                this.productWarning = '⚠️ Terjadi gangguan koneksi saat memuat harga produk.';
             }
-            this.productWarning = '';
-            this.subtotal = data.data.subtotal;
-            this.total = data.data.total;
-            const byId = {};
-            (data.data.lines || []).forEach(x => { byId[String(x.product_id)] = x; });
-            this.lines = this.lines.map(old => {
-                const latest = byId[String(old.product_id)];
-                if (!latest) return old;
-                return {
-                    ...old,
-                    qty: latest.qty,
-                    unit_price: latest.unit_price,
-                    line_total: latest.line_total,
-                    product_name: latest.product_name,
-                    stock: latest.stock !== undefined ? latest.stock : old.stock,
-                    unit: latest.unit || old.unit,
-                    allow_decimal_qty: latest.allow_decimal_qty !== undefined ? latest.allow_decimal_qty : old.allow_decimal_qty,
-                    is_consignment: latest.is_consignment !== undefined ? latest.is_consignment : old.is_consignment,
-                };
-            });
-            this.syncPayment();
         },
         removeLine(productId) {
             this.lines = this.lines.filter(l => String(l.product_id) !== String(productId));
@@ -883,6 +898,8 @@ function posApp() {
             });
         },
         getCsrfToken() {
+            const input = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (input && input.value) return input.value;
             const m = document.cookie.match(/csrftoken=([^;]+)/);
             return m ? decodeURIComponent(m[1]) : '';
         },
