@@ -3,10 +3,12 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
+from django.utils import timezone
 
 from core.constants import Role
 from members.models import Member, MemberCard
-from sales.services import search_members
+from sales.models import Sale, SalePayment
+from sales.services import get_default_member, search_members
 
 User = get_user_model()
 
@@ -94,3 +96,96 @@ class PosMemberBarcodeScanTests(TestCase):
         self.assertGreaterEqual(len(rows), 1)
         self.assertEqual(rows[0]['code'], 'MBR-001')
         self.assertTrue(rows[0]['is_exact'])
+
+
+class SalesDailySummaryReportTests(TestCase):
+    def setUp(self):
+        self.admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN_TOKO)
+        self.user = User.objects.create_user(username='admin_test', password='password123')
+        self.user.groups.add(self.admin_group)
+
+        # Real member
+        self.member = Member.objects.create(
+            code='MBR-TEST',
+            full_name='Anggota Asli',
+            phone='08123456789',
+            is_active=True,
+        )
+
+        # Default walk-in non-member
+        self.non_member = get_default_member()
+
+        # 1. Transaction by real member
+        self.sale1 = Sale.objects.create(
+            sale_number='SL-TEST-001',
+            client_txn_id='client-001',
+            member=self.member,
+            subtotal=Decimal('50000.00'),
+            total=Decimal('50000.00'),
+            created_by=self.user,
+        )
+        SalePayment.objects.create(
+            sale=self.sale1,
+            method=SalePayment.METHOD_CASH,
+            amount=Decimal('50000.00'),
+            received_amount=Decimal('50000.00'),
+        )
+
+        # 2. Transaction by walk-in non-member (points to default member with phone='0000000000')
+        self.sale2 = Sale.objects.create(
+            sale_number='SL-TEST-002',
+            client_txn_id='client-002',
+            member=self.non_member,
+            subtotal=Decimal('25000.00'),
+            total=Decimal('25000.00'),
+            created_by=self.user,
+        )
+        SalePayment.objects.create(
+            sale=self.sale2,
+            method=SalePayment.METHOD_CASH,
+            amount=Decimal('25000.00'),
+            received_amount=Decimal('25000.00'),
+        )
+
+        # 3. Transaction with member=None (in case any transaction has null member)
+        self.sale3 = Sale.objects.create(
+            sale_number='SL-TEST-003',
+            client_txn_id='client-003',
+            member=None,
+            subtotal=Decimal('10000.00'),
+            total=Decimal('10000.00'),
+            created_by=self.user,
+        )
+        SalePayment.objects.create(
+            sale=self.sale3,
+            method=SalePayment.METHOD_CASH,
+            amount=Decimal('10000.00'),
+            received_amount=Decimal('10000.00'),
+        )
+
+    def test_daily_summary_correctly_separates_member_and_non_member(self):
+        self.client.force_login(self.user)
+        today_str = timezone.localdate().isoformat()
+        response = self.client.get(f'/sales/reports/daily-summary/?date_from={today_str}&date_to={today_str}')
+        self.assertEqual(response.status_code, 200)
+        rows = response.context['rows']
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        # Total transactions = 3
+        self.assertEqual(row['total_transactions'], 3)
+        # Real member = 1
+        self.assertEqual(row['member_transactions'], 1)
+        # Non-member (walk-in + null) = 2
+        self.assertEqual(row['non_member_transactions'], 2)
+
+    def test_daily_summary_export_csv_separates_member_and_non_member(self):
+        self.client.force_login(self.user)
+        today_str = timezone.localdate().isoformat()
+        response = self.client.get(f'/sales/reports/daily-summary/export/csv/?date_from={today_str}&date_to={today_str}')
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        lines = content.strip().splitlines()
+        self.assertEqual(len(lines), 2)  # header + 1 data line
+        data_parts = lines[1].split(',')
+        self.assertEqual(data_parts[6], '1')  # member_trx
+        self.assertEqual(data_parts[7], '2')  # non_member_trx

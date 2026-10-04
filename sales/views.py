@@ -428,8 +428,8 @@ def sales_daily_summary(request):
         .annotate(
             total_transactions=Count('id'),
             omzet=Sum('total'),
-            member_transactions=Count('id', filter=Q(member__isnull=False)),
-            non_member_transactions=Count('id', filter=Q(member__isnull=True)),
+            member_transactions=Count('id', filter=Q(member__isnull=False) & ~Q(member__phone='0000000000')),
+            non_member_transactions=Count('id', filter=Q(member__isnull=True) | Q(member__phone='0000000000')),
         )
         .order_by('-tx_date')
     )
@@ -553,8 +553,8 @@ def sales_daily_summary_export_csv(request):
         .annotate(
             total_transactions=Count('id'),
             omzet=Sum('total'),
-            member_transactions=Count('id', filter=Q(member__isnull=False)),
-            non_member_transactions=Count('id', filter=Q(member__isnull=True)),
+            member_transactions=Count('id', filter=Q(member__isnull=False) & ~Q(member__phone='0000000000')),
+            non_member_transactions=Count('id', filter=Q(member__isnull=True) | Q(member__phone='0000000000')),
             item_qty=Sum('items__qty'),
         )
         .order_by('-tx_date')
