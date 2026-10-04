@@ -127,7 +127,14 @@
 </div>
 
 <div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-    <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Transaksi POS Hari Ini</p><p class="mt-1 text-lg font-semibold">{{ admin_dashboard.kpi.sales_today_count }} trx</p><p class="text-sm text-slate-600">Omzet: Rp {{ admin_dashboard.kpi.sales_today_total|clean_number }}</p></div>
+    <a href="{% url 'sales_daily_summary_detail' admin_dashboard.today|date:'Y-m-d' %}" class="group block rounded-xl bg-white p-5 shadow-sm transition hover:shadow-md hover:border-blue-300 border border-transparent">
+        <div class="flex items-center justify-between">
+            <p class="text-sm text-slate-500 group-hover:text-blue-600 font-medium">Transaksi POS Hari Ini</p>
+            <span class="text-xs text-slate-400 group-hover:text-blue-600 transition">&rarr;</span>
+        </div>
+        <p class="mt-1 text-lg font-semibold text-slate-800 group-hover:text-blue-600">{{ admin_dashboard.kpi.sales_today_count }} trx</p>
+        <p class="text-sm text-slate-600">Omzet: Rp {{ admin_dashboard.kpi.sales_today_total|clean_number }}</p>
+    </a>
     <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Pembelian Hari Ini</p><p class="mt-1 text-lg font-semibold">{{ admin_dashboard.kpi.purchase_today_count }} trx</p><p class="text-sm text-slate-600">Nilai: Rp {{ admin_dashboard.kpi.purchase_today_total|clean_number }}</p></div>
     <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Topup Hari Ini</p><p class="mt-1 text-lg font-semibold">Approved {{ admin_dashboard.kpi.approved_topup_today }}</p><p class="text-sm text-slate-600">Rejected {{ admin_dashboard.kpi.rejected_topup_today }}</p></div>
     <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Master Data</p><p class="mt-1 text-sm font-semibold">Produk: {{ admin_dashboard.kpi.product_count }}</p><p class="text-sm text-slate-600">Supplier: {{ admin_dashboard.kpi.supplier_count }}</p><p class="text-sm text-slate-600">Member Aktif: {{ admin_dashboard.kpi.member_active_count }} / {{ admin_dashboard.kpi.member_total_count }}</p></div>

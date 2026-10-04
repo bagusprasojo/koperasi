@@ -5,6 +5,7 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
+from django.utils import timezone
 
 from core.constants import Role, CASHIER_ROLES, STAFF_ROLES
 from core.context_processors import role_flags
@@ -317,6 +318,8 @@ class RBACTests(TestCase):
         self.assertContains(resp_admin, 'Kasir (POS)')
         self.assertContains(resp_admin, 'Kulakan')
         self.assertContains(resp_admin, 'Kelola Staf')
+        today_str = timezone.localdate().isoformat()
+        self.assertContains(resp_admin, f'/sales/reports/daily-summary/{today_str}/')
 
         # 4. Member: Melihat portal member, TIDAK melihat modul staf
         self.client.force_login(self.member_user1)
