@@ -189,3 +189,36 @@ class SalesDailySummaryReportTests(TestCase):
         data_parts = lines[1].split(',')
         self.assertEqual(data_parts[6], '1')  # member_trx
         self.assertEqual(data_parts[7], '2')  # non_member_trx
+
+    def test_daily_summary_detail_pagination(self):
+        self.client.force_login(self.user)
+        today_str = timezone.localdate().isoformat()
+
+        # Create 22 more transactions so total = 25 (over page limit of 20)
+        for i in range(4, 26):
+            Sale.objects.create(
+                sale_number=f'SL-PAGINATE-{i:03d}',
+                client_txn_id=f'client-paginate-{i:03d}',
+                member=self.member,
+                subtotal=Decimal('10000.00'),
+                total=Decimal('10000.00'),
+                created_by=self.user,
+            )
+
+        # Page 1
+        resp_p1 = self.client.get(f'/sales/reports/daily-summary/{today_str}/?page=1')
+        self.assertEqual(resp_p1.status_code, 200)
+        self.assertIn('page_obj', resp_p1.context)
+        page_obj = resp_p1.context['page_obj']
+        self.assertEqual(page_obj.paginator.count, 25)
+        self.assertEqual(page_obj.paginator.num_pages, 2)
+        self.assertEqual(len(resp_p1.context['rows']), 20)
+        self.assertContains(resp_p1, 'Berikutnya')
+        self.assertNotContains(resp_p1, 'Sebelumnya')
+
+        # Page 2
+        resp_p2 = self.client.get(f'/sales/reports/daily-summary/{today_str}/?page=2')
+        self.assertEqual(resp_p2.status_code, 200)
+        self.assertEqual(len(resp_p2.context['rows']), 5)
+        self.assertContains(resp_p2, 'Sebelumnya')
+        self.assertNotContains(resp_p2, 'Berikutnya')

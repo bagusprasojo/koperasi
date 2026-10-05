@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.contrib import messages
 from django.db.models import Count, Sum, Q
 from django.db.models.functions import TruncDate
@@ -518,7 +519,7 @@ def sales_daily_summary_detail(request, tx_date):
         target_date = timezone.datetime.fromisoformat(tx_date).date()
     except Exception:
         messages.error(request, 'Format tanggal detail laporan tidak valid.')
-        return render(request, 'sales/daily_summary_detail.html', {'rows': [], 'tx_date': tx_date, 'query': ''})
+        return render(request, 'sales/daily_summary_detail.html', {'rows': [], 'tx_date': tx_date, 'query': '', 'page_obj': None})
     query = (request.GET.get('q') or '').strip()
     sales = Sale.objects.select_related('member', 'created_by').prefetch_related('payments').filter(created_at__date=target_date).order_by('-created_at')
     if query:
@@ -527,14 +528,21 @@ def sales_daily_summary_detail(request, tx_date):
             Q(member__full_name__icontains=query) |
             Q(created_by__username__icontains=query)
         )
+    paginator = Paginator(sales, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
     rows = []
-    for s in sales:
+    for s in page_obj:
         methods = sorted(set(p.get_method_display() for p in s.payments.all()))
         rows.append({'sale': s, 'methods': ', '.join(methods) if methods else '-'})
     return render(
         request,
         'sales/daily_summary_detail.html',
-        {'rows': rows, 'tx_date': target_date, 'query': query},
+        {
+            'page_obj': page_obj,
+            'rows': rows,
+            'tx_date': target_date,
+            'query': query,
+        },
     )
 
 

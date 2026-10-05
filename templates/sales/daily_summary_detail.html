@@ -45,5 +45,21 @@
             </tbody>
         </table>
     </div>
+
+    {% if page_obj %}
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+        <p class="text-slate-500">
+            Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }} (Total: {{ page_obj.paginator.count }} transaksi)
+        </p>
+        <div class="flex gap-2">
+            {% if page_obj.has_previous %}
+                <a href="?q={{ query }}&page={{ page_obj.previous_page_number }}" class="rounded-md border border-slate-300 bg-white px-3 py-1 text-slate-700 hover:bg-slate-50">Sebelumnya</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+                <a href="?q={{ query }}&page={{ page_obj.next_page_number }}" class="rounded-md border border-slate-300 bg-white px-3 py-1 text-slate-700 hover:bg-slate-50">Berikutnya</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
