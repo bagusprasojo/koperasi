@@ -320,6 +320,13 @@ class RBACTests(TestCase):
         self.assertContains(resp_admin, 'Kelola Staf')
         today_str = timezone.localdate().isoformat()
         self.assertContains(resp_admin, f'/sales/reports/daily-summary/{today_str}/')
+        self.assertContains(resp_admin, 'Omzet POS Hari Ini')
+        self.assertContains(resp_admin, 'Aksi Cepat')
+        self.assertContains(resp_admin, '5 Transaksi Kasir Terbaru Hari Ini')
+        self.assertContains(resp_admin, 'Produk Perlu Restok Segera')
+        self.assertIn('admin_dashboard', resp_admin.context)
+        self.assertIn('recent_sales', resp_admin.context['admin_dashboard'])
+        self.assertIn('low_stock_products', resp_admin.context['admin_dashboard'])
 
         # 4. Member: Melihat portal member, TIDAK melihat modul staf
         self.client.force_login(self.member_user1)

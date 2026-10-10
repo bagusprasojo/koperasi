@@ -20,7 +20,7 @@ def dashboard(request):
         from inventory.models import Product, Supplier, InventoryTransaction, DailyClosing
         from members.models import MemberTopUp
         from members.models import Member
-        from sales.models import Sale
+        from sales.models import Sale, SalePayment
         today = timezone.localdate()
         topup_stats = {
             'pending': MemberTopUp.objects.filter(status=MemberTopUp.STATUS_PENDING).count(),
@@ -34,12 +34,27 @@ def dashboard(request):
             ).count(),
         }
         sales_today_qs = Sale.objects.filter(created_at__date=today)
+        sales_today_count = sales_today_qs.count()
+        sales_today_total = sales_today_qs.aggregate(v=Sum('total'))['v'] or 0
+        cash_today = SalePayment.objects.filter(sale__created_at__date=today, method=SalePayment.METHOD_CASH).aggregate(v=Sum('amount'))['v'] or 0
+        deposit_today = SalePayment.objects.filter(sale__created_at__date=today, method=SalePayment.METHOD_MEMBER).aggregate(v=Sum('amount'))['v'] or 0
+
         purchase_today_qs = InventoryTransaction.objects.filter(
             tx_type=InventoryTransaction.TYPE_PURCHASE,
             tx_date=today,
         )
-        low_stock_count = Product.objects.filter(reorder_point__gt=0, stock__lte=F('reorder_point')).count()
+        low_stock_qs = Product.objects.filter(reorder_point__gt=0, stock__lte=F('reorder_point'))
+        low_stock_count = low_stock_qs.count()
+        low_stock_products = list(low_stock_qs.select_related('unit').order_by('stock')[:5])
         closing_today = DailyClosing.objects.filter(close_date=today).first()
+
+        recent_sales = list(
+            Sale.objects.select_related('member', 'created_by')
+            .prefetch_related('payments')
+            .filter(created_at__date=today)
+            .order_by('-created_at')[:5]
+        )
+
         admin_dashboard = {
             'today': today,
             'profile': {
@@ -53,8 +68,10 @@ def dashboard(request):
                 'pending_topup': topup_stats['pending'],
                 'approved_topup_today': topup_stats['approved_today'],
                 'rejected_topup_today': topup_stats['rejected_today'],
-                'sales_today_count': sales_today_qs.count(),
-                'sales_today_total': sales_today_qs.aggregate(v=Sum('total'))['v'] or 0,
+                'sales_today_count': sales_today_count,
+                'sales_today_total': sales_today_total,
+                'sales_today_cash': cash_today,
+                'sales_today_deposit': deposit_today,
                 'purchase_today_count': purchase_today_qs.count(),
                 'purchase_today_total': purchase_today_qs.aggregate(v=Sum('total_amount'))['v'] or 0,
                 'low_stock_count': low_stock_count,
@@ -64,6 +81,8 @@ def dashboard(request):
                 'member_total_count': Member.objects.count(),
                 'closing_today_done': bool(closing_today),
             },
+            'recent_sales': recent_sales,
+            'low_stock_products': low_stock_products,
         }
     if 'member' in user_roles:
         from members.models import MemberTopUp
